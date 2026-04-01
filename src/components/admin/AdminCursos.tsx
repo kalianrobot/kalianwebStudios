@@ -253,7 +253,15 @@ const AdminCursos = () => {
                       onClick={() => setCursoSeleccionado(c.id)}
                       className="bg-slate-900 text-white px-8 py-3 rounded-xl font-black uppercase text-[10px] tracking-widest hover:bg-indigo-600 transition-all"
                     >+ Inscribir Alumno</button>
-                    <button onClick={async () => { if(confirm("¿Borrar curso?")) { await deleteDoc(doc(db, "cursos", c.id)); fetchCursos(); } }} className="text-red-300 hover:text-red-500 font-bold text-[10px] uppercase">Eliminar</button>
+                    <button 
+                      onClick={async () => { 
+                        await deleteDoc(doc(db, "cursos", c.id)); 
+                        fetchCursos(); 
+                      }} 
+                      className="text-red-300 hover:text-red-500 font-bold text-[10px] uppercase"
+                    >
+                      Eliminar
+                    </button>
                   </div>
                 )}
               </div>

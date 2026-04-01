@@ -1,0 +1,195 @@
+import React, { useState } from 'react';
+import { db } from '../../firebase';
+import { collection, addDoc, serverTimestamp } from 'firebase/firestore';
+
+const NewsletterForm = () => {
+  const [form, setForm] = useState({ nombre: '', email: '', interes: 'musica' });
+  const [aceptado, setAceptado] = useState(false);
+  const [cargando, setCargando] = useState(false);
+  const [exito, setExito] = useState(false);
+  const [error, setError] = useState('');
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!aceptado) return;
+
+    setCargando(true);
+    setError('');
+
+    try {
+      // 1. Obtener IP con timeout para evitar bloqueos
+      let ip = 'unknown';
+      try {
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 3000);
+        const ipRes = await fetch('https://api.ipify.org?format=json', { signal: controller.signal });
+        clearTimeout(timeoutId);
+        const ipData = await ipRes.json();
+        ip = ipData.ip;
+      } catch (e) { 
+        console.warn("No se pudo obtener la IP:", e); 
+      }
+
+      // 2. Guardar en Firestore
+      console.log("Guardando en Firestore...");
+      const docRef = await addDoc(collection(db, "newsletter_subscribers"), {
+        nombre: form.nombre,
+        email: form.email,
+        interes: form.interes,
+        fecha: serverTimestamp(),
+        ip: ip,
+        acepto_terminos: true
+      });
+      console.log("Documento guardado con ID:", docRef.id);
+
+      // 3. Petición a Brevo API
+      const BREVO_API_KEY = import.meta.env.VITE_BREVO_API_KEY;
+      console.log("Brevo API Key presente:", !!BREVO_API_KEY);
+      
+      if (BREVO_API_KEY) {
+        console.log("Enviando a Brevo...");
+        const brevoRes = await fetch('https://api.brevo.com/v3/contacts', {
+          method: 'POST',
+          headers: {
+            'accept': 'application/json',
+            'api-key': BREVO_API_KEY,
+            'content-type': 'application/json'
+          },
+          body: JSON.stringify({
+            email: form.email,
+            attributes: {
+              NOMBRE: form.nombre,
+              INTERES: form.interes.toUpperCase()
+            },
+            updateEnabled: true
+          })
+        });
+
+        if (!brevoRes.ok) {
+          const brevoError = await brevoRes.json();
+          // Si el contacto ya existe, Brevo devuelve un 400 con un código específico
+          if (brevoRes.status === 400 && brevoError.code === 'duplicate_parameter') {
+            // No lo tratamos como error crítico para el usuario
+            console.log("El contacto ya existe en Brevo");
+          } else {
+            throw new Error(brevoError.message || "Error al conectar con el servicio de email");
+          }
+        }
+      }
+
+      setExito(true);
+      setForm({ nombre: '', email: '', interes: 'musica' });
+    } catch (err: any) {
+      console.error("Error en suscripción:", err);
+      setError(err.message || "Hubo un problema al procesar tu suscripción. Inténtalo de nuevo.");
+    } finally {
+      setCargando(false);
+    }
+  };
+
+  if (exito) {
+    return (
+      <div className="bg-emerald-500/10 border border-emerald-500/20 p-8 rounded-[2.5rem] text-center animate-in fade-in zoom-in duration-500">
+        <div className="text-4xl mb-4">🎉</div>
+        <h3 className="text-2xl font-black uppercase italic text-emerald-500 mb-2">¡Genial!</h3>
+        <p className="text-slate-400 font-bold">Revisa tu email para confirmar la suscripción y empezar a recibir noticias de Kalian.</p>
+        <button 
+          onClick={() => setExito(false)}
+          className="mt-6 text-[10px] font-black uppercase text-slate-500 hover:text-white transition-colors tracking-widest"
+        >
+          Volver
+        </button>
+      </div>
+    );
+  }
+
+  return (
+    <div className="bg-slate-900 border border-white/10 p-8 md:p-12 rounded-[3rem] shadow-2xl max-w-xl mx-auto">
+      <div className="mb-8">
+        <h2 className="text-3xl font-black uppercase italic leading-none text-white">Únete a la<br/><span className="text-indigo-500">Newsletter</span></h2>
+        <p className="text-slate-400 font-bold mt-2 text-sm uppercase tracking-tighter">Recibe noticias, eventos y descuentos exclusivos.</p>
+      </div>
+
+      <form onSubmit={handleSubmit} className="space-y-5">
+        <div className="space-y-1">
+          <label className="text-[10px] font-black uppercase text-slate-500 ml-4 tracking-widest">Nombre Completo</label>
+          <input 
+            type="text" 
+            placeholder="Tu nombre..."
+            className="w-full p-5 bg-white/5 border border-white/10 rounded-2xl outline-none focus:ring-2 ring-indigo-500 text-white font-bold transition-all"
+            value={form.nombre}
+            onChange={e => setForm({...form, nombre: e.target.value})}
+            required
+          />
+        </div>
+
+        <div className="space-y-1">
+          <label className="text-[10px] font-black uppercase text-slate-500 ml-4 tracking-widest">Email</label>
+          <input 
+            type="email" 
+            placeholder="tu@email.com"
+            className="w-full p-5 bg-white/5 border border-white/10 rounded-2xl outline-none focus:ring-2 ring-indigo-500 text-white font-bold transition-all"
+            value={form.email}
+            onChange={e => setForm({...form, email: e.target.value})}
+            required
+          />
+        </div>
+
+        <div className="space-y-1">
+          <label className="text-[10px] font-black uppercase text-slate-500 ml-4 tracking-widest">Me interesa...</label>
+          <select 
+            className="w-full p-5 bg-white/5 border border-white/10 rounded-2xl outline-none focus:ring-2 ring-indigo-500 text-white font-black uppercase tracking-widest transition-all appearance-none"
+            value={form.interes}
+            onChange={e => setForm({...form, interes: e.target.value})}
+          >
+            <option value="musica" className="bg-slate-900 text-white">🎸 Música y Conciertos</option>
+            <option value="danza" className="bg-slate-900 text-white">💃 Danza y Clases</option>
+          </select>
+        </div>
+
+        <div className="pt-4">
+          <label className="flex gap-4 cursor-pointer group">
+            <div className="relative flex items-center">
+              <input 
+                type="checkbox" 
+                className="peer sr-only"
+                checked={aceptado}
+                onChange={e => setAceptado(e.target.checked)}
+              />
+              <div className="w-6 h-6 border-2 border-white/20 rounded-lg peer-checked:bg-indigo-500 peer-checked:border-indigo-500 transition-all flex items-center justify-center">
+                <svg className="w-4 h-4 text-white opacity-0 peer-checked:opacity-100 transition-opacity" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={4} d="M5 13l4 4L19 7" />
+                </svg>
+              </div>
+            </div>
+            <span className="text-[11px] text-slate-400 font-bold leading-tight select-none">
+              Acepto recibir comunicaciones comerciales y noticias sobre cursos y eventos de Centro Cultural Kalian. He leído y acepto la <span className="text-indigo-400 underline">Política de Privacidad</span>.
+            </span>
+          </label>
+        </div>
+
+        {error && <p className="text-red-400 text-[10px] font-black uppercase tracking-widest text-center animate-pulse">{error}</p>}
+
+        <button 
+          disabled={!aceptado || cargando}
+          className={`w-full p-6 rounded-[2rem] font-black uppercase tracking-widest text-sm transition-all shadow-2xl ${
+            aceptado && !cargando 
+            ? 'bg-indigo-600 text-white hover:bg-indigo-500 active:scale-95' 
+            : 'bg-slate-800 text-slate-600 cursor-not-allowed'
+          }`}
+        >
+          {cargando ? 'Procesando...' : 'Suscribirme Ahora'}
+        </button>
+
+        <div className="text-center space-y-1 pt-4 border-t border-white/5">
+          <p className="text-[8px] text-slate-500 font-black uppercase tracking-widest">Información Básica de Protección de Datos</p>
+          <p className="text-[8px] text-slate-600 font-bold leading-relaxed">
+            Responsable: Kalian. Finalidad: Envío de noticias. Destinatario: Brevo. Derechos: Acceso y supresión.
+          </p>
+        </div>
+      </form>
+    </div>
+  );
+};
+
+export default NewsletterForm;

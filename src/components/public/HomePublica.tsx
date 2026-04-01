@@ -3,6 +3,7 @@ import { useAuth } from '../../context/AuthContext';
 import { db } from '../../firebase';
 import { collection, getDocs, query, orderBy, DocumentData } from 'firebase/firestore';
 import ReservaForm from './ReservaForm';
+import NewsletterForm from './NewsletterForm';
 
 const HomePublica = () => {
   const { role } = useAuth();
@@ -141,6 +142,11 @@ const HomePublica = () => {
               );
             })}
           </div>
+        </section>
+
+        {/* SECCIÓN NEWSLETTER */}
+        <section className="py-20 border-t border-white/5">
+          <NewsletterForm />
         </section>
       </div>
 

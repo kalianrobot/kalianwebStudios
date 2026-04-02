@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { auth, db } from '../../firebase';
 import { collection, query, where, getDocs, doc, updateDoc, DocumentData, getDoc } from 'firebase/firestore';
 import { useNavigate } from 'react-router-dom';
+import { QRCodeSVG } from 'qrcode.react';
 
 const PerfilSocio = () => {
   const [reservas, setReservas] = useState<DocumentData[]>([]);
@@ -175,20 +176,20 @@ const PerfilSocio = () => {
   };
 
   if (cargando) return (
-    <div className="min-h-screen bg-slate-900 flex items-center justify-center">
-      <div className="text-white font-black italic uppercase animate-pulse">Cargando Panel...</div>
+    <div className="min-h-screen bg-kalian-dark flex items-center justify-center">
+      <div className="text-kalian-gold kalian-poster-text text-4xl animate-pulse">Cargando Panel...</div>
     </div>
   );
 
   if (!usuario && !cargando) {
     return (
-      <div className="min-h-screen bg-slate-900 flex flex-col items-center justify-center p-6 text-center">
-        <div className="w-24 h-24 bg-red-500/10 text-red-500 rounded-full flex items-center justify-center text-4xl mb-6">🚫</div>
-        <h2 className="text-3xl font-black uppercase italic text-white mb-4">Acceso Restringido</h2>
-        <p className="text-slate-400 font-bold max-w-md">Lo sentimos, este panel es exclusivo para socios registrados con DNI. Si crees que esto es un error, contacta con administración.</p>
+      <div className="min-h-screen bg-kalian-dark flex flex-col items-center justify-center p-6 text-center">
+        <div className="w-24 h-24 bg-red-500/10 text-red-500 rounded-full flex items-center justify-center text-4xl mb-6 border border-red-500/20 shadow-2xl shadow-red-500/10">🚫</div>
+        <h2 className="text-4xl kalian-poster-text text-kalian-cream mb-4">Acceso Restringido</h2>
+        <p className="text-kalian-cream/50 font-bold max-w-md text-sm uppercase tracking-widest leading-relaxed">Lo sentimos, este panel es exclusivo para socios registrados con DNI. Si crees que esto es un error, contacta con administración.</p>
         <button 
           onClick={() => navigate('/')} 
-          className="mt-8 bg-indigo-600 hover:bg-indigo-700 text-white px-8 py-3 rounded-2xl font-black uppercase text-[10px] tracking-widest transition-all shadow-lg"
+          className="mt-12 bg-kalian-gold text-black px-10 py-4 rounded-2xl kalian-poster-text text-xl tracking-widest hover:bg-white transition-all shadow-2xl shadow-kalian-gold/20"
         >
           Volver al Inicio
         </button>
@@ -197,17 +198,17 @@ const PerfilSocio = () => {
   }
 
   return (
-    <div className="min-h-screen bg-slate-900 p-6 md:p-12 text-slate-100 font-sans">
-      <header className="max-w-6xl mx-auto mb-12 flex justify-between items-end">
+    <div className="min-h-screen bg-kalian-dark p-6 md:p-12 text-kalian-cream font-sans">
+      <header className="max-w-6xl mx-auto mb-20 flex flex-col md:flex-row justify-between items-start md:items-end gap-8">
         <div>
-          <h1 className="text-5xl font-black italic uppercase leading-none">Mi Panel<br/><span className="text-indigo-500">Kalian</span></h1>
+          <h1 className="text-6xl md:text-8xl kalian-poster-text text-kalian-gold tracking-[-0.05em]">MI PANEL <span className="text-kalian-cream">KALIAN</span></h1>
           {usuario && (
-            <div className="mt-4 space-y-2">
-              <p className="font-bold text-slate-400 uppercase tracking-widest text-xs">Socio: {usuario.nombre} • {usuario.dni}</p>
+            <div className="mt-6 space-y-3">
+              <p className="font-black text-kalian-gold/40 uppercase tracking-[0.4em] text-[10px]">Socio: {usuario.nombre} • {usuario.dni}</p>
               {usuario.cursos && usuario.cursos.length > 0 && (
-                <div className="flex gap-2 flex-wrap">
+                <div className="flex gap-3 flex-wrap">
                   {usuario.cursos.map((cId: string) => (
-                    <span key={cId} className="bg-indigo-500/20 text-indigo-400 px-3 py-1 rounded-lg text-[9px] font-black uppercase tracking-widest border border-indigo-500/30">Curso: {cId}</span>
+                    <span key={cId} className="bg-kalian-gold/10 text-kalian-gold px-4 py-1.5 rounded-full text-[9px] font-black uppercase tracking-widest border border-kalian-gold/20">Curso: {cId}</span>
                   ))}
                 </div>
               )}
@@ -216,40 +217,40 @@ const PerfilSocio = () => {
         </div>
         <button 
           onClick={() => auth.signOut().then(() => navigate('/'))}
-          className="text-[10px] font-black uppercase text-slate-500 hover:text-white transition-colors"
+          className="text-[10px] font-black uppercase text-kalian-gold/40 hover:text-kalian-gold transition-colors tracking-[0.3em] border-b border-transparent hover:border-kalian-gold/40 pb-1"
         >
           Cerrar Sesión
         </button>
       </header>
 
-      <main className="max-w-6xl mx-auto space-y-16">
+      <main className="max-w-6xl mx-auto space-y-24">
         {/* SECCIÓN CURSOS Y LOCALES */}
         {(cursosDetalle.length > 0 || localDetalle) && (
-          <section className="space-y-8">
-            <div className="flex items-center gap-4">
-              <h2 className="text-2xl font-black italic uppercase tracking-tighter">Mis <span className="text-emerald-500">Cursos y Locales</span></h2>
-              <div className="h-[2px] flex-1 bg-white/10"></div>
+          <section className="space-y-12">
+            <div className="flex items-center gap-6">
+              <h2 className="text-3xl kalian-poster-text text-kalian-gold">MIS <span className="text-kalian-cream">CURSOS Y LOCALES</span></h2>
+              <div className="h-[1px] flex-1 bg-kalian-gold/20"></div>
             </div>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
               {cursosDetalle.map(c => (
-                <div key={c.id} className="bg-emerald-500/10 border border-emerald-500/20 rounded-[2.5rem] p-8 flex items-center gap-6">
-                  <div className="w-16 h-16 bg-emerald-500 rounded-2xl flex items-center justify-center text-3xl">
+                <div key={c.id} className="bg-black/40 border border-kalian-gold/10 rounded-3xl p-8 flex items-center gap-8 hover:border-kalian-gold/30 transition-all">
+                  <div className="w-20 h-20 bg-kalian-gold/10 border border-kalian-gold/20 rounded-2xl flex items-center justify-center text-4xl">
                     {c.categoria === 'danza' ? '💃' : '🎸'}
                   </div>
                   <div>
-                    <p className="text-[10px] font-black text-emerald-500 uppercase tracking-widest">Curso Activo</p>
-                    <h3 className="text-2xl font-black uppercase italic">{c.titulo}</h3>
-                    <p className="text-sm font-bold text-slate-400 mt-1">{c.horario}</p>
+                    <p className="text-[9px] font-black text-kalian-gold uppercase tracking-[0.3em] mb-2">Curso Activo</p>
+                    <h3 className="text-3xl kalian-poster-text text-kalian-cream">{c.titulo}</h3>
+                    <p className="text-xs font-bold text-kalian-cream/40 mt-2 tracking-widest uppercase">{c.horario}</p>
                   </div>
                 </div>
               ))}
               {localDetalle && (
-                <div className="bg-indigo-500/10 border border-indigo-500/20 rounded-[2.5rem] p-8 flex items-center gap-6">
-                  <div className="w-16 h-16 bg-indigo-500 rounded-2xl flex items-center justify-center text-3xl">🏠</div>
+                <div className="bg-black/40 border border-kalian-gold/10 rounded-3xl p-8 flex items-center gap-8 hover:border-kalian-gold/30 transition-all">
+                  <div className="w-20 h-20 bg-kalian-gold/10 border border-kalian-gold/20 rounded-2xl flex items-center justify-center text-4xl">🏠</div>
                   <div>
-                    <p className="text-[10px] font-black text-indigo-500 uppercase tracking-widest">Alquiler de Local</p>
-                    <h3 className="text-2xl font-black uppercase italic">{localDetalle.nombre}</h3>
-                    <p className="text-sm font-bold text-slate-400 mt-1">Grupo: {localDetalle.nombreGrupo}</p>
+                    <p className="text-[9px] font-black text-kalian-gold uppercase tracking-[0.3em] mb-2">Alquiler de Local</p>
+                    <h3 className="text-3xl kalian-poster-text text-kalian-cream">{localDetalle.nombre}</h3>
+                    <p className="text-xs font-bold text-kalian-cream/40 mt-2 tracking-widest uppercase">Grupo: {localDetalle.nombreGrupo}</p>
                   </div>
                 </div>
               )}
@@ -258,44 +259,52 @@ const PerfilSocio = () => {
         )}
 
         {/* SECCIÓN RESERVAS EVENTOS */}
-        <section className="space-y-8">
-          <div className="flex items-center gap-4">
-            <h2 className="text-2xl font-black italic uppercase tracking-tighter">Mis <span className="text-indigo-500">Reservas</span></h2>
-            <div className="h-[2px] flex-1 bg-white/10"></div>
+        <section className="space-y-12">
+          <div className="flex items-center gap-6">
+            <h2 className="text-3xl kalian-poster-text text-kalian-gold">MIS <span className="text-kalian-cream">RESERVAS</span></h2>
+            <div className="h-[1px] flex-1 bg-kalian-gold/20"></div>
           </div>
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-10">
             {reservas.length === 0 && cursosDetalle.length === 0 && !localDetalle ? (
-              <div className="col-span-full bg-slate-800/50 p-16 rounded-[3rem] text-center border-2 border-dashed border-slate-700">
-                <p className="italic text-slate-500 font-bold uppercase tracking-tighter text-2xl">No tienes actividades<br/>inscritas todavía</p>
+              <div className="col-span-full bg-black/20 p-20 rounded-[3rem] text-center border border-kalian-gold/10 border-dashed">
+                <p className="kalian-poster-text text-kalian-gold/30 text-4xl">No tienes actividades<br/>inscritas todavía</p>
               </div>
             ) : reservas.map(res => (
-          <div key={res.id} className="bg-white rounded-[3rem] p-8 text-slate-900 shadow-2xl flex flex-col items-center transform hover:scale-[1.02] transition-transform">
-            <span className="bg-indigo-100 text-indigo-600 px-4 py-1 rounded-full text-[10px] font-black uppercase mb-4 tracking-tighter">
+          <div key={res.id} className="bg-kalian-cream rounded-[3rem] p-10 text-black shadow-2xl flex flex-col items-center transform hover:scale-[1.02] transition-all duration-500 group relative">
+            <div className="absolute top-0 left-0 w-full h-4 bg-kalian-gold rounded-t-[3rem] opacity-20"></div>
+            
+            <span className="bg-black text-kalian-gold px-5 py-1.5 rounded-full text-[10px] font-black uppercase mb-6 tracking-widest">
               {res.tipo} • {res.fechaActividad}
             </span>
             
-            <h3 className="text-xl font-black uppercase leading-tight text-center mb-6 h-12 flex items-center">{res.titulo}</h3>
+            <h3 className="text-3xl kalian-poster-text uppercase leading-none text-center mb-8 h-16 flex items-center">{res.titulo}</h3>
             
-            <div className="bg-slate-50 p-6 rounded-[2.5rem] mb-6 shadow-inner border border-slate-100">
-              <img src={res.qrUrl} alt="Ticket QR" className="w-32 h-32 mix-blend-multiply" />
-              <p className="text-center font-mono text-[9px] mt-4 text-slate-400 font-bold tracking-widest">{res.ticketID}</p>
+            <div className="bg-white p-8 rounded-[2.5rem] mb-8 shadow-inner border border-black/5 flex flex-col items-center group-hover:shadow-2xl transition-all">
+              <QRCodeSVG 
+                value={res.id} 
+                size={140} 
+                level="H" 
+                includeMargin={true}
+                className="mix-blend-multiply"
+              />
+              <p className="text-center font-mono text-[9px] mt-6 text-black/30 font-bold tracking-[0.3em]">{res.id}</p>
             </div>
 
-            <div className="w-full bg-slate-50 p-4 rounded-2xl flex justify-between items-center border border-slate-100">
+            <div className="w-full bg-black/5 p-6 rounded-3xl flex justify-between items-center border border-black/5">
               <div>
-                <p className="text-[9px] font-black text-slate-400 uppercase tracking-tighter">Acompañantes</p>
-                <p className="text-2xl font-black italic">{res.acompañantes}</p>
+                <p className="text-[9px] font-black text-black/40 uppercase tracking-widest">Acompañantes</p>
+                <p className="text-3xl kalian-poster-text mt-1">{res.acompañantes}</p>
               </div>
-              <div className="flex gap-1">
+              <div className="flex gap-2">
                 <button 
                   onClick={() => actualizarAcompañantes(res, res.acompañantes - 1)}
-                  className="w-10 h-10 bg-white border border-slate-200 rounded-xl font-black hover:bg-slate-900 hover:text-white transition-all shadow-sm">-</button>
+                  className="w-12 h-12 bg-white border border-black/10 rounded-2xl kalian-poster-text text-2xl hover:bg-black hover:text-kalian-gold transition-all shadow-sm">-</button>
                 <button 
                   onClick={() => actualizarAcompañantes(res, res.acompañantes + 1)}
-                  className="w-10 h-10 bg-white border border-slate-200 rounded-xl font-black hover:bg-slate-900 hover:text-white transition-all shadow-sm">+</button>
+                  className="w-12 h-12 bg-white border border-black/10 rounded-2xl kalian-poster-text text-2xl hover:bg-black hover:text-kalian-gold transition-all shadow-sm">+</button>
               </div>
             </div>
-            <p className="text-[8px] text-slate-400 mt-3 uppercase font-black tracking-widest italic">Gestiona tus acompañantes según aforo</p>
+            <p className="text-[8px] text-black/30 mt-6 uppercase font-black tracking-[0.3em] italic">Gestiona tus acompañantes según aforo</p>
           </div>
         ))}
           </div>

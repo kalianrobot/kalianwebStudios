@@ -1,8 +1,10 @@
-import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
+import { BrowserRouter as Router, Routes, Route, Navigate, useLocation } from 'react-router-dom';
 import { AuthProvider, useAuth } from './context/AuthContext';
 
 // Componentes Públicos
-import HomePublica from './components/public/HomePublica';
+import LandingPage from './pages/LandingPage';
+import NewsletterPage from './pages/NewsletterPage';
+import HomeSocio from './components/socio/HomeSocio';
 import Navbar from './components/public/Navbar';
 import LoginSocio from './components/auth/LoginSocio';
 import PerfilSocio from './components/socio/PerfilSocio';
@@ -18,21 +20,27 @@ import AdminLogin from './pages/AdminLogin';
 
 function AppContent() {
   const { user, role, logoutAdmin } = useAuth();
+  const location = useLocation();
+  const isLanding = location.pathname === '/';
 
   return (
-    <Router>
-      <Navbar />
+    <>
+      {!isLanding && <Navbar />}
 
       <Routes>
+        {/* LANDING PAGE */}
+        <Route path="/" element={<LandingPage />} />
+        
         {/* RUTAS PÚBLICAS */}
-        <Route path="/" element={<HomePublica />} />
         <Route path="/login" element={<LoginSocio />} />
+        <Route path="/newsletter-kalian-privado" element={<NewsletterPage />} />
 
         {/* RUTA DE LOGIN DE ADMIN */}
         <Route path="/login-admin" element={role !== 'admin' ? <AdminLogin /> : <Navigate to="/admin" />} />
 
-        {/* RUTA DE PERFIL DE SOCIO */}
-        <Route path="/perfil" element={user ? <PerfilSocio /> : <Navigate to="/login" />} />
+        {/* RUTAS PRIVADAS SOCIO */}
+        <Route path="/home" element={user ? <HomeSocio /> : <Navigate to="/" />} />
+        <Route path="/perfil" element={user ? <PerfilSocio /> : <Navigate to="/" />} />
 
         {/* RUTAS ADMIN */}
         <Route path="/admin" element={
@@ -52,14 +60,16 @@ function AppContent() {
         {/* REDIRECCIÓN POR DEFECTO */}
         <Route path="*" element={<Navigate to="/" />} />
       </Routes>
-    </Router>
+    </>
   );
 }
 
 export default function App() {
   return (
     <AuthProvider>
-      <AppContent />
+      <Router>
+        <AppContent />
+      </Router>
     </AuthProvider>
   );
 }

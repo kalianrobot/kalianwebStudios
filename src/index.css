@@ -1,11 +1,23 @@
+@import url('https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Inter:wght@400;700;900&display=swap');
 @import "tailwindcss";
 
 @theme {
   --font-sans: "Inter", ui-sans-serif, system-ui, sans-serif;
+  --font-display: "Bebas Neue", sans-serif;
+  
+  --color-kalian-dark: #1c1917;
+  --color-kalian-gold: #c5a059;
+  --color-kalian-cream: #e7e5e4;
+  --color-kalian-orange: #f97316;
 }
 
 body {
-  @apply bg-slate-950 text-white;
+  @apply bg-kalian-dark text-kalian-cream font-sans antialiased;
+}
+
+/* Custom utility for the "poster" aesthetic */
+.kalian-poster-text {
+  @apply font-display uppercase tracking-tighter leading-none;
 }
 
 .counter {

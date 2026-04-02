@@ -55,7 +55,7 @@ const HomeSocio = () => {
                 
                 <div className="flex justify-between items-start relative z-10">
                   <span className="bg-kalian-gold text-black text-[9px] font-black uppercase px-4 py-1.5 rounded-full tracking-widest">{ev.categoria}</span>
-                  <span className="text-kalian-gold kalian-poster-text text-3xl">{ev.precio_base}€</span>
+                  <span className="text-kalian-gold kalian-poster-text text-3xl">{ev.precio_estandar}€</span>
                 </div>
                 
                 <div className="space-y-2 relative z-10">

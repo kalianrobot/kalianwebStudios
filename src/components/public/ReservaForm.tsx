@@ -22,7 +22,7 @@ const ReservaForm = ({ item, alCerrar }: ReservaFormProps) => {
   
   const esCurso = item.fechaFin !== undefined;
   const categoriaActividad = item.categoria || 'musica';
-  const precioBase = Number(item.precio_base || item.precio || 0);
+  const precioBase = Number(item.precio_estandar || item.precio || 0);
 
   useEffect(() => {
     if (socioData) {
@@ -263,27 +263,28 @@ const ReservaForm = ({ item, alCerrar }: ReservaFormProps) => {
   }
 
   return (
-    <div className="bg-white p-8 rounded-[3rem] shadow-2xl max-w-md w-full relative text-slate-900 border-t-[12px] border-indigo-600">
-      <button onClick={alCerrar} className="absolute top-6 right-6 text-slate-300 font-bold text-2xl hover:text-slate-500">✕</button>
+    <div className="bg-kalian-dark p-8 md:p-12 rounded-[3rem] shadow-2xl max-w-md w-full relative text-kalian-cream border border-kalian-gold/20 overflow-hidden">
+      <div className="absolute top-0 left-0 w-full h-1 bg-kalian-gold"></div>
+      <button onClick={alCerrar} className="absolute top-8 right-8 text-kalian-gold/40 font-black text-2xl hover:text-kalian-gold transition-colors">✕</button>
       
-      <h2 className="text-3xl font-black italic uppercase leading-tight mb-2 tracking-tighter">{item.titulo}</h2>
-      <p className="text-[10px] font-bold text-indigo-600 uppercase mb-8 tracking-[0.2em]">
-        {esCurso ? '📚 Inscripción Curso' : '🎟️ Reserva de Evento'}
+      <h2 className="text-4xl kalian-poster-text text-kalian-gold leading-none mb-2 tracking-tight uppercase italic">{item.titulo}</h2>
+      <p className="text-[10px] font-black text-kalian-gold/40 uppercase mb-10 tracking-[0.3em]">
+        {esCurso ? '📚 INSCRIPCIÓN CURSO' : '🎟️ RESERVA DE EVENTO'}
       </p>
 
       {mensaje ? (
-        <div className="bg-slate-900 text-white p-12 rounded-[2.5rem] text-center font-bold italic text-xl animate-in fade-in zoom-in">
+        <div className="bg-kalian-gold/5 border border-kalian-gold/20 text-kalian-gold p-12 rounded-[2.5rem] text-center font-black kalian-poster-text text-2xl animate-in fade-in zoom-in italic">
           {mensaje}
         </div>
       ) : (
-        <form onSubmit={enviar} className="space-y-5">
+        <form onSubmit={enviar} className="space-y-6">
           <div className="space-y-2">
-            <label className="text-[10px] font-black text-slate-400 uppercase ml-4">
-              {esCurso ? 'DNI (Obligatorio)' : 'Tu Identificación (DNI si eres socio)'}
+            <label className="text-[9px] font-black text-kalian-gold/40 uppercase tracking-[0.3em] ml-4">
+              {esCurso ? 'DNI (OBLIGATORIO)' : 'TU IDENTIFICACIÓN (DNI SI ERES SOCIO)'}
             </label>
             <input 
               type="text" placeholder={esCurso ? "DNI OBLIGATORIO" : "DNI PARA DESCUENTO"} 
-              className="w-full p-5 bg-slate-100 rounded-2xl font-black uppercase outline-none focus:ring-2 ring-indigo-500 transition-all text-xl" 
+              className="w-full p-5 bg-kalian-gold/5 rounded-2xl font-black uppercase outline-none border border-kalian-gold/10 focus:border-kalian-gold transition-all text-xl text-kalian-gold" 
               value={form.dni} 
               onChange={e => setForm({...form, dni: e.target.value.toUpperCase()})} 
               disabled={!!socioData}
@@ -292,10 +293,10 @@ const ReservaForm = ({ item, alCerrar }: ReservaFormProps) => {
           </div>
 
           <div className="space-y-2">
-            <label className="text-[10px] font-black text-slate-400 uppercase ml-4">Nombre Completo</label>
+            <label className="text-[9px] font-black text-kalian-gold/40 uppercase tracking-[0.3em] ml-4">NOMBRE COMPLETO</label>
             <input 
               type="text" placeholder="NOMBRE Y APELLIDOS" 
-              className="w-full p-5 bg-slate-100 rounded-2xl font-bold outline-none focus:ring-2 ring-indigo-500 transition-all" 
+              className="w-full p-5 bg-kalian-gold/5 rounded-2xl font-bold outline-none border border-kalian-gold/10 focus:border-kalian-gold transition-all text-kalian-cream" 
               value={form.nombre} 
               onChange={e => setForm({...form, nombre: e.target.value})} 
               required 
@@ -304,12 +305,12 @@ const ReservaForm = ({ item, alCerrar }: ReservaFormProps) => {
           </div>
 
           <div className="space-y-2">
-            <label className="text-[10px] font-black text-slate-400 uppercase ml-4">
-              Email {esCurso ? '(Obligatorio)' : '(Opcional para recibir el QR)'}
+            <label className="text-[9px] font-black text-kalian-gold/40 uppercase tracking-[0.3em] ml-4">
+              EMAIL {esCurso ? '(OBLIGATORIO)' : '(OPCIONAL PARA RECIBIR EL QR)'}
             </label>
             <input 
               type="email" placeholder="tu@email.com" 
-              className="w-full p-5 bg-slate-100 rounded-2xl font-bold outline-none focus:ring-2 ring-indigo-500 transition-all" 
+              className="w-full p-5 bg-kalian-gold/5 rounded-2xl font-bold outline-none border border-kalian-gold/10 focus:border-kalian-gold transition-all text-kalian-cream" 
               value={form.email} 
               onChange={e => setForm({...form, email: e.target.value})} 
               required={esCurso}
@@ -318,14 +319,14 @@ const ReservaForm = ({ item, alCerrar }: ReservaFormProps) => {
           </div>
 
           {!esCurso && (
-            <div className="flex justify-between items-center bg-indigo-50 p-6 rounded-3xl border border-indigo-100">
+            <div className="flex justify-between items-center bg-kalian-gold/5 p-6 rounded-3xl border border-kalian-gold/10">
               <div>
-                <span className="text-[10px] font-black uppercase text-indigo-400 block mb-1">Acompañantes</span>
-                <span className="text-xs text-indigo-900/50 font-bold italic">Máximo 4 personas</span>
+                <span className="text-[9px] font-black uppercase text-kalian-gold/40 block mb-1 tracking-widest">Acompañantes</span>
+                <span className="text-[10px] text-kalian-gold/20 font-bold italic uppercase">Máximo 4 personas</span>
               </div>
               <input 
                 type="number" min="0" max="4"
-                className="w-20 bg-white p-3 rounded-xl text-center font-black text-2xl text-indigo-600 shadow-sm outline-none" 
+                className="w-20 bg-kalian-gold/10 p-3 rounded-xl text-center font-black text-2xl text-kalian-gold shadow-sm outline-none border border-kalian-gold/20" 
                 value={form.acompañantes} 
                 onChange={e => setForm({...form, acompañantes: Number(e.target.value)})} 
               />
@@ -333,34 +334,34 @@ const ReservaForm = ({ item, alCerrar }: ReservaFormProps) => {
           )}
 
           {/* DESGLOSE DE PRECIO */}
-          <div className="bg-slate-50 p-6 rounded-3xl border border-slate-100 space-y-2">
-            <div className="flex justify-between items-center text-[10px] font-black uppercase text-slate-400">
+          <div className="bg-black/40 p-6 rounded-3xl border border-kalian-gold/10 space-y-3">
+            <div className="flex justify-between items-center text-[9px] font-black uppercase text-kalian-gold/40 tracking-widest">
               <span>Precio Base</span>
               <span>{precioBase}€</span>
             </div>
             {precioCalculado.esSocio && (
-              <div className="flex justify-between items-center text-[10px] font-black uppercase text-emerald-500">
+              <div className="flex justify-between items-center text-[9px] font-black uppercase text-kalian-gold tracking-widest">
                 <span>Descuento Socio</span>
                 <span>-100%</span>
               </div>
             )}
-            <div className="flex justify-between items-center pt-2 border-t border-slate-200">
-              <span className="text-xs font-black uppercase text-slate-900">Total a pagar</span>
-              <span className="text-2xl font-black italic text-indigo-600">{precioCalculado.total}€</span>
+            <div className="flex justify-between items-center pt-3 border-t border-kalian-gold/10">
+              <span className="text-xs font-black uppercase text-kalian-cream tracking-widest">Total a pagar</span>
+              <span className="text-4xl kalian-poster-text text-kalian-gold italic">{precioCalculado.total}€</span>
             </div>
-            <p className="text-[8px] text-slate-400 font-bold uppercase text-center pt-1">
-              {precioCalculado.esSocio ? '✓ Descuento aplicado por ser socio activo' : 'Regístrate como socio para obtener descuentos'}
+            <p className="text-[8px] text-kalian-gold/20 font-black uppercase text-center pt-1 tracking-widest">
+              {precioCalculado.esSocio ? '✓ DESCUENTO APLICADO POR SER SOCIO ACTIVO' : 'REGÍSTRATE COMO SOCIO PARA OBTENER DESCUENTOS'}
             </p>
           </div>
 
           <button 
             disabled={cargando}
-            className="w-full bg-slate-900 text-white p-6 rounded-[2rem] font-black uppercase tracking-widest shadow-2xl hover:bg-indigo-600 transition-all flex items-center justify-center gap-3 active:scale-95"
+            className="w-full bg-kalian-gold text-black p-6 rounded-2xl kalian-poster-text text-xl tracking-widest hover:bg-white transition-all flex items-center justify-center gap-3 active:scale-95 shadow-2xl shadow-kalian-gold/20"
           >
-            {cargando ? 'Procesando...' : (esCurso ? 'Consultar Inscripción' : 'Confirmar Reserva')}
+            {cargando ? 'PROCESANDO...' : (esCurso ? 'CONSULTAR INSCRIPCIÓN' : 'CONFIRMAR RESERVA')}
           </button>
           
-          <p className="text-center text-[9px] text-slate-400 font-bold uppercase tracking-widest">
+          <p className="text-center text-[9px] text-kalian-gold/20 font-black uppercase tracking-[0.2em]">
             El pago se realizará en efectivo en el centro
           </p>
         </form>

@@ -3,6 +3,9 @@ import { db } from '../../firebase';
 import { collection, setDoc, doc, getDocs, deleteDoc, query, orderBy, DocumentData, updateDoc, getDoc, arrayUnion, increment, where } from 'firebase/firestore';
 import { Link } from 'react-router-dom';
 
+import { createSocioAuth } from '../../lib/adminAuth';
+import { sendWelcomeEmail } from '../../lib/brevoService';
+
 const AdminCursos = () => {
   const [cursos, setCursos] = useState<DocumentData[]>([]);
   const [msg, setMsg] = useState('');
@@ -63,14 +66,32 @@ const AdminCursos = () => {
 
       // 1. Si no existe el socio, lo creamos (perfil básico)
       if (!socioSnap.exists()) {
+        // Create in Firebase Auth first to get a real UID and send activation link
+        let realUid = "manual-" + Math.random().toString(36).substring(7);
+        if (email) {
+          try {
+            const authResult = await createSocioAuth(email);
+            if (authResult.uid) realUid = authResult.uid;
+            
+            // Send welcome email via Brevo
+            // Note: Since we can't get the link string from client SDK, we inform the user
+            // that they will receive a separate email from Firebase for activation.
+            await sendWelcomeEmail(email, nombre || "Socio Kalian", "https://kalian.es/login"); 
+            // We use the login link as a fallback, explaining in the email that they need to check their inbox for the activation link.
+          } catch (err) {
+            console.error("Error creating auth user or sending email:", err);
+          }
+        }
+
         await setDoc(socioRef, {
           dni: dniUpper,
           nombre: nombre || "Pendiente de registro",
           email: email || "",
-          uid: "manual-" + Math.random().toString(36).substring(7),
+          uid: realUid,
           expiraciones: { [categoria]: fechaFin },
           cursos: [cursoId], // Link to course
-          verificado: true
+          verificado: true,
+          fechaAlta: new Date().toISOString()
         });
       } else {
         // 2. Si existe, actualizamos su vigencia y datos si vienen de solicitud

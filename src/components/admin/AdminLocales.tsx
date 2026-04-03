@@ -15,13 +15,13 @@ const AdminLocales = () => {
       const snap = await getDocs(collection(db, "locales"));
       if (snap.empty) {
         const initial = [
-          { id: 'L1', nombre: 'Local 1', aforo_max: 10, estado: 'disponible', alquilado: false, inquilinos: [] },
-          { id: 'L2', nombre: 'Local 2', aforo_max: 10, estado: 'disponible', alquilado: false, inquilinos: [] },
-          { id: 'L3', nombre: 'Local 3', aforo_max: 10, estado: 'disponible', alquilado: false, inquilinos: [] },
-          { id: 'L4', nombre: 'Local 4', aforo_max: 10, estado: 'disponible', alquilado: false, inquilinos: [] },
-          { id: 'L5', nombre: 'Local 5', aforo_max: 10, estado: 'disponible', alquilado: false, inquilinos: [] },
-          { id: 'L6', nombre: 'Local 6', aforo_max: 10, estado: 'disponible', alquilado: false, inquilinos: [] },
-          { id: 'L7', nombre: 'Local 7', aforo_max: 10, estado: 'disponible', alquilado: false, inquilinos: [] },
+          { id: 'L1', nombre: 'Local 1', estado: 'disponible', alquilado: false, inquilinos: [], fechaExpiracion: '2099-12-31' },
+          { id: 'L2', nombre: 'Local 2', estado: 'disponible', alquilado: false, inquilinos: [], fechaExpiracion: '2099-12-31' },
+          { id: 'L3', nombre: 'Local 3', estado: 'disponible', alquilado: false, inquilinos: [], fechaExpiracion: '2099-12-31' },
+          { id: 'L4', nombre: 'Local 4', estado: 'disponible', alquilado: false, inquilinos: [], fechaExpiracion: '2099-12-31' },
+          { id: 'L5', nombre: 'Local 5', estado: 'disponible', alquilado: false, inquilinos: [], fechaExpiracion: '2099-12-31' },
+          { id: 'L6', nombre: 'Local 6', estado: 'disponible', alquilado: false, inquilinos: [], fechaExpiracion: '2099-12-31' },
+          { id: 'L7', nombre: 'Local 7', estado: 'disponible', alquilado: false, inquilinos: [], fechaExpiracion: '2099-12-31' },
         ];
         for (const loc of initial) {
           const { id, ...data } = loc;
@@ -140,8 +140,8 @@ const AdminLocales = () => {
                   
                   <div className="flex gap-4 mb-6">
                     <div className="flex-1 bg-slate-50 p-3 rounded-2xl text-center">
-                      <p className="text-[8px] font-black uppercase text-slate-400">Aforo Max</p>
-                      <p className="font-black text-lg">{l.aforo_max}</p>
+                      <p className="text-[8px] font-black uppercase text-slate-400">Socios</p>
+                      <p className="font-black text-lg">{l.inquilinos?.length || 0}</p>
                     </div>
                     <div className={`flex-1 p-3 rounded-2xl text-center ${l.alquilado ? 'bg-red-50' : 'bg-emerald-50'}`}>
                       <p className="text-[8px] font-black uppercase text-slate-400">Estado</p>
@@ -153,7 +153,7 @@ const AdminLocales = () => {
                     <div className="mb-6 space-y-2">
                       <p className="text-[10px] font-black uppercase text-indigo-600 tracking-tighter">Grupo: <span className="text-slate-900">{l.nombreGrupo}</span></p>
                       <p className="text-[10px] font-black uppercase text-slate-400 tracking-tighter">Actividad: <span className="text-slate-900">{l.actividadArtistica}</span></p>
-                      <p className="text-[10px] font-black uppercase text-slate-400 tracking-tighter">Expira: <span className="text-slate-900">{l.fechaExpiracion}</span></p>
+                      <p className="text-[10px] font-black uppercase text-slate-400 tracking-tighter">Expira: <span className="text-slate-900">{l.fechaExpiracion === '2099-12-31' ? 'INDEFINIDA' : l.fechaExpiracion}</span></p>
                     </div>
                   )}
                 </div>
@@ -212,7 +212,14 @@ const AdminLocales = () => {
                         </div>
                         <div className="space-y-1">
                           <label className="text-[10px] font-black uppercase text-slate-400 ml-4">Fecha Expiración Alquiler</label>
-                          <input type="date" className="w-full p-4 bg-slate-50 rounded-2xl outline-none border border-slate-100 font-bold" value={editando.fechaExpiracion || ''} onChange={e => setEditando({...editando, fechaExpiracion: e.target.value})} required />
+                          <div className="flex gap-2">
+                            <input type="date" className="flex-1 p-4 bg-slate-50 rounded-2xl outline-none border border-slate-100 font-bold" value={editando.fechaExpiracion || ''} onChange={e => setEditando({...editando, fechaExpiracion: e.target.value})} required />
+                            <button 
+                              type="button"
+                              onClick={() => setEditando({...editando, fechaExpiracion: '2099-12-31'})}
+                              className="bg-slate-900 text-white px-4 rounded-2xl font-black uppercase text-[9px]"
+                            >Indefinida</button>
+                          </div>
                         </div>
                       </>
                     )}

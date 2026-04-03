@@ -34,6 +34,12 @@ const ReservaForm = ({ item, alCerrar }: ReservaFormProps) => {
   useEffect(() => {
     const calcular = async () => {
       let socio = esSocioActivo(categoriaActividad);
+      
+      // BDD: Socios de "local" tienen mismos descuentos que "musica"
+      if (!socio && categoriaActividad === 'musica') {
+        socio = esSocioActivo('local');
+      }
+
       const dniUpper = form.dni.trim().toUpperCase();
 
       if (!socio && dniUpper && !esCurso) {
@@ -41,19 +47,30 @@ const ReservaForm = ({ item, alCerrar }: ReservaFormProps) => {
           const snap = await getDoc(doc(db, "socios", dniUpper));
           if (snap.exists()) {
             const hoy = new Date().toISOString().split('T')[0];
-            const exp = snap.data().expiraciones?.[categoriaActividad] || '';
+            const expData = snap.data().expiraciones || {};
+            const exp = expData[categoriaActividad] || (categoriaActividad === 'musica' ? expData['local'] : '') || '';
             if (exp >= hoy) socio = true;
           }
         } catch (e) { console.error(e); }
       }
 
-      // BDD1: Descuento socio solo aplica a eventos, no a cursos
-      const socioParaPrecio = esCurso ? false : socio;
-      const total = (socioParaPrecio ? 0 : precioBase) + (Number(form.acompañantes) * precioBase);
+      // BDD1: Descuento socio aplica a eventos y cursos si tienen precio_descuento
+      const socioParaPrecio = socio;
+      
+      let total = 0;
+      const precioSocio = item.tiene_descuento ? Number(item.precio_descuento) : 0;
+      const precioTitular = socioParaPrecio ? precioSocio : precioBase;
+
+      if (esCurso) {
+        total = precioTitular;
+      } else {
+        total = precioTitular + (Number(form.acompañantes) * precioBase);
+      }
+      
       setPrecioCalculado({ total, esSocio: socioParaPrecio });
     };
     calcular();
-  }, [form.dni, form.acompañantes, socioData, esCurso, categoriaActividad, precioBase]);
+  }, [form.dni, form.acompañantes, socioData, esCurso, categoriaActividad, precioBase, item.tiene_descuento, item.precio_descuento]);
 
   const enviar = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -104,13 +121,16 @@ const ReservaForm = ({ item, alCerrar }: ReservaFormProps) => {
 
       // 3. CÁLCULO DE SLOTS
       const slots = [];
+      const precioSocio = item.tiene_descuento ? Number(item.precio_descuento) : 0;
+      const precioTitular = esSocioReal ? precioSocio : precioBase;
+
       slots.push({
         dni: dniUpper || 'INVITADO',
         nombre: form.nombre,
         email: form.email, // Guardamos el email para el admin
         tipo: 'titular',
         estado: esSocioReal ? 'validado_socio' : 'pendiente',
-        precio: esSocioReal ? 0 : precioBase
+        precio: precioTitular
       });
 
       if (!esCurso) {
@@ -336,17 +356,23 @@ const ReservaForm = ({ item, alCerrar }: ReservaFormProps) => {
           {/* DESGLOSE DE PRECIO */}
           <div className="bg-black/40 p-6 rounded-3xl border border-kalian-gold/10 space-y-3">
             <div className="flex justify-between items-center text-[9px] font-black uppercase text-kalian-gold/40 tracking-widest">
-              <span>Precio Base</span>
+              <span>Aportación Base</span>
               <span>{precioBase}€</span>
             </div>
-            {precioCalculado.esSocio && (
+            {precioCalculado.esSocio && item.tiene_descuento && (
+              <div className="flex justify-between items-center text-[9px] font-black uppercase text-kalian-gold tracking-widest">
+                <span>Descuento Socio</span>
+                <span>{item.precio_descuento}€</span>
+              </div>
+            )}
+            {precioCalculado.esSocio && !item.tiene_descuento && (
               <div className="flex justify-between items-center text-[9px] font-black uppercase text-kalian-gold tracking-widest">
                 <span>Descuento Socio</span>
                 <span>-100%</span>
               </div>
             )}
             <div className="flex justify-between items-center pt-3 border-t border-kalian-gold/10">
-              <span className="text-xs font-black uppercase text-kalian-cream tracking-widest">Total a pagar</span>
+              <span className="text-xs font-black uppercase text-kalian-cream tracking-widest">Total</span>
               <span className="text-4xl kalian-poster-text text-kalian-gold italic">{precioCalculado.total}€</span>
             </div>
             <p className="text-[8px] text-kalian-gold/20 font-black uppercase text-center pt-1 tracking-widest">

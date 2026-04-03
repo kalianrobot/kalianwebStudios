@@ -18,6 +18,10 @@ import AdminCheckIn from './components/admin/AdminCheckIn';
 import AdminLocales from './components/admin/AdminLocales';
 import AdminLogin from './pages/AdminLogin';
 
+// Componentes Teacher
+import TeacherDashboard from './components/teacher/TeacherDashboard';
+import TeacherLogin from './pages/TeacherLogin';
+
 function AppContent() {
   const { user, role, logoutAdmin } = useAuth();
   const location = useLocation();
@@ -38,6 +42,9 @@ function AppContent() {
         {/* RUTA DE LOGIN DE ADMIN */}
         <Route path="/login-admin" element={role !== 'admin' ? <AdminLogin /> : <Navigate to="/admin" />} />
 
+        {/* RUTA DE LOGIN DE PROFESORES */}
+        <Route path="/login-teacher" element={role !== 'teacher' ? <TeacherLogin /> : <Navigate to="/teacher" />} />
+
         {/* RUTAS PRIVADAS SOCIO */}
         <Route path="/home" element={user ? <HomeSocio /> : <Navigate to="/" />} />
         <Route path="/perfil" element={user ? <PerfilSocio /> : <Navigate to="/" />} />
@@ -56,6 +63,9 @@ function AppContent() {
         <Route path="/admin/cursos" element={role === 'admin' ? <AdminCursos /> : <Navigate to="/login-admin" />} />
         <Route path="/admin/socios" element={role === 'admin' ? <AdminSocios /> : <Navigate to="/login-admin" />} />
         <Route path="/admin/locales" element={role === 'admin' ? <AdminLocales /> : <Navigate to="/login-admin" />} />
+
+        {/* RUTAS TEACHER */}
+        <Route path="/teacher" element={role === 'teacher' ? <TeacherDashboard /> : <Navigate to="/login-teacher" />} />
 
         {/* REDIRECCIÓN POR DEFECTO */}
         <Route path="*" element={<Navigate to="/" />} />

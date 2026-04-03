@@ -1,11 +1,20 @@
 import React, { useState, useEffect } from 'react';
 import { db } from '../../firebase';
-import { collection, setDoc, doc, getDocs, deleteDoc, query, orderBy, DocumentData } from 'firebase/firestore';
+import { collection, setDoc, doc, getDocs, deleteDoc, query, orderBy, DocumentData, updateDoc } from 'firebase/firestore';
 import { Link } from 'react-router-dom';
 
 const AdminEventos = () => {
   const [eventos, setEventos] = useState<DocumentData[]>([]);
-  const [form, setForm] = useState({ titulo: '', fecha: '', precio_estandar: '', categoria: 'musica', aforo_max: '50' });
+  const [form, setForm] = useState({ 
+    titulo: '', 
+    fecha: '', 
+    precio_estandar: '', 
+    categoria: 'musica', 
+    aforo_max: '50',
+    tiene_descuento: false,
+    precio_descuento: ''
+  });
+  const [editando, setEditando] = useState<string | null>(null);
   const [msg, setMsg] = useState('');
 
   const fetchEventos = async () => {
@@ -17,24 +26,34 @@ const AdminEventos = () => {
 
   useEffect(() => { fetchEventos(); }, []);
 
-  const crear = async (e: React.FormEvent) => {
+  const guardar = async (e: React.FormEvent) => {
     e.preventDefault();
     try {
-      const slug = form.titulo.trim().replace(/\s+/g, '-').toUpperCase();
-      const customId = `${form.fecha.substring(0,10)}-${slug}`;
-      await setDoc(doc(db, "eventos", customId), { 
+      const eventoData = { 
         ...form, 
         precio_estandar: Number(form.precio_estandar),
+        precio_descuento: form.tiene_descuento ? Number(form.precio_descuento) : Number(form.precio_estandar),
         aforo_max: Number(form.aforo_max),
-        aforo_actual: 0
-      });
-      setMsg("✅ Evento publicado con éxito");
-      setForm({ titulo: '', fecha: '', precio_estandar: '', categoria: 'musica', aforo_max: '50' });
+        aforo_actual: editando ? (eventos.find(ev => ev.id === editando)?.aforo_actual || 0) : 0
+      };
+
+      if (editando) {
+        await updateDoc(doc(db, "eventos", editando), eventoData);
+        setMsg("✅ Evento actualizado con éxito");
+      } else {
+        const slug = form.titulo.trim().replace(/\s+/g, '-').toUpperCase();
+        const customId = `${form.fecha.substring(0,10)}-${slug}`;
+        await setDoc(doc(db, "eventos", customId), eventoData);
+        setMsg("✅ Evento publicado con éxito");
+      }
+
+      setForm({ titulo: '', fecha: '', precio_estandar: '', categoria: 'musica', aforo_max: '50', tiene_descuento: false, precio_descuento: '' });
+      setEditando(null);
       fetchEventos();
       setTimeout(() => setMsg(''), 3000);
     } catch (err: any) {
       console.error(err);
-      alert("Error al publicar: " + err.message);
+      alert("Error al guardar: " + err.message);
     }
   };
 
@@ -48,7 +67,9 @@ const AdminEventos = () => {
 
         {msg && <div className="bg-kalian-gold text-black p-6 rounded-2xl mb-10 font-black kalian-poster-text text-2xl text-center animate-bounce uppercase tracking-widest shadow-2xl shadow-kalian-gold/20">{msg}</div>}
 
-        <form onSubmit={crear} className="bg-black/40 p-10 rounded-[3rem] shadow-2xl space-y-6 mb-16 text-kalian-cream border border-kalian-gold/10">
+        <form onSubmit={guardar} className="bg-black/40 p-10 rounded-[3rem] shadow-2xl space-y-6 mb-16 text-kalian-cream border border-kalian-gold/10">
+          <h2 className="text-xl font-black uppercase italic mb-4 text-kalian-gold">{editando ? 'Editar Evento' : 'Nuevo Evento'}</h2>
+          
           <div className="space-y-2">
             <label className="text-[9px] font-black uppercase text-kalian-gold/40 ml-4 tracking-widest">Título del Evento</label>
             <input type="text" placeholder="EJ: CONCIERTO DE JAZZ" className="w-full p-5 bg-kalian-gold/5 rounded-2xl outline-none border border-kalian-gold/10 focus:border-kalian-gold transition-all text-kalian-gold font-black uppercase text-xl" value={form.titulo} onChange={e => setForm({...form, titulo: e.target.value})} required />
@@ -67,6 +88,25 @@ const AdminEventos = () => {
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
             <div className="space-y-2">
+              <label className="text-[9px] font-black uppercase text-kalian-gold/40 ml-4 tracking-widest">¿Tiene Descuento para Socios?</label>
+              <button 
+                type="button"
+                onClick={() => setForm({...form, tiene_descuento: !form.tiene_descuento})}
+                className={`w-full p-5 rounded-2xl font-black uppercase tracking-widest transition-all ${form.tiene_descuento ? 'bg-kalian-gold text-black' : 'bg-kalian-gold/5 text-kalian-gold border border-kalian-gold/10'}`}
+              >
+                {form.tiene_descuento ? 'CON DESCUENTO' : 'SIN DESCUENTO'}
+              </button>
+            </div>
+            {form.tiene_descuento && (
+              <div className="space-y-2">
+                <label className="text-[9px] font-black uppercase text-kalian-gold/40 ml-4 tracking-widest">Precio con Descuento (€)</label>
+                <input type="number" placeholder="PRECIO SOCIO (€)" className="w-full p-5 bg-kalian-gold/5 rounded-2xl outline-none border border-kalian-gold/10 focus:border-kalian-gold transition-all text-kalian-gold font-black text-xl" value={form.precio_descuento} onChange={e => setForm({...form, precio_descuento: e.target.value})} required />
+              </div>
+            )}
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            <div className="space-y-2">
               <label className="text-[9px] font-black uppercase text-kalian-gold/40 ml-4 tracking-widest">Aforo Máximo</label>
               <input type="number" placeholder="AFORO MÁX" className="w-full p-5 bg-kalian-gold/5 rounded-2xl outline-none border border-kalian-gold/10 focus:border-kalian-gold transition-all text-kalian-cream font-bold" value={form.aforo_max} onChange={e => setForm({...form, aforo_max: e.target.value})} required />
             </div>
@@ -79,7 +119,21 @@ const AdminEventos = () => {
             </div>
           </div>
 
-          <button className="w-full bg-kalian-gold text-black p-6 rounded-2xl kalian-poster-text text-xl tracking-widest hover:bg-white transition-all shadow-2xl shadow-kalian-gold/20 active:scale-95 uppercase">Publicar Concierto / Evento</button>
+          <div className="flex gap-3">
+            <button className="flex-1 bg-kalian-gold text-black p-6 rounded-2xl kalian-poster-text text-xl tracking-widest hover:bg-white transition-all shadow-2xl shadow-kalian-gold/20 active:scale-95 uppercase">
+              {editando ? 'Actualizar Evento' : 'Publicar Concierto / Evento'}
+            </button>
+            {editando && (
+              <button 
+                type="button"
+                onClick={() => {
+                  setEditando(null);
+                  setForm({ titulo: '', fecha: '', precio_estandar: '', categoria: 'musica', aforo_max: '50', tiene_descuento: false, precio_descuento: '' });
+                }}
+                className="bg-kalian-gold/10 text-kalian-gold px-8 rounded-2xl font-black uppercase"
+              >Cancelar</button>
+            )}
+          </div>
         </form>
 
         <div className="space-y-4">
@@ -89,18 +143,40 @@ const AdminEventos = () => {
               <div className="text-center md:text-left">
                 <h3 className="text-3xl kalian-poster-text text-kalian-cream group-hover:text-kalian-gold transition-colors uppercase italic">{ev.titulo}</h3>
                 <p className="text-[10px] text-kalian-gold/40 font-black uppercase tracking-[0.3em] mt-2">
-                  {new Date(ev.fecha).toLocaleString('es-ES', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })} | {ev.categoria.toUpperCase()} | {ev.precio_estandar}€ | AFORO: {ev.aforo_actual || 0}/{ev.aforo_max}
+                  {new Date(ev.fecha).toLocaleString('es-ES', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })} | {ev.categoria.toUpperCase()} | {ev.precio_estandar}€ {ev.tiene_descuento ? `(Socio: ${ev.precio_descuento}€)` : '(Sin dto)'} | AFORO: {ev.aforo_actual || 0}/{ev.aforo_max}
                 </p>
               </div>
-              <button 
-                onClick={async () => { 
-                  await deleteDoc(doc(db, "eventos", ev.id)); 
-                  fetchEventos(); 
-                }} 
-                className="bg-red-500/10 text-red-500 hover:bg-red-500 hover:text-white px-6 py-3 rounded-xl font-black text-[10px] uppercase tracking-widest transition-all"
-              >
-                BORRAR
-              </button>
+              <div className="flex gap-2">
+                <button 
+                  onClick={() => {
+                    setEditando(ev.id);
+                    setForm({
+                      titulo: ev.titulo,
+                      fecha: ev.fecha,
+                      precio_estandar: ev.precio_estandar.toString(),
+                      categoria: ev.categoria,
+                      aforo_max: ev.aforo_max.toString(),
+                      tiene_descuento: ev.tiene_descuento || false,
+                      precio_descuento: ev.precio_descuento?.toString() || ''
+                    });
+                    window.scrollTo({ top: 0, behavior: 'smooth' });
+                  }}
+                  className="bg-kalian-gold/10 text-kalian-gold hover:bg-kalian-gold hover:text-black px-6 py-3 rounded-xl font-black text-[10px] uppercase tracking-widest transition-all"
+                >
+                  EDITAR
+                </button>
+                <button 
+                  onClick={async () => { 
+                    if (window.confirm("¿Seguro que quieres borrar este evento?")) {
+                      await deleteDoc(doc(db, "eventos", ev.id)); 
+                      fetchEventos(); 
+                    }
+                  }} 
+                  className="bg-red-500/10 text-red-500 hover:bg-red-500 hover:text-white px-6 py-3 rounded-xl font-black text-[10px] uppercase tracking-widest transition-all"
+                >
+                  BORRAR
+                </button>
+              </div>
             </div>
           ))}
         </div>

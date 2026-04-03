@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { db } from '../../firebase';
-import { collection, getDocs, doc, setDoc, getDoc, query, orderBy, DocumentData } from 'firebase/firestore';
+import { collection, getDocs, doc, setDoc, getDoc, query, orderBy, DocumentData, deleteDoc } from 'firebase/firestore';
 import { Link } from 'react-router-dom';
 import { createSocioAuth } from '../../lib/adminAuth';
 import { sendWelcomeEmail } from '../../lib/brevoService';
@@ -25,6 +25,19 @@ const AdminSocios = () => {
   };
 
   useEffect(() => { fetchSocios(); }, []);
+
+  const handleDelete = async (id: string) => {
+    if (!window.confirm("¿Seguro que quieres eliminar este socio? Esta acción no se puede deshacer.")) return;
+    try {
+      await deleteDoc(doc(db, "socios", id));
+      setMsg("✅ Socio eliminado");
+      setTimeout(() => setMsg(''), 3000);
+      fetchSocios();
+    } catch (err) {
+      console.error(err);
+      alert("Error al eliminar");
+    }
+  };
 
   const handleCreate = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -173,15 +186,21 @@ const AdminSocios = () => {
                       )}
                     </div>
                   </div>
-                  <div className="flex gap-4 flex-wrap justify-end w-full md:w-auto">
-                    {activas.map(cat => (
-                      <div key={cat} className="flex flex-col items-end">
-                        <span className="px-4 py-1.5 bg-kalian-gold text-black text-[10px] font-black uppercase rounded-xl shadow-xl shadow-kalian-gold/10 tracking-widest">{cat}</span>
-                        <span className="text-[8px] font-black text-kalian-gold/40 mt-2 uppercase tracking-widest">Hasta {exp[cat]}</span>
-                      </div>
-                    ))}
-                    {activas.length === 0 && <span className="px-6 py-2 bg-black/40 text-kalian-gold/20 font-black text-[10px] uppercase rounded-xl border border-kalian-gold/10 tracking-widest italic">Inactivo</span>}
-                  </div>
+                    <div className="flex gap-4 flex-wrap justify-end w-full md:w-auto">
+                      {activas.map(cat => (
+                        <div key={cat} className="flex flex-col items-end">
+                          <span className="px-4 py-1.5 bg-kalian-gold text-black text-[10px] font-black uppercase rounded-xl shadow-xl shadow-kalian-gold/10 tracking-widest">{cat}</span>
+                          <span className="text-[8px] font-black text-kalian-gold/40 mt-2 uppercase tracking-widest">Hasta {exp[cat]}</span>
+                        </div>
+                      ))}
+                      {activas.length === 0 && <span className="px-6 py-2 bg-black/40 text-kalian-gold/20 font-black text-[10px] uppercase rounded-xl border border-kalian-gold/10 tracking-widest italic">Inactivo</span>}
+                      <button 
+                        onClick={() => handleDelete(s.id)}
+                        className="p-3 bg-red-500/10 text-red-500 rounded-xl border border-red-500/20 hover:bg-red-500 hover:text-white transition-all text-[10px] font-black uppercase tracking-widest"
+                      >
+                        ELIMINAR
+                      </button>
+                    </div>
                 </div>
               );
             })}

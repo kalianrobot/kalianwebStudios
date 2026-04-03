@@ -1,11 +1,12 @@
 import React, { useEffect, useState } from 'react';
 import { auth, db } from '../../firebase';
-import { collection, query, where, getDocs, doc, updateDoc, DocumentData, getDoc } from 'firebase/firestore';
+import { collection, query, where, getDocs, doc, updateDoc, DocumentData, getDoc, deleteDoc, increment } from 'firebase/firestore';
 import { useNavigate } from 'react-router-dom';
 import { QRCodeSVG } from 'qrcode.react';
 
 const PerfilSocio = () => {
-  const [reservas, setReservas] = useState<DocumentData[]>([]);
+  const [reservasActivas, setReservasActivas] = useState<DocumentData[]>([]);
+  const [historialReservas, setHistorialReservas] = useState<DocumentData[]>([]);
   const [cursosDetalle, setCursosDetalle] = useState<DocumentData[]>([]);
   const [localDetalle, setLocalDetalle] = useState<DocumentData | null>(null);
   const [usuario, setUsuario] = useState<DocumentData | null>(null);
@@ -60,57 +61,37 @@ const PerfilSocio = () => {
           const snapResUid = await getDocs(qResUid);
           const hoy = new Date().toISOString().split('T')[0];
 
-          let listaReservas = snapResUid.docs.map(d => ({ 
-            id: d.id, 
-            titulo: d.data().eventoTitulo,
-            tipo: d.data().esCurso ? 'CURSO' : 'EVENTO',
-            fechaActividad: d.data().fechaActividad || d.data().fechaReserva?.split('T')[0],
-            ...d.data() 
-          })).filter(r => r.fechaActividad >= hoy);
+          let todasLasReservas: any[] = snapResUid.docs.map(d => ({ id: d.id, ...d.data() }));
 
-          // Fallback por DNI (lo más seguro para socios)
+          // Fallback por DNI
           if (sData.dni) {
             const qResDni = query(collection(db, "reservas"), where("dniTitular", "==", sData.dni));
             const snapResDni = await getDocs(qResDni);
             snapResDni.docs.forEach(d => {
-              const rData = d.data();
-              const fechaAct = rData.fechaActividad || rData.fechaReserva?.split('T')[0];
-              if (fechaAct >= hoy && !listaReservas.some(r => r.id === d.id)) {
-                listaReservas.push({ 
-                  id: d.id, 
-                  titulo: rData.eventoTitulo,
-                  tipo: rData.esCurso ? 'CURSO' : 'EVENTO',
-                  fechaActividad: fechaAct,
-                  ...rData 
-                });
+              if (!todasLasReservas.some(r => r.id === d.id)) {
+                todasLasReservas.push({ id: d.id, ...d.data() });
               }
             });
           }
 
-          if (auth.currentUser.email) {
-            const qResEmail = query(collection(db, "reservas"), where("emailTitular", "==", auth.currentUser.email));
-            const snapResEmail = await getDocs(qResEmail);
+          // Verificar si el evento existe y separar activas de historial
+          const promVerificar = todasLasReservas.map(async (r) => {
+            const evSnap = await getDoc(doc(db, r.esCurso ? "cursos" : "eventos", r.eventoId));
+            if (!evSnap.exists()) return null; // BDD: Si el evento se borra, la reserva desaparece
             
-            for (const d of snapResEmail.docs) {
-              const data = d.data();
-              const fechaAct = data.fechaActividad || data.fechaReserva?.split('T')[0];
-              if (fechaAct >= hoy) {
-                if (data.uidTitular !== auth.currentUser.uid) {
-                  await updateDoc(d.ref, { uidTitular: auth.currentUser.uid });
-                }
-                if (!listaReservas.some(r => r.id === d.id)) {
-                  listaReservas.push({ 
-                    id: d.id, 
-                    titulo: data.eventoTitulo,
-                    tipo: data.esCurso ? 'CURSO' : 'EVENTO',
-                    fechaActividad: fechaAct,
-                    ...data 
-                  });
-                }
-              }
-            }
-          }
-          setReservas(listaReservas);
+            const fechaAct = r.fechaActividad || r.fechaReserva?.split('T')[0];
+            return { 
+              ...r, 
+              titulo: r.eventoTitulo,
+              tipo: r.esCurso ? 'CURSO' : 'EVENTO',
+              fechaActividad: fechaAct,
+              activa: fechaAct >= hoy
+            };
+          });
+
+          const verificadas = (await Promise.all(promVerificar)).filter(r => r !== null);
+          setReservasActivas(verificadas.filter(r => r.activa));
+          setHistorialReservas(verificadas.filter(r => !r.activa));
         }
       } catch (err) {
         console.error("Error cargando perfil:", err);
@@ -121,6 +102,30 @@ const PerfilSocio = () => {
     cargarDatos();
   }, [navigate]);
 
+  const cancelarReserva = async (reserva: any) => {
+    if (!window.confirm("¿Seguro que quieres cancelar esta reserva?")) return;
+    
+    try {
+      const esCurso = reserva.esCurso;
+      const coleccionActividad = esCurso ? "cursos" : "eventos";
+      const docRef = doc(db, coleccionActividad, reserva.eventoId);
+      
+      // Restar aforo
+      const numPlazas = 1 + (reserva.acompañantes || 0);
+      await updateDoc(docRef, {
+        aforo_actual: increment(-numPlazas)
+      });
+
+      // Borrar reserva
+      await deleteDoc(doc(db, "reservas", reserva.id));
+      
+      setReservasActivas(prev => prev.filter(r => r.id !== reserva.id));
+      alert("✅ Reserva cancelada con éxito");
+    } catch (err) {
+      console.error(err);
+      alert("Error al cancelar");
+    }
+  };
   const actualizarAcompañantes = async (reserva: any, nuevoNum: number) => {
     if (nuevoNum < 0) return;
     
@@ -168,7 +173,7 @@ const PerfilSocio = () => {
         aforo_actual: ocupacionSinMi + 1 + nuevoNum
       });
 
-      setReservas(prev => prev.map(r => r.id === reserva.id ? { ...r, acompañantes: nuevoNum } : r));
+      setReservasActivas(prev => prev.map(r => r.id === reserva.id ? { ...r, acompañantes: nuevoNum } : r));
     } catch (err) {
       console.error("Error al actualizar:", err);
       alert("No se pudo actualizar el número de acompañantes.");
@@ -265,11 +270,11 @@ const PerfilSocio = () => {
             <div className="h-[1px] flex-1 bg-kalian-gold/20"></div>
           </div>
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-10">
-            {reservas.length === 0 && cursosDetalle.length === 0 && !localDetalle ? (
+            {reservasActivas.length === 0 && cursosDetalle.length === 0 && !localDetalle ? (
               <div className="col-span-full bg-black/20 p-20 rounded-[3rem] text-center border border-kalian-gold/10 border-dashed">
                 <p className="kalian-poster-text text-kalian-gold/30 text-4xl">No tienes actividades<br/>inscritas todavía</p>
               </div>
-            ) : reservas.map(res => (
+            ) : reservasActivas.map(res => (
           <div key={res.id} className="bg-kalian-cream rounded-[3rem] p-10 text-black shadow-2xl flex flex-col items-center transform hover:scale-[1.02] transition-all duration-500 group relative">
             <div className="absolute top-0 left-0 w-full h-4 bg-kalian-gold rounded-t-[3rem] opacity-20"></div>
             
@@ -304,11 +309,36 @@ const PerfilSocio = () => {
                   className="w-12 h-12 bg-white border border-black/10 rounded-2xl kalian-poster-text text-2xl hover:bg-black hover:text-kalian-gold transition-all shadow-sm">+</button>
               </div>
             </div>
-            <p className="text-[8px] text-black/30 mt-6 uppercase font-black tracking-[0.3em] italic">Gestiona tus acompañantes según aforo</p>
+            
+            <button 
+              onClick={() => cancelarReserva(res)}
+              className="mt-6 text-[9px] font-black uppercase text-red-500/40 hover:text-red-500 transition-colors tracking-widest"
+            >
+              Cancelar Reserva
+            </button>
           </div>
         ))}
           </div>
         </section>
+
+        {/* SECCIÓN HISTORIAL */}
+        {historialReservas.length > 0 && (
+          <section className="space-y-12">
+            <div className="flex items-center gap-6">
+              <h2 className="text-3xl kalian-poster-text text-kalian-gold/40">HISTORIAL <span className="text-kalian-cream/40">PASADO</span></h2>
+              <div className="h-[1px] flex-1 bg-kalian-gold/10"></div>
+            </div>
+            <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-4 gap-6 opacity-60 grayscale">
+              {historialReservas.map(res => (
+                <div key={res.id} className="bg-black/20 border border-kalian-gold/10 rounded-3xl p-6">
+                  <p className="text-[8px] font-black text-kalian-gold/40 uppercase mb-2">{res.fechaActividad}</p>
+                  <h3 className="text-xl kalian-poster-text text-kalian-cream uppercase leading-none">{res.titulo}</h3>
+                  <p className="text-[8px] font-bold text-kalian-gold/20 mt-2 uppercase">Ticket: {res.id}</p>
+                </div>
+              ))}
+            </div>
+          </section>
+        )}
       </main>
     </div>
   );

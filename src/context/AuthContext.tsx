@@ -7,10 +7,13 @@ interface AuthContextType {
   user: User | null;
   socioData: DocumentData | null;
   isAdmin: boolean;
-  role: 'admin' | 'socio' | 'invitado' | 'invitado_registrado';
+  isTeacher: boolean;
+  role: 'admin' | 'teacher' | 'socio' | 'invitado' | 'invitado_registrado';
   loading: boolean;
   loginAdmin: (password: string) => boolean;
+  loginTeacher: (password: string) => boolean;
   logoutAdmin: () => void;
+  logoutTeacher: () => void;
   logoutSocio: () => Promise<void>;
   esSocioActivo: (categoria: string) => boolean;
 }
@@ -29,6 +32,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   const [user, setUser] = useState<User | null>(null);
   const [socioData, setSocioData] = useState<DocumentData | null>(null);
   const [isAdmin, setIsAdmin] = useState(localStorage.getItem('kalianAdmin') === 'true');
+  const [isTeacher, setIsTeacher] = useState(localStorage.getItem('kalianTeacher') === 'true');
   const [loading, setLoading] = useState(true);
 
   const hoy = new Date().toISOString().split('T')[0];
@@ -48,9 +52,23 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     return false;
   };
 
+  const loginTeacher = (password: string) => {
+    if (password === 'profekalian') {
+      setIsTeacher(true);
+      localStorage.setItem('kalianTeacher', 'true');
+      return true;
+    }
+    return false;
+  };
+
   const logoutAdmin = () => {
     setIsAdmin(false);
     localStorage.removeItem('kalianAdmin');
+  };
+
+  const logoutTeacher = () => {
+    setIsTeacher(false);
+    localStorage.removeItem('kalianTeacher');
   };
 
   const logoutSocio = () => {
@@ -89,8 +107,9 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     return () => unsubscribe();
   }, []);
 
-  const obtenerRolDinamico = (): 'admin' | 'socio' | 'invitado' | 'invitado_registrado' => {
+  const obtenerRolDinamico = (): 'admin' | 'teacher' | 'socio' | 'invitado' | 'invitado_registrado' => {
     if (isAdmin) return 'admin';
+    if (isTeacher) return 'teacher';
     if (!user) return 'invitado';
     
     const tieneContratoActivo = Object.values(socioData?.expiraciones || {})
@@ -105,10 +124,13 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     user, 
     socioData, 
     isAdmin, 
+    isTeacher,
     role, 
     loading, 
     loginAdmin, 
+    loginTeacher,
     logoutAdmin, 
+    logoutTeacher,
     logoutSocio,
     esSocioActivo
   };

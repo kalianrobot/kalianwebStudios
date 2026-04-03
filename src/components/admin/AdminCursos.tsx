@@ -9,13 +9,29 @@ import { sendWelcomeEmail } from '../../lib/brevoService';
 const AdminCursos = () => {
   const [cursos, setCursos] = useState<DocumentData[]>([]);
   const [msg, setMsg] = useState('');
-  const [form, setForm] = useState({ titulo: '', precio: '', categoria: 'musica', fechaInicio: '', fechaFin: '', aforo_total: 20, horario: '' });
-  const [manualAlumno, setManualAlumno] = useState({ dni: '', nombre: '', email: '' });
+  const [form, setForm] = useState({ 
+    titulo: '', 
+    precio: '', 
+    tiene_descuento: false,
+    precio_descuento: '',
+    precioTipo: 'mes', // 'mes' o 'clase'
+    categoria: 'musica', 
+    fechaInicio: '2025-09-01', 
+    fechaFin: '2026-06-30', 
+    aforo_disponible: true, 
+    horario: '',
+    tipoClase: 'presencial', // 'presencial' o 'online'
+    frecuencia: 'semanal', // 'semanal', 'quincenal', 'mensual'
+    profesor: '',
+    descripcion: ''
+  });
+  const [editando, setEditando] = useState<string | null>(null);
   const [cursoSeleccionado, setCursoSeleccionado] = useState<string | null>(null);
   const [solicitudes, setSolicitudes] = useState<DocumentData[]>([]);
+  const [manualAlumno, setManualAlumno] = useState({ dni: '', nombre: '', email: '' });
 
   const fetchCursos = async () => {
-    const snap = await getDocs(query(collection(db, "cursos"), orderBy("fechaInicio", "desc")));
+    const snap = await getDocs(query(collection(db, "cursos"), orderBy("categoria", "asc")));
     setCursos(snap.docs.map(d => ({ id: d.id, ...d.data() })));
 
     // Fetch solicitudes (reservas de cursos)
@@ -25,25 +41,46 @@ const AdminCursos = () => {
 
   useEffect(() => { fetchCursos(); }, []);
 
-  const crear = async (e: React.FormEvent) => {
+  const guardar = async (e: React.FormEvent) => {
     e.preventDefault();
     try {
-      const anioMes = form.fechaInicio.substring(0, 7); 
-      const slug = form.titulo.trim().replace(/\s+/g, '-').toUpperCase();
-      const customId = `${anioMes}-${slug}`;
-
-      await setDoc(doc(db, "cursos", customId), { 
+      const cursoData = { 
         ...form, 
         precio: Number(form.precio),
-        aforo_total: Number(form.aforo_total),
-        aforo_actual: 0,
-        alumnos: [],
-        horario: form.horario
-      });
+        precio_descuento: form.tiene_descuento ? Number(form.precio_descuento) : 0,
+        aforo_actual: editando ? (cursos.find(c => c.id === editando)?.aforo_actual || 0) : 0,
+        alumnos: editando ? (cursos.find(c => c.id === editando)?.alumnos || []) : [],
+      };
+
+      if (editando) {
+        await updateDoc(doc(db, "cursos", editando), cursoData);
+        setMsg("✅ Curso actualizado");
+      } else {
+        const anioMes = form.fechaInicio.substring(0, 7); 
+        const slug = form.titulo.trim().replace(/\s+/g, '-').toUpperCase();
+        const customId = `${anioMes}-${slug}`;
+        await setDoc(doc(db, "cursos", customId), cursoData);
+        setMsg("✅ Curso creado: " + customId);
+      }
       
-      setMsg("✅ Curso creado: " + customId);
       setTimeout(() => setMsg(''), 3000);
-      setForm({ titulo: '', precio: '', categoria: 'musica', fechaInicio: '', fechaFin: '', aforo_total: 20, horario: '' });
+      setForm({ 
+        titulo: '', 
+        precio: '', 
+        tiene_descuento: false,
+        precio_descuento: '',
+        precioTipo: 'mes',
+        categoria: 'musica', 
+        fechaInicio: '2025-09-01', 
+        fechaFin: '2026-06-30', 
+        aforo_disponible: true, 
+        horario: '',
+        tipoClase: 'presencial',
+        frecuencia: 'semanal',
+        profesor: '',
+        descripcion: ''
+      });
+      setEditando(null);
       fetchCursos();
     } catch (err) { alert("Error al guardar"); }
   };
@@ -181,12 +218,52 @@ const AdminCursos = () => {
         )}
 
         <div className="grid lg:grid-cols-2 gap-8">
-          {/* FORMULARIO CREACIÓN */}
-          <form onSubmit={crear} className="bg-white p-10 rounded-[3rem] shadow-2xl space-y-5 h-fit border-t-[12px] border-slate-900 text-slate-900">
-            <h2 className="text-xl font-black uppercase italic mb-4">Nuevo Curso</h2>
-            <input type="text" placeholder="Nombre del Curso" className="w-full p-5 bg-slate-50 rounded-2xl outline-none focus:ring-2 ring-indigo-500 border border-slate-200 text-slate-900" value={form.titulo} onChange={e => setForm({...form, titulo: e.target.value})} required />
+          {/* FORMULARIO CREACIÓN / EDICIÓN */}
+          <form onSubmit={guardar} className="bg-white p-10 rounded-[3rem] shadow-2xl space-y-5 h-fit border-t-[12px] border-slate-900 text-slate-900">
+            <h2 className="text-xl font-black uppercase italic mb-4">{editando ? 'Editar Curso' : 'Nuevo Curso'}</h2>
             
-            <input type="text" placeholder="Horario (ej: Lunes y Martes 14:00-15:00)" className="w-full p-5 bg-slate-50 rounded-2xl outline-none focus:ring-2 ring-indigo-500 border border-slate-200 text-slate-900" value={form.horario} onChange={e => setForm({...form, horario: e.target.value})} required />
+            <div className="space-y-1">
+              <label className="text-[9px] font-black uppercase text-slate-400 ml-4">Nombre del Curso</label>
+              <input type="text" placeholder="Nombre del Curso" className="w-full p-5 bg-slate-50 rounded-2xl outline-none focus:ring-2 ring-indigo-500 border border-slate-200 text-slate-900" value={form.titulo} onChange={e => setForm({...form, titulo: e.target.value})} required />
+            </div>
+
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-1">
+                <label className="text-[9px] font-black uppercase text-slate-400 ml-4">Profesor/a</label>
+                <input type="text" placeholder="Nombre del profesor" className="w-full p-5 bg-slate-50 rounded-2xl outline-none border border-slate-200 text-slate-900" value={form.profesor} onChange={e => setForm({...form, profesor: e.target.value})} required />
+              </div>
+              <div className="space-y-1">
+                <label className="text-[9px] font-black uppercase text-slate-400 ml-4">Categoría</label>
+                <select className="w-full p-5 bg-slate-50 rounded-2xl font-black uppercase border border-slate-200 text-slate-900" value={form.categoria} onChange={e => setForm({...form, categoria: e.target.value})}>
+                  <option value="musica">🎸 Music is cool</option>
+                  <option value="danza">💃 Club de baile</option>
+                  <option value="local">🏠 Locales</option>
+                </select>
+              </div>
+            </div>
+
+            <div className="space-y-1">
+              <label className="text-[9px] font-black uppercase text-slate-400 ml-4">Horario</label>
+              <input type="text" placeholder="ej: Lunes y Martes 14:00-15:00" className="w-full p-5 bg-slate-50 rounded-2xl outline-none border border-slate-200 text-slate-900" value={form.horario} onChange={e => setForm({...form, horario: e.target.value})} required />
+            </div>
+
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-1">
+                <label className="text-[9px] font-black uppercase text-slate-400 ml-4">Tipo de Clase</label>
+                <select className="w-full p-5 bg-slate-50 rounded-2xl font-black uppercase border border-slate-200 text-slate-900" value={form.tipoClase} onChange={e => setForm({...form, tipoClase: e.target.value})}>
+                  <option value="presencial">Presencial</option>
+                  <option value="online">Online</option>
+                </select>
+              </div>
+              <div className="space-y-1">
+                <label className="text-[9px] font-black uppercase text-slate-400 ml-4">Frecuencia</label>
+                <select className="w-full p-5 bg-slate-50 rounded-2xl font-black uppercase border border-slate-200 text-slate-900" value={form.frecuencia} onChange={e => setForm({...form, frecuencia: e.target.value})}>
+                  <option value="semanal">Semanal</option>
+                  <option value="quincenal">Quincenal</option>
+                  <option value="mensual">Mensual</option>
+                </select>
+              </div>
+            </div>
 
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-1">
@@ -202,21 +279,68 @@ const AdminCursos = () => {
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-1">
                 <label className="text-[10px] font-black uppercase text-slate-400 ml-4">Precio (€)</label>
-                <input type="number" placeholder="Precio (€)" className="w-full p-5 bg-slate-50 rounded-2xl outline-none font-bold border border-slate-200 text-slate-900" value={form.precio} onChange={e => setForm({...form, precio: e.target.value})} required />
+                <div className="flex gap-2">
+                  <input type="number" placeholder="Precio" className="flex-1 p-5 bg-slate-50 rounded-2xl outline-none font-bold border border-slate-200 text-slate-900" value={form.precio} onChange={e => setForm({...form, precio: e.target.value})} required />
+                  <select className="p-5 bg-slate-50 rounded-2xl font-black uppercase border border-slate-200 text-slate-900" value={form.precioTipo} onChange={e => setForm({...form, precioTipo: e.target.value})}>
+                    <option value="mes">/mes</option>
+                    <option value="clase">/clase</option>
+                  </select>
+                </div>
               </div>
               <div className="space-y-1">
-                <label className="text-[10px] font-black uppercase text-slate-400 ml-4">Aforo Máximo</label>
-                <input type="number" placeholder="Aforo" className="w-full p-5 bg-slate-50 rounded-2xl outline-none font-bold border border-slate-200 text-slate-900" value={form.aforo_total} onChange={e => setForm({...form, aforo_total: Number(e.target.value)})} required />
+                <label className="text-[10px] font-black uppercase text-slate-400 ml-4">Disponibilidad</label>
+                <button 
+                  type="button"
+                  onClick={() => setForm({...form, aforo_disponible: !form.aforo_disponible})}
+                  className={`w-full p-5 rounded-2xl font-black uppercase tracking-widest transition-all ${form.aforo_disponible ? 'bg-emerald-100 text-emerald-600 border-emerald-200' : 'bg-red-100 text-red-600 border-red-200'} border`}
+                >
+                  {form.aforo_disponible ? 'Plazas Libres' : 'Sin Plazas'}
+                </button>
               </div>
             </div>
 
-            <select className="w-full p-5 bg-slate-50 rounded-2xl font-black uppercase tracking-widest border border-slate-200 text-slate-900" value={form.categoria} onChange={e => setForm({...form, categoria: e.target.value})}>
-              <option value="musica">🎸 Música</option>
-              <option value="danza">💃 Danza</option>
-              <option value="local">🏠 Local</option>
-            </select>
+            <div className="grid grid-cols-2 gap-4">
+              <div className="flex items-center gap-4 bg-slate-50 p-5 rounded-2xl border border-slate-200">
+                <input 
+                  type="checkbox" 
+                  className="w-6 h-6 rounded-lg accent-slate-900" 
+                  checked={form.tiene_descuento} 
+                  onChange={e => setForm({...form, tiene_descuento: e.target.checked})} 
+                />
+                <p className="text-[10px] font-black uppercase text-slate-900 tracking-widest">¿Descuento Socio?</p>
+              </div>
+              {form.tiene_descuento && (
+                <div className="space-y-1">
+                  <label className="text-[10px] font-black uppercase text-slate-400 ml-4">Precio Socio (€)</label>
+                  <input type="number" placeholder="Precio Socio" className="w-full p-5 bg-slate-50 rounded-2xl outline-none border border-slate-200 text-slate-900 font-bold" value={form.precio_descuento} onChange={e => setForm({...form, precio_descuento: e.target.value})} required />
+                </div>
+              )}
+            </div>
 
-            <button className="w-full bg-slate-900 text-white p-6 rounded-[2rem] font-black uppercase shadow-2xl hover:bg-indigo-600 transition-all active:scale-95">Publicar Curso</button>
+            <div className="space-y-1">
+              <label className="text-[9px] font-black uppercase text-slate-400 ml-4">Descripción del Curso</label>
+              <textarea placeholder="Información descriptiva del curso..." className="w-full p-5 bg-slate-50 rounded-2xl outline-none border border-slate-200 text-slate-900 min-h-[100px]" value={form.descripcion} onChange={e => setForm({...form, descripcion: e.target.value})} />
+            </div>
+
+            <div className="flex gap-3">
+              <button className="flex-1 bg-slate-900 text-white p-6 rounded-[2rem] font-black uppercase shadow-2xl hover:bg-indigo-600 transition-all active:scale-95">
+                {editando ? 'Actualizar Curso' : 'Publicar Curso'}
+              </button>
+              {editando && (
+                <button 
+                  type="button"
+                  onClick={() => {
+                    setEditando(null);
+                    setForm({ 
+                      titulo: '', precio: '', tiene_descuento: false, precio_descuento: '', precioTipo: 'mes', categoria: 'musica', 
+                      fechaInicio: '2025-09-01', fechaFin: '2026-06-30', aforo_disponible: true, 
+                      horario: '', tipoClase: 'presencial', frecuencia: 'semanal', profesor: '', descripcion: '' 
+                    });
+                  }}
+                  className="bg-slate-200 text-slate-600 px-8 rounded-[2rem] font-black uppercase"
+                >Cancelar</button>
+              )}
+            </div>
           </form>
 
           {/* LISTADO Y GESTIÓN */}
@@ -226,14 +350,19 @@ const AdminCursos = () => {
               <div key={c.id} className="bg-white p-8 rounded-[2.5rem] shadow-lg border border-slate-100 group">
                 <div className="flex justify-between items-start mb-4">
                   <div>
-                    <span className="text-[9px] font-black uppercase bg-indigo-100 text-indigo-600 px-3 py-1 rounded-full mb-2 inline-block">{c.categoria}</span>
+                    <span className="text-[9px] font-black uppercase bg-indigo-100 text-indigo-600 px-3 py-1 rounded-full mb-2 inline-block">
+                      {c.categoria === 'musica' ? 'Music is cool' : c.categoria === 'danza' ? 'Club de baile' : 'Locales'}
+                    </span>
                     <h3 className="font-black text-2xl uppercase italic leading-none">{c.titulo}</h3>
-                    <p className="text-[10px] text-indigo-500 font-black mt-1 uppercase tracking-widest">{c.horario}</p>
+                    <p className="text-[10px] text-indigo-500 font-black mt-1 uppercase tracking-widest">{c.horario} | {c.profesor}</p>
                     <p className="text-[10px] text-slate-400 font-bold mt-2 uppercase tracking-widest">{c.fechaInicio} al {c.fechaFin}</p>
+                    <p className="text-[10px] text-slate-400 font-bold mt-1 uppercase tracking-widest">{c.precio}€/{c.precioTipo || 'mes'} | {c.tipoClase} | {c.frecuencia}</p>
                   </div>
                   <div className="text-right">
-                    <p className="text-2xl font-black italic text-slate-900">{c.aforo_actual || 0}/{c.aforo_total}</p>
-                    <p className="text-[8px] font-black uppercase text-slate-300">Plazas</p>
+                    <p className={`text-xl font-black italic ${c.aforo_disponible ? 'text-emerald-500' : 'text-red-500'}`}>
+                      {c.aforo_disponible ? 'DISPONIBLE' : 'COMPLETO'}
+                    </p>
+                    <p className="text-[8px] font-black uppercase text-slate-300">{c.alumnos?.length || 0} Alumnos</p>
                   </div>
                 </div>
 
@@ -270,14 +399,39 @@ const AdminCursos = () => {
                   </div>
                 ) : (
                   <div className="mt-6 flex justify-between items-center">
-                    <button 
-                      onClick={() => setCursoSeleccionado(c.id)}
-                      className="bg-slate-900 text-white px-8 py-3 rounded-xl font-black uppercase text-[10px] tracking-widest hover:bg-indigo-600 transition-all"
-                    >+ Inscribir Alumno</button>
+                    <div className="flex gap-2">
+                      <button 
+                        onClick={() => {
+                          setEditando(c.id);
+                          setForm({
+                            titulo: c.titulo,
+                            precio: c.precio.toString(),
+                            precioTipo: c.precioTipo || 'mes',
+                            categoria: c.categoria,
+                            fechaInicio: c.fechaInicio,
+                            fechaFin: c.fechaFin,
+                            aforo_disponible: c.aforo_disponible !== false,
+                            horario: c.horario,
+                            tipoClase: c.tipoClase || 'presencial',
+                            frecuencia: c.frecuencia || 'semanal',
+                            profesor: c.profesor || '',
+                            descripcion: c.descripcion || ''
+                          });
+                          window.scrollTo({ top: 0, behavior: 'smooth' });
+                        }}
+                        className="bg-indigo-100 text-indigo-600 px-6 py-3 rounded-xl font-black uppercase text-[10px] tracking-widest hover:bg-indigo-200 transition-all"
+                      >Editar</button>
+                      <button 
+                        onClick={() => setCursoSeleccionado(c.id)}
+                        className="bg-slate-900 text-white px-8 py-3 rounded-xl font-black uppercase text-[10px] tracking-widest hover:bg-indigo-600 transition-all"
+                      >+ Inscribir Alumno</button>
+                    </div>
                     <button 
                       onClick={async () => { 
-                        await deleteDoc(doc(db, "cursos", c.id)); 
-                        fetchCursos(); 
+                        if (window.confirm("¿Seguro que quieres eliminar este curso?")) {
+                          await deleteDoc(doc(db, "cursos", c.id)); 
+                          fetchCursos(); 
+                        }
                       }} 
                       className="text-red-300 hover:text-red-500 font-bold text-[10px] uppercase"
                     >

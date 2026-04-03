@@ -46,7 +46,9 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   const loginAdmin = (password: string) => {
     if (password === 'kalian2026') {
       setIsAdmin(true);
+      setIsTeacher(false);
       localStorage.setItem('kalianAdmin', 'true');
+      localStorage.removeItem('kalianTeacher');
       return true;
     }
     return false;
@@ -55,7 +57,9 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   const loginTeacher = (password: string) => {
     if (password === 'profekalian') {
       setIsTeacher(true);
+      setIsAdmin(false);
       localStorage.setItem('kalianTeacher', 'true');
+      localStorage.removeItem('kalianAdmin');
       return true;
     }
     return false;

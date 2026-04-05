@@ -1,5 +1,6 @@
 import React from 'react';
 import { Link } from 'react-router-dom';
+import { KalianLogo } from '../components/public/KalianLogo';
 
 const LandingPage = () => {
   return (
@@ -16,15 +17,9 @@ const LandingPage = () => {
 
       {/* Content */}
       <div className="relative z-10 text-center space-y-12 px-6 max-w-4xl">
-        {/* Stylized Logo */}
+        {/* Official Logo */}
         <div className="flex justify-center mb-8">
-          <div className="w-24 h-24 bg-black rounded-full flex items-center justify-center relative border-2 border-kalian-gold/20 shadow-2xl">
-            <div className="relative">
-              <div className="w-12 h-2 bg-white -rotate-45 translate-y-1"></div>
-              <div className="w-12 h-2 bg-white rotate-45 -translate-y-1"></div>
-              <div className="absolute -right-2 -top-2 w-4 h-4 bg-kalian-orange rounded-full shadow-[0_0_15px_rgba(249,115,22,0.6)]"></div>
-            </div>
-          </div>
+          <KalianLogo size="lg" />
         </div>
 
         <div className="space-y-2">

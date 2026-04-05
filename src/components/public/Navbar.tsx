@@ -1,5 +1,6 @@
 import { useAuth } from '../../context/AuthContext';
 import { Link, useNavigate } from 'react-router-dom';
+import { KalianLogo } from './KalianLogo';
 
 const Navbar = () => {
   const { socioData, logoutSocio } = useAuth();
@@ -15,14 +16,7 @@ const Navbar = () => {
     <nav className="flex justify-between items-center p-6 bg-kalian-dark text-kalian-cream border-b border-kalian-gold/10 shadow-2xl sticky top-0 z-50">
       <div className="flex items-center gap-4">
         <Link to="/" className="flex items-center gap-3 group">
-          <div className="w-8 h-8 bg-black rounded-full flex items-center justify-center relative border border-kalian-gold/30">
-            <div className="relative scale-50">
-              <div className="w-12 h-2 bg-white -rotate-45 translate-y-1"></div>
-              <div className="w-12 h-2 bg-white rotate-45 -translate-y-1"></div>
-              <div className="absolute -right-2 -top-2 w-4 h-4 bg-kalian-orange rounded-full"></div>
-            </div>
-          </div>
-          <span className="text-xl kalian-poster-text text-kalian-gold group-hover:text-kalian-cream transition-colors">KALIAN</span>
+          <KalianLogo size="sm" showText={true} />
         </Link>
       </div>
       

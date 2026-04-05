@@ -5,22 +5,31 @@ import { useNavigate } from 'react-router-dom';
 const AdminLogin = () => {
   const [pass, setPass] = useState('');
   const [error, setError] = useState('');
+  const [loading, setLoading] = useState(false);
   const { loginAdmin, role } = useAuth();
   const navigate = useNavigate();
 
+  const ADMIN_EMAIL = "kalianrobot@gmail.com"; // Email de administrador por defecto
+
   useEffect(() => {
     if (role === 'admin') {
-      navigate('/admin');
+      navigate('/staff');
     }
   }, [role, navigate]);
 
-  const handleLogin = (e: React.FormEvent) => {
+  const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (loginAdmin(pass)) {
-      navigate('/admin');
-    } else {
-      setError('Clave incorrecta');
+    setLoading(true);
+    setError('');
+    try {
+      // Usamos el email fijo de admin y el password introducido
+      await loginAdmin(ADMIN_EMAIL, pass);
+      navigate('/staff');
+    } catch (err: any) {
+      setError('Clave de Staff incorrecta');
       setPass('');
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -47,19 +56,23 @@ const AdminLogin = () => {
 
         <form onSubmit={handleLogin} className="space-y-6">
           <div className="space-y-2">
-            <p className="text-[9px] font-black text-kalian-gold/40 uppercase tracking-[0.4em] ml-4">Contraseña de Acceso</p>
+            <p className="text-[9px] font-black text-kalian-gold/40 uppercase tracking-[0.4em] ml-4">Contraseña de Staff</p>
             <input
               type="password"
               placeholder="••••••••"
               className="w-full p-6 bg-kalian-gold/5 rounded-2xl text-center text-2xl kalian-poster-text border border-kalian-gold/10 focus:border-kalian-gold focus:bg-kalian-gold/10 outline-none text-kalian-gold transition-all placeholder:text-kalian-gold/20"
+              required
               autoFocus
               value={pass}
               onChange={e => setPass(e.target.value)}
             />
           </div>
           
-          <button className="w-full bg-kalian-gold text-black p-6 rounded-2xl kalian-poster-text text-xl tracking-widest hover:bg-white transition-all shadow-2xl shadow-kalian-gold/20">
-            ENTRAR AL PANEL
+          <button 
+            disabled={loading}
+            className="w-full bg-kalian-gold text-black p-6 rounded-2xl kalian-poster-text text-xl tracking-widest hover:bg-white transition-all shadow-2xl shadow-kalian-gold/20 disabled:opacity-50"
+          >
+            {loading ? 'VERIFICANDO...' : 'ENTRAR AL PANEL'}
           </button>
         </form>
 

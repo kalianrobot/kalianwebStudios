@@ -8,6 +8,7 @@ import { sendWelcomeEmail } from '../../lib/brevoService';
 
 const AdminCursos = () => {
   const [cursos, setCursos] = useState<DocumentData[]>([]);
+  const [profesores, setProfesores] = useState<DocumentData[]>([]);
   const [msg, setMsg] = useState('');
   const [form, setForm] = useState({ 
     titulo: '', 
@@ -22,7 +23,8 @@ const AdminCursos = () => {
     horario: '',
     tipoClase: 'presencial', // 'presencial' o 'online'
     frecuencia: 'semanal', // 'semanal', 'quincenal', 'mensual'
-    profesor: '',
+    profesorId: '',
+    profesorNombre: '',
     descripcion: ''
   });
   const [editando, setEditando] = useState<string | null>(null);
@@ -37,6 +39,10 @@ const AdminCursos = () => {
     // Fetch solicitudes (reservas de cursos)
     const snapSol = await getDocs(query(collection(db, "reservas"), where("esCurso", "==", true)));
     setSolicitudes(snapSol.docs.map(d => ({ id: d.id, ...d.data() })));
+
+    // Fetch profesores
+    const snapProf = await getDocs(query(collection(db, "profesores"), orderBy("nombre", "asc")));
+    setProfesores(snapProf.docs.map(d => ({ id: d.id, ...d.data() })));
   };
 
   useEffect(() => { fetchCursos(); }, []);
@@ -44,8 +50,10 @@ const AdminCursos = () => {
   const guardar = async (e: React.FormEvent) => {
     e.preventDefault();
     try {
+      const prof = profesores.find(p => p.id === form.profesorId);
       const cursoData = { 
         ...form, 
+        profesorNombre: prof ? prof.nombre : form.profesorNombre,
         precio: Number(form.precio),
         precio_descuento: form.tiene_descuento ? Number(form.precio_descuento) : 0,
         aforo_actual: editando ? (cursos.find(c => c.id === editando)?.aforo_actual || 0) : 0,
@@ -77,7 +85,8 @@ const AdminCursos = () => {
         horario: '',
         tipoClase: 'presencial',
         frecuencia: 'semanal',
-        profesor: '',
+        profesorId: '',
+        profesorNombre: '',
         descripcion: ''
       });
       setEditando(null);
@@ -168,7 +177,7 @@ const AdminCursos = () => {
   return (
     <div className="min-h-screen bg-slate-100 p-6 font-sans text-slate-900">
       <div className="max-w-6xl mx-auto">
-        <Link to="/admin" className="text-indigo-600 font-bold text-xs uppercase tracking-widest">← Volver</Link>
+        <Link to="/staff" className="text-indigo-600 font-bold text-xs uppercase tracking-widest">← Volver</Link>
         <h1 className="text-4xl font-black italic uppercase mb-8 mt-2 tracking-tighter">Academia <span className="text-indigo-600">Kalian</span></h1>
 
         {msg && <div className="bg-emerald-500 text-white p-5 rounded-3xl mb-8 font-bold text-center shadow-xl animate-bounce">{msg}</div>}
@@ -230,7 +239,17 @@ const AdminCursos = () => {
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-1">
                 <label className="text-[9px] font-black uppercase text-slate-400 ml-4">Profesor/a</label>
-                <input type="text" placeholder="Nombre del profesor" className="w-full p-5 bg-slate-50 rounded-2xl outline-none border border-slate-200 text-slate-900" value={form.profesor} onChange={e => setForm({...form, profesor: e.target.value})} required />
+                <select 
+                  className="w-full p-5 bg-slate-50 rounded-2xl font-black uppercase border border-slate-200 text-slate-900" 
+                  value={form.profesorId} 
+                  onChange={e => setForm({...form, profesorId: e.target.value})} 
+                  required
+                >
+                  <option value="">Seleccionar Profesor</option>
+                  {profesores.map(p => (
+                    <option key={p.id} value={p.id}>{p.nombre}</option>
+                  ))}
+                </select>
               </div>
               <div className="space-y-1">
                 <label className="text-[9px] font-black uppercase text-slate-400 ml-4">Categoría</label>
@@ -354,7 +373,8 @@ const AdminCursos = () => {
                       {c.categoria === 'musica' ? 'Music is cool' : c.categoria === 'danza' ? 'Club de baile' : 'Locales'}
                     </span>
                     <h3 className="font-black text-2xl uppercase italic leading-none">{c.titulo}</h3>
-                    <p className="text-[10px] text-indigo-500 font-black mt-1 uppercase tracking-widest">{c.horario} | {c.profesor}</p>
+                    <p className="text-[10px] text-indigo-500 font-black mt-1 uppercase tracking-widest">{c.horario} | {c.profesorNombre || c.profesor}</p>
+                    <p className="text-[8px] text-slate-300 font-mono mt-1">ID Prof: {c.profesorId || 'SIN ID'}</p>
                     <p className="text-[10px] text-slate-400 font-bold mt-2 uppercase tracking-widest">{c.fechaInicio} al {c.fechaFin}</p>
                     <p className="text-[10px] text-slate-400 font-bold mt-1 uppercase tracking-widest">{c.precio}€/{c.precioTipo || 'mes'} | {c.tipoClase} | {c.frecuencia}</p>
                   </div>
@@ -414,7 +434,8 @@ const AdminCursos = () => {
                             horario: c.horario,
                             tipoClase: c.tipoClase || 'presencial',
                             frecuencia: c.frecuencia || 'semanal',
-                            profesor: c.profesor || '',
+                            profesorId: c.profesorId || '',
+                            profesorNombre: c.profesorNombre || c.profesor || '',
                             descripcion: c.descripcion || ''
                           });
                           window.scrollTo({ top: 0, behavior: 'smooth' });

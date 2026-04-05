@@ -246,6 +246,27 @@ const PerfilSocio = () => {
                     <p className="text-[9px] font-black text-kalian-gold uppercase tracking-[0.3em] mb-2">Curso Activo</p>
                     <h3 className="text-3xl kalian-poster-text text-kalian-cream">{c.titulo}</h3>
                     <p className="text-xs font-bold text-kalian-cream/40 mt-2 tracking-widest uppercase">{c.horario}</p>
+                    
+                    {/* DOCUMENTOS DEL CURSO */}
+                    {c.documentos && c.documentos.length > 0 && (
+                      <div className="mt-6 pt-6 border-t border-kalian-gold/10 space-y-3">
+                        <p className="text-[8px] font-black text-kalian-gold/40 uppercase tracking-widest">Material del Curso</p>
+                        <div className="flex flex-wrap gap-2">
+                          {c.documentos.map((doc: any, idx: number) => (
+                            <a 
+                              key={idx} 
+                              href={doc.url} 
+                              target="_blank" 
+                              rel="noreferrer"
+                              className="bg-kalian-gold/5 hover:bg-kalian-gold/20 border border-kalian-gold/10 px-3 py-2 rounded-lg flex items-center gap-2 transition-all group"
+                            >
+                              <span className="text-sm">📄</span>
+                              <span className="text-[9px] font-bold uppercase tracking-tighter text-kalian-cream/60 group-hover:text-kalian-gold">{doc.nombre}</span>
+                            </a>
+                          ))}
+                        </div>
+                      </div>
+                    )}
                   </div>
                 </div>
               ))}

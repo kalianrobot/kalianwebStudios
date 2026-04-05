@@ -16,6 +16,7 @@ import AdminCursos from './components/admin/AdminCursos';
 import AdminSocios from './components/admin/AdminSocios';
 import AdminCheckIn from './components/admin/AdminCheckIn';
 import AdminLocales from './components/admin/AdminLocales';
+import AdminProfesores from './components/admin/AdminProfesores';
 import AdminLogin from './pages/AdminLogin';
 
 // Componentes Teacher
@@ -39,33 +40,37 @@ function AppContent() {
         <Route path="/login" element={<LoginSocio />} />
         <Route path="/newsletter-kalian-privado" element={<NewsletterPage />} />
 
-        {/* RUTA DE LOGIN DE ADMIN */}
-        <Route path="/login-admin" element={role !== 'admin' ? <AdminLogin /> : <Navigate to="/admin" />} />
+        {/* RUTAS STAFF (ADMIN) */}
+        <Route path="/staff/login" element={role !== 'admin' ? <AdminLogin /> : <Navigate to="/staff" />} />
+        <Route path="/admin" element={<Navigate to="/staff" />} />
+        <Route path="/login-admin" element={<Navigate to="/staff/login" />} />
+        
+        <Route path="/staff" element={
+          role === 'admin' ? (
+            <AdminDashboard logout={logoutAdmin} />
+          ) : (
+            <Navigate to="/staff/login" />
+          )
+        } />
 
-        {/* RUTA DE LOGIN DE PROFESORES */}
-        <Route path="/login-teacher" element={role !== 'teacher' ? <TeacherLogin /> : <Navigate to="/teacher" />} />
+        <Route path="/staff/checkin" element={role === 'admin' ? <AdminCheckIn /> : <Navigate to="/staff/login" />} />
+        <Route path="/staff/eventos" element={role === 'admin' ? <AdminEventos /> : <Navigate to="/staff/login" />} />
+        <Route path="/staff/cursos" element={role === 'admin' ? <AdminCursos /> : <Navigate to="/staff/login" />} />
+        <Route path="/staff/socios" element={role === 'admin' ? <AdminSocios /> : <Navigate to="/staff/login" />} />
+        <Route path="/staff/profesores" element={role === 'admin' ? <AdminProfesores /> : <Navigate to="/staff/login" />} />
+        <Route path="/staff/locales" element={role === 'admin' ? <AdminLocales /> : <Navigate to="/staff/login" />} />
+
+        {/* RUTAS PROFESORES (TEACHER) */}
+        <Route path="/profesor/login" element={role !== 'teacher' ? <TeacherLogin /> : <Navigate to="/profesor" />} />
+        <Route path="/login-teacher" element={<Navigate to="/profesor/login" />} />
+        <Route path="/teacher" element={<Navigate to="/profesor" />} />
+        <Route path="/staff/profesor" element={<Navigate to="/profesor" />} />
+        
+        <Route path="/profesor" element={role === 'teacher' ? <TeacherDashboard /> : <Navigate to="/profesor/login" />} />
 
         {/* RUTAS PRIVADAS SOCIO */}
         <Route path="/home" element={user ? <HomeSocio /> : <Navigate to="/" />} />
         <Route path="/perfil" element={user ? <PerfilSocio /> : <Navigate to="/" />} />
-
-        {/* RUTAS ADMIN */}
-        <Route path="/admin" element={
-          role === 'admin' ? (
-            <AdminDashboard logout={logoutAdmin} />
-          ) : (
-            <Navigate to="/login-admin" />
-          )
-        } />
-
-        <Route path="/admin/checkin" element={role === 'admin' ? <AdminCheckIn /> : <Navigate to="/login-admin" />} />
-        <Route path="/admin/eventos" element={role === 'admin' ? <AdminEventos /> : <Navigate to="/login-admin" />} />
-        <Route path="/admin/cursos" element={role === 'admin' ? <AdminCursos /> : <Navigate to="/login-admin" />} />
-        <Route path="/admin/socios" element={role === 'admin' ? <AdminSocios /> : <Navigate to="/login-admin" />} />
-        <Route path="/admin/locales" element={role === 'admin' ? <AdminLocales /> : <Navigate to="/login-admin" />} />
-
-        {/* RUTAS TEACHER */}
-        <Route path="/teacher" element={role === 'teacher' ? <TeacherDashboard /> : <Navigate to="/login-teacher" />} />
 
         {/* REDIRECCIÓN POR DEFECTO */}
         <Route path="*" element={<Navigate to="/" />} />

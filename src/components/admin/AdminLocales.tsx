@@ -118,7 +118,7 @@ const AdminLocales = () => {
       <div className="max-w-6xl mx-auto">
         <header className="mb-8 flex justify-between items-center">
           <div>
-            <Link to="/admin" className="text-indigo-600 font-bold text-xs uppercase tracking-widest">← Volver</Link>
+            <Link to="/staff" className="text-indigo-600 font-bold text-xs uppercase tracking-widest">← Volver</Link>
             <h1 className="text-3xl font-black italic uppercase text-slate-900 mt-2">Gestión de Locales</h1>
           </div>
           {msg && <div className="bg-emerald-500 text-white px-6 py-3 rounded-2xl font-bold animate-bounce shadow-lg">{msg}</div>}

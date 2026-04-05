@@ -86,7 +86,7 @@ const AdminCheckIn = () => {
     <div className="min-h-screen bg-slate-900 p-6 font-sans text-white">
       <div className="max-w-xl mx-auto">
         <header className="flex justify-between items-center mb-10">
-          <Link to="/admin" className="text-slate-500 font-bold text-xs uppercase tracking-widest">← Panel</Link>
+          <Link to="/staff" className="text-slate-500 font-bold text-xs uppercase tracking-widest">← Panel</Link>
           <h1 className="text-2xl font-black italic uppercase tracking-tighter">Control de <span className="text-indigo-500">Acceso</span></h1>
         </header>
 

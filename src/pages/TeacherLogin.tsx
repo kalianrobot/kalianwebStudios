@@ -3,17 +3,44 @@ import { useAuth } from '../context/AuthContext';
 import { useNavigate } from 'react-router-dom';
 
 const TeacherLogin = () => {
+  const [email, setEmail] = useState('');
   const [pass, setPass] = useState('');
   const [error, setError] = useState('');
-  const { loginTeacher } = useAuth();
+  const [loading, setLoading] = useState(false);
+  const [info, setInfo] = useState('');
+  const { loginTeacher, resetPassword } = useAuth();
   const navigate = useNavigate();
 
-  const handleLogin = (e: React.FormEvent) => {
+  const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (loginTeacher(pass)) {
-      navigate('/teacher');
-    } else {
-      setError('Contraseña incorrecta');
+    setLoading(true);
+    setError('');
+    setInfo('');
+    try {
+      await loginTeacher(email, pass);
+      navigate('/profesor');
+    } catch (err: any) {
+      setError(err.message || 'Error al iniciar sesión');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleReset = async () => {
+    if (!email) {
+      setError("Introduce tu email para enviarte el enlace.");
+      return;
+    }
+    setLoading(true);
+    setError('');
+    setInfo('');
+    try {
+      await resetPassword(email);
+      setInfo("✅ Email enviado. Revisa tu bandeja de entrada.");
+    } catch (err: any) {
+      setError(err.message || 'Error al enviar email');
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -24,21 +51,49 @@ const TeacherLogin = () => {
         
         <form onSubmit={handleLogin} className="space-y-6">
           <div className="space-y-2">
-            <label className="text-[10px] font-black uppercase text-kalian-gold/40 ml-4 tracking-widest">Contraseña de Acceso</label>
+            <label className="text-[10px] font-black uppercase text-kalian-gold/40 ml-4 tracking-widest">Email de Profesor</label>
+            <input 
+              type="email" 
+              placeholder="profesor@kalian.es" 
+              className="w-full p-5 bg-kalian-gold/5 rounded-2xl outline-none border border-kalian-gold/10 focus:border-kalian-gold transition-all text-kalian-gold text-center text-xl"
+              value={email}
+              onChange={e => setEmail(e.target.value)}
+              required
+            />
+          </div>
+
+          <div className="space-y-2">
+            <label className="text-[10px] font-black uppercase text-kalian-gold/40 ml-4 tracking-widest">Contraseña</label>
             <input 
               type="password" 
               placeholder="••••••••" 
               className="w-full p-5 bg-kalian-gold/5 rounded-2xl outline-none border border-kalian-gold/10 focus:border-kalian-gold transition-all text-kalian-gold text-center text-2xl"
               value={pass}
               onChange={e => setPass(e.target.value)}
-              required
+              required={!info}
             />
           </div>
 
-          {error && <p className="text-red-500 text-center font-bold text-xs uppercase tracking-widest animate-pulse">{error}</p>}
+          {error && <p className="text-red-500 text-center font-bold text-[10px] uppercase tracking-widest animate-pulse">{error}</p>}
+          {info && <p className="text-kalian-gold text-center font-bold text-[10px] uppercase tracking-widest">{info}</p>}
 
-          <button className="w-full bg-kalian-gold text-black p-6 rounded-2xl kalian-poster-text text-xl tracking-widest hover:bg-white transition-all shadow-2xl shadow-kalian-gold/20 active:scale-95 uppercase">Entrar al Panel</button>
+          <button 
+            disabled={loading}
+            className="w-full bg-kalian-gold text-black p-6 rounded-2xl kalian-poster-text text-xl tracking-widest hover:bg-white transition-all shadow-2xl shadow-kalian-gold/20 active:scale-95 uppercase disabled:opacity-50"
+          >
+            {loading ? 'CARGANDO...' : 'Entrar al Panel'}
+          </button>
         </form>
+
+        <div className="mt-8 text-center">
+          <button 
+            onClick={handleReset}
+            disabled={loading}
+            className="text-kalian-gold/40 font-black text-[9px] uppercase tracking-[0.3em] hover:text-kalian-gold transition-colors border-b border-transparent hover:border-kalian-gold/40 pb-1"
+          >
+            ¿Has olvidado tu contraseña?
+          </button>
+        </div>
       </div>
     </div>
   );

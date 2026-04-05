@@ -45,6 +45,7 @@ const AdminSocios = () => {
 
     setLoading(true);
     try {
+      const emailClean = form.email.trim().toLowerCase();
       const dniUpper = form.dni.toUpperCase();
       const socioRef = doc(db, "socios", dniUpper);
       const socioSnap = await getDoc(socioRef);
@@ -58,11 +59,11 @@ const AdminSocios = () => {
       // 1. Create in Firebase Auth and send activation link
       let realUid = "manual-" + Math.random().toString(36).substring(7);
       try {
-        const authResult = await createSocioAuth(form.email);
+        const authResult = await createSocioAuth(emailClean);
         if (authResult.uid) realUid = authResult.uid;
         
         // Send welcome email via Brevo
-        await sendWelcomeEmail(form.email, form.nombre || "Socio Kalian", "https://kalian.es/login");
+        await sendWelcomeEmail(emailClean, form.nombre || "Socio Kalian", "https://kalian.es/login");
       } catch (err) {
         console.error("Error creating auth user or sending email:", err);
       }
@@ -71,7 +72,7 @@ const AdminSocios = () => {
       await setDoc(socioRef, {
         dni: dniUpper,
         nombre: form.nombre,
-        email: form.email,
+        email: emailClean,
         uid: realUid,
         expiraciones: {},
         cursos: [],
@@ -96,7 +97,7 @@ const AdminSocios = () => {
       <div className="max-w-6xl mx-auto">
         <header className="mb-12 flex flex-col md:flex-row justify-between items-start md:items-end gap-6">
           <div>
-            <Link to="/admin" className="text-kalian-gold/40 font-black text-[10px] uppercase tracking-[0.3em] hover:text-kalian-gold transition-colors">← Volver al Panel</Link>
+            <Link to="/staff" className="text-kalian-gold/40 font-black text-[10px] uppercase tracking-[0.3em] hover:text-kalian-gold transition-colors">← Volver al Panel</Link>
             <h1 className="text-6xl kalian-poster-text text-kalian-gold mt-4 tracking-tight">SOCIOS <span className="text-kalian-cream">KALIAN</span></h1>
           </div>
           <div className="flex gap-4">

@@ -7,11 +7,12 @@ interface AdminDashboardProps {
 const AdminDashboard = ({ logout }: AdminDashboardProps) => {
   const navigate = useNavigate();
   const menus = [
-    { t: 'Check-In', icon: '⚡', color: 'border-indigo-600', path: '/admin/checkin' },
-    { t: 'Eventos', icon: '🎸', color: 'border-slate-600', path: '/admin/eventos' },
-    { t: 'Cursos', icon: '💃', color: 'border-emerald-500', path: '/admin/cursos' },
-    { t: 'Socios', icon: '👥', color: 'border-blue-500', path: '/admin/socios' },
-    { t: 'Locales', icon: '🏠', color: 'border-amber-500', path: '/admin/locales' }
+    { t: 'Check-In', icon: '⚡', color: 'border-indigo-600', path: '/staff/checkin' },
+    { t: 'Eventos', icon: '🎸', color: 'border-slate-600', path: '/staff/eventos' },
+    { t: 'Cursos', icon: '💃', color: 'border-emerald-500', path: '/staff/cursos' },
+    { t: 'Socios', icon: '👥', color: 'border-blue-500', path: '/staff/socios' },
+    { t: 'Profesores', icon: '👨‍🏫', color: 'border-indigo-500', path: '/staff/profesores' },
+    { t: 'Locales', icon: '🏠', color: 'border-amber-500', path: '/staff/locales' }
   ];
 
   const handleLogout = () => {

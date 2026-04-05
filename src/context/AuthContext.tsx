@@ -1,7 +1,7 @@
 import React, { createContext, useContext, useEffect, useState, ReactNode } from 'react';
 import { auth, db } from '../firebase';
-import { onAuthStateChanged, signOut, User } from 'firebase/auth';
-import { collection, query, where, getDocs, DocumentData, updateDoc, doc } from 'firebase/firestore';
+import { onAuthStateChanged, signOut, User, signInWithEmailAndPassword, sendPasswordResetEmail } from 'firebase/auth';
+import { collection, query, where, getDocs, DocumentData, updateDoc, doc, getDoc, setDoc, getDocFromServer } from 'firebase/firestore';
 
 interface AuthContextType {
   user: User | null;
@@ -10,11 +10,12 @@ interface AuthContextType {
   isTeacher: boolean;
   role: 'admin' | 'teacher' | 'socio' | 'invitado' | 'invitado_registrado';
   loading: boolean;
-  loginAdmin: (password: string) => boolean;
-  loginTeacher: (password: string) => boolean;
+  loginAdmin: (email: string, password: string) => Promise<void>;
+  loginTeacher: (email: string, password: string) => Promise<void>;
   logoutAdmin: () => void;
   logoutTeacher: () => void;
   logoutSocio: () => Promise<void>;
+  resetPassword: (email: string) => Promise<void>;
   esSocioActivo: (categoria: string) => boolean;
 }
 
@@ -31,8 +32,9 @@ export const useAuth = () => {
 export const AuthProvider = ({ children }: { children: ReactNode }) => {
   const [user, setUser] = useState<User | null>(null);
   const [socioData, setSocioData] = useState<DocumentData | null>(null);
-  const [isAdmin, setIsAdmin] = useState(localStorage.getItem('kalianAdmin') === 'true');
-  const [isTeacher, setIsTeacher] = useState(localStorage.getItem('kalianTeacher') === 'true');
+  const [userData, setUserData] = useState<DocumentData | null>(null);
+  const [isAdmin, setIsAdmin] = useState(false);
+  const [isTeacher, setIsTeacher] = useState(false);
   const [loading, setLoading] = useState(true);
 
   const hoy = new Date().toISOString().split('T')[0];
@@ -43,53 +45,79 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     return fechaExp && fechaExp >= hoy;
   };
 
-  const loginAdmin = (password: string) => {
-    if (password === 'kalian2026') {
-      setIsAdmin(true);
-      setIsTeacher(false);
-      localStorage.setItem('kalianAdmin', 'true');
-      localStorage.removeItem('kalianTeacher');
-      return true;
-    }
-    return false;
+  const loginAdmin = async (email: string, password: string) => {
+    await signInWithEmailAndPassword(auth, email, password);
   };
 
-  const loginTeacher = (password: string) => {
-    if (password === 'profekalian') {
-      setIsTeacher(true);
-      setIsAdmin(false);
-      localStorage.setItem('kalianTeacher', 'true');
-      localStorage.removeItem('kalianAdmin');
-      return true;
-    }
-    return false;
+  const loginTeacher = async (email: string, password: string) => {
+    await signInWithEmailAndPassword(auth, email, password);
   };
 
   const logoutAdmin = () => {
-    setIsAdmin(false);
-    localStorage.removeItem('kalianAdmin');
+    signOut(auth);
   };
 
   const logoutTeacher = () => {
-    setIsTeacher(false);
-    localStorage.removeItem('kalianTeacher');
+    signOut(auth);
   };
 
   const logoutSocio = () => {
     return signOut(auth);
   };
 
+  const resetPassword = async (email: string) => {
+    await sendPasswordResetEmail(auth, email);
+  };
+
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
+      setLoading(true);
       if (firebaseUser) {
         setUser(firebaseUser);
         try {
+          // 1. Obtener datos de rol (Admin/Teacher)
+          const userRef = doc(db, "users", firebaseUser.uid);
+          let userSnap;
+          try {
+            userSnap = await getDoc(userRef);
+          } catch (e: any) {
+            if (e.code === 'unavailable' || e.message?.includes('offline')) {
+              console.warn("Firestore offline, intentando obtener desde el servidor...");
+              userSnap = await getDocFromServer(userRef);
+            } else {
+              throw e;
+            }
+          }
+
+          if (userSnap.exists()) {
+            const data = userSnap.data();
+            setUserData(data);
+            setIsAdmin(data.role === 'admin');
+            setIsTeacher(data.role === 'teacher');
+          } else {
+            // Si no existe en users, comprobamos si es el admin por defecto
+            if (firebaseUser.email === "kalianrobot@gmail.com") {
+              setIsAdmin(true);
+              setIsTeacher(false);
+              // Crear el documento de admin si no existe para asegurar que la colección existe
+              await setDoc(userRef, {
+                uid: firebaseUser.uid,
+                email: firebaseUser.email,
+                nombre: "Administrador",
+                role: 'admin'
+              });
+            } else {
+              setIsAdmin(false);
+              setIsTeacher(false);
+            }
+          }
+
+          // 2. Obtener datos de socio
           const q = query(collection(db, "socios"), where("uid", "==", firebaseUser.uid));
           const snap = await getDocs(q);
           if (!snap.empty) {
             setSocioData(snap.docs[0].data());
           } else if (firebaseUser.email) {
-            // Vincular socio por email si fue creado por admin sin UID
             const qEmail = query(collection(db, "socios"), where("email", "==", firebaseUser.email));
             const snapEmail = await getDocs(qEmail);
             if (!snapEmail.empty) {
@@ -99,11 +127,14 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
             }
           }
         } catch (error) {
-          console.error("Error obteniendo datos del socio:", error);
+          console.error("Error obteniendo datos del usuario:", error);
         }
       } else {
         setUser(null);
         setSocioData(null);
+        setUserData(null);
+        setIsAdmin(false);
+        setIsTeacher(false);
       }
       setLoading(false);
     });
@@ -136,6 +167,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     logoutAdmin, 
     logoutTeacher,
     logoutSocio,
+    resetPassword,
     esSocioActivo
   };
 

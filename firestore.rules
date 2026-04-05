@@ -15,8 +15,15 @@ service cloud.firestore {
 
     function isAdmin() {
       return isAuthenticated() && 
-        (get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin' ||
-         request.auth.token.email == "kalianrobot@gmail.com");
+        (request.auth.token.email == "kalianrobot@gmail.com" ||
+         (exists(/databases/$(database)/documents/users/$(request.auth.uid)) && 
+          get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin'));
+    }
+
+    function isTeacher() {
+      return isAuthenticated() && 
+        (get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'teacher' ||
+         exists(/databases/$(database)/documents/profesores/$(request.auth.uid)));
     }
 
     function isValidEmail(email) {
@@ -27,9 +34,9 @@ service cloud.firestore {
     // Rules
     // ===============================================================
 
-    // SOCIOS: Solo lectura propia o admin. Escritura solo admin.
+    // SOCIOS: Solo lectura propia, admin o profesor (para ver alumnos). Escritura solo admin.
     match /socios/{socioId} {
-      allow read: if isAuthenticated() && (isOwner(resource.data.uid) || isAdmin());
+      allow read: if isAuthenticated() && (isOwner(resource.data.uid) || isAdmin() || isTeacher());
       allow write: if isAdmin();
     }
 
@@ -58,7 +65,19 @@ service cloud.firestore {
     }
     match /cursos/{cursoId} {
       allow read: if true;
+      allow update: if isAdmin() || (isTeacher() && resource.data.profesorId == request.auth.uid);
+      allow create, delete: if isAdmin();
+    }
+
+    // PROFESORES: Lectura propia o admin. Escritura admin.
+    match /profesores/{uid} {
+      allow read: if isAuthenticated() && (isOwner(uid) || isAdmin());
       allow write: if isAdmin();
+    }
+
+    // PAGOS MENSUALES: Lectura y escritura admin o profesor.
+    match /pagos_mensuales/{pagoId} {
+      allow read, write: if isAdmin() || isTeacher();
     }
 
     // LOCALES: Lectura pública. Escritura admin.

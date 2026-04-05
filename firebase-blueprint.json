@@ -1,0 +1,62 @@
+{
+  "entities": {
+    "profesores": {
+      "title": "Profesor",
+      "description": "Información de los profesores de la asociación",
+      "type": "object",
+      "properties": {
+        "uid": { "type": "string", "description": "UID de Firebase Auth" },
+        "nombre": { "type": "string", "description": "Nombre completo" },
+        "email": { "type": "string", "format": "email" },
+        "especialidad": { "type": "string" },
+        "activo": { "type": "boolean" }
+      },
+      "required": ["uid", "nombre", "email"]
+    },
+    "cursos": {
+      "title": "Curso",
+      "description": "Cursos y talleres ofrecidos",
+      "type": "object",
+      "properties": {
+        "titulo": { "type": "string" },
+        "profesorId": { "type": "string", "description": "UID del profesor asignado" },
+        "profesorNombre": { "type": "string" },
+        "categoria": { "type": "string", "enum": ["musica", "danza", "local"] },
+        "alumnos": { "type": "array", "items": { "type": "string" }, "description": "Lista de DNIs de alumnos" },
+        "aforo_disponible": { "type": "boolean" },
+        "aforo_actual": { "type": "number" },
+        "precio": { "type": "number" },
+        "horario": { "type": "string" }
+      }
+    },
+    "pagos_mensuales": {
+      "title": "Pago Mensual",
+      "description": "Registro de pagos de socios por mes",
+      "type": "object",
+      "properties": {
+        "socioId": { "type": "string", "description": "DNI del socio" },
+        "mes": { "type": "number", "description": "Mes del pago (1-12)" },
+        "anio": { "type": "number", "description": "Año del pago" },
+        "aportacionKalian": { "type": "boolean", "description": "Aportación de 15€" },
+        "cuotaCurso": { "type": "boolean", "description": "Cuota del curso (común a todos)" },
+        "actualizadoPor": { "type": "string", "description": "UID del profesor que actualizó" },
+        "fechaActualizacion": { "type": "string", "format": "date-time" }
+      },
+      "required": ["socioId", "mes", "anio"]
+    }
+  },
+  "firestore": {
+    "/profesores/{uid}": {
+      "schema": "profesores",
+      "description": "Colección de profesores"
+    },
+    "/cursos/{cursoId}": {
+      "schema": "cursos",
+      "description": "Colección de cursos"
+    },
+    "/pagos_mensuales/{pagoId}": {
+      "schema": "pagos_mensuales",
+      "description": "Colección de pagos mensuales (ID: anio_mes_dni)"
+    }
+  }
+}

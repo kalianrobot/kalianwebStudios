@@ -46,29 +46,45 @@ const HomeSocio = () => {
             {eventos.map(ev => (
               <div 
                 key={ev.id} 
-                className="bg-black/40 border border-kalian-gold/10 rounded-3xl p-8 space-y-8 hover:border-kalian-gold/40 transition-all group cursor-pointer relative overflow-hidden"
+                className="bg-black/40 border border-kalian-gold/10 rounded-[2.5rem] overflow-hidden hover:border-kalian-gold/40 transition-all group cursor-pointer relative flex flex-col h-full shadow-2xl"
                 onClick={() => setItemSeleccionado(ev)}
               >
-                <div className="absolute top-0 right-0 p-4 opacity-10 group-hover:opacity-30 transition-opacity">
-                  <span className="text-6xl kalian-poster-text text-kalian-gold">{ev.titulo.charAt(0)}</span>
+                {/* IMAGEN DEL EVENTO */}
+                <div className="h-64 relative overflow-hidden bg-kalian-gold/5 border-b border-kalian-gold/10 flex-shrink-0">
+                  {ev.imagenUrl ? (
+                    <img 
+                      src={ev.imagenUrl} 
+                      alt={ev.titulo} 
+                      className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-700"
+                      referrerPolicy="no-referrer"
+                    />
+                  ) : (
+                    <div className="w-full h-full flex items-center justify-center opacity-10">
+                      <span className="text-8xl kalian-poster-text text-kalian-gold">{ev.titulo.charAt(0)}</span>
+                    </div>
+                  )}
+                  <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-transparent to-transparent"></div>
+                  <div className="absolute bottom-4 left-6 right-6 flex justify-between items-end">
+                    <span className="bg-kalian-gold text-black text-[9px] font-black uppercase px-4 py-1.5 rounded-full tracking-widest shadow-lg">{ev.categoria}</span>
+                    <span className="text-kalian-gold kalian-poster-text text-4xl drop-shadow-lg">{ev.precio_estandar}€</span>
+                  </div>
                 </div>
                 
-                <div className="flex justify-between items-start relative z-10">
-                  <span className="bg-kalian-gold text-black text-[9px] font-black uppercase px-4 py-1.5 rounded-full tracking-widest">{ev.categoria}</span>
-                  <span className="text-kalian-gold kalian-poster-text text-3xl">{ev.precio_estandar}€</span>
-                </div>
-                
-                <div className="space-y-2 relative z-10">
-                  <h3 className="text-3xl kalian-poster-text text-kalian-cream group-hover:text-kalian-gold transition-colors">{ev.titulo}</h3>
-                  <div className="w-12 h-1 bg-kalian-gold/30 group-hover:w-full transition-all duration-500"></div>
-                </div>
+                <div className="p-8 space-y-6 flex-grow flex flex-col justify-between relative z-10">
+                  <div className="space-y-4">
+                    <div className="space-y-2">
+                      <h3 className="text-3xl kalian-poster-text text-kalian-cream group-hover:text-kalian-gold transition-colors leading-none uppercase italic">{ev.titulo}</h3>
+                      <div className="w-12 h-1 bg-kalian-gold/30 group-hover:w-full transition-all duration-500"></div>
+                    </div>
 
-                <div className="space-y-1 relative z-10">
-                  <p className="text-[9px] font-black text-kalian-gold/40 uppercase tracking-[0.3em]">Fecha y Hora</p>
-                  <p className="font-bold text-kalian-cream/80 uppercase text-sm">{new Date(ev.fecha).toLocaleString('es-ES', { day: 'numeric', month: 'long', hour: '2-digit', minute: '2-digit' })}</p>
+                    <div className="space-y-1">
+                      <p className="text-[9px] font-black text-kalian-gold/40 uppercase tracking-[0.3em]">Fecha y Hora</p>
+                      <p className="font-bold text-kalian-cream/80 uppercase text-sm tracking-widest">{new Date(ev.fecha).toLocaleString('es-ES', { day: 'numeric', month: 'long', hour: '2-digit', minute: '2-digit' })}</p>
+                    </div>
+                  </div>
+                  
+                  <button className="w-full bg-kalian-gold text-black p-5 rounded-2xl kalian-poster-text text-lg tracking-widest hover:bg-white transition-all shadow-xl shadow-kalian-gold/10 mt-4">Reservar Plaza</button>
                 </div>
-                
-                <button className="w-full bg-kalian-gold text-black p-5 rounded-2xl kalian-poster-text text-lg tracking-widest hover:bg-white transition-all shadow-xl shadow-kalian-gold/10">Reservar Plaza</button>
               </div>
             ))}
           </div>

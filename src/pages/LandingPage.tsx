@@ -32,7 +32,7 @@ const LandingPage = () => {
         </div>
 
         {/* Enlaces Discretos */}
-        <div className="flex flex-col md:flex-row items-center justify-center gap-8 md:gap-20 pt-12">
+        <div className="flex flex-col md:flex-row items-center justify-center gap-8 md:gap-12 pt-12">
           <Link 
             to="/login" 
             className="group flex flex-col items-center gap-3"
@@ -46,7 +46,19 @@ const LandingPage = () => {
           <div className="hidden md:block w-[1px] h-8 bg-kalian-gold/20"></div>
 
           <Link 
-            to="/login-admin" 
+            to="/profesor/login" 
+            className="group flex flex-col items-center gap-3"
+          >
+            <span className="text-kalian-cream/50 group-hover:text-kalian-cream font-black uppercase tracking-[0.4em] text-[10px] transition-all duration-500">
+              Profesores
+            </span>
+            <div className="w-8 group-hover:w-24 h-[2px] bg-kalian-cream/30 transition-all duration-700 ease-in-out"></div>
+          </Link>
+
+          <div className="hidden md:block w-[1px] h-8 bg-kalian-gold/20"></div>
+
+          <Link 
+            to="/staff/login" 
             className="group flex flex-col items-center gap-3"
           >
             <span className="text-kalian-cream/50 group-hover:text-kalian-cream font-black uppercase tracking-[0.4em] text-[10px] transition-all duration-500">

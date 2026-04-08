@@ -1,11 +1,6 @@
-import { Link, useNavigate } from 'react-router-dom';
+import { Link } from 'react-router-dom';
 
-interface AdminDashboardProps {
-  logout: () => void;
-}
-
-const AdminDashboard = ({ logout }: AdminDashboardProps) => {
-  const navigate = useNavigate();
+const AdminDashboard = () => {
   const menus = [
     { t: 'Check-In', icon: '⚡', color: 'border-indigo-600', path: '/staff/checkin' },
     { t: 'Eventos', icon: '🎸', color: 'border-slate-600', path: '/staff/eventos' },
@@ -14,11 +9,6 @@ const AdminDashboard = ({ logout }: AdminDashboardProps) => {
     { t: 'Profesores', icon: '👨‍🏫', color: 'border-indigo-500', path: '/staff/profesores' },
     { t: 'Locales', icon: '🏠', color: 'border-amber-500', path: '/staff/locales' }
   ];
-
-  const handleLogout = () => {
-    logout();
-    navigate('/');
-  };
 
   return (
     <div className="min-h-screen bg-kalian-dark flex flex-col items-center justify-center p-6 text-kalian-cream font-sans relative overflow-hidden">
@@ -43,13 +33,6 @@ const AdminDashboard = ({ logout }: AdminDashboardProps) => {
           </Link>
         ))}
       </div>
-
-      <button 
-        onClick={handleLogout} 
-        className="mt-24 text-kalian-gold/30 font-black uppercase text-[10px] tracking-[0.5em] hover:text-kalian-gold transition-all border-b border-transparent hover:border-kalian-gold/30 pb-1 relative z-10"
-      >
-        Finalizar Sesión Admin
-      </button>
     </div>
   );
 };

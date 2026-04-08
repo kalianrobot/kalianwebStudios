@@ -27,10 +27,11 @@ function AppContent() {
   const { user, role, logoutAdmin } = useAuth();
   const location = useLocation();
   const isLanding = location.pathname === '/';
+  const isLogin = ['/login', '/profesor/login', '/staff/login'].includes(location.pathname);
 
   return (
     <>
-      {!isLanding && <Navbar />}
+      {!isLanding && !isLogin && <Navbar />}
 
       <Routes>
         {/* LANDING PAGE */}
@@ -47,7 +48,7 @@ function AppContent() {
         
         <Route path="/staff" element={
           role === 'admin' ? (
-            <AdminDashboard logout={logoutAdmin} />
+            <AdminDashboard />
           ) : (
             <Navigate to="/staff/login" />
           )

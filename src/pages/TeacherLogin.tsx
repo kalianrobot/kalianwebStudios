@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { useAuth } from '../context/AuthContext';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, Link } from 'react-router-dom';
 
 const TeacherLogin = () => {
   const [email, setEmail] = useState('');
@@ -49,6 +49,10 @@ const TeacherLogin = () => {
       <div className="max-w-md w-full bg-black/40 p-12 rounded-[3rem] border border-kalian-gold/20 shadow-2xl">
         <h1 className="text-5xl kalian-poster-text text-kalian-gold text-center mb-8 uppercase italic leading-none">ACCESO <span className="text-kalian-cream">PROFESORES</span></h1>
         
+        <div className="mb-8 text-center">
+          <Link to="/" className="text-kalian-gold/40 font-black text-[10px] uppercase tracking-[0.3em] hover:text-kalian-gold transition-colors">← Volver al Inicio</Link>
+        </div>
+
         <form onSubmit={handleLogin} className="space-y-6">
           <div className="space-y-2">
             <label className="text-[10px] font-black uppercase text-kalian-gold/40 ml-4 tracking-widest">Email de Profesor</label>

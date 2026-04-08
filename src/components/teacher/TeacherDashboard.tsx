@@ -222,15 +222,6 @@ const TeacherDashboard = () => {
             >
               🔄 Refrescar
             </button>
-            {socioData && (
-              <Link 
-                to="/perfil" 
-                className="bg-indigo-600 text-white px-6 py-3 rounded-xl font-black text-[10px] uppercase tracking-widest hover:bg-white hover:text-indigo-600 transition-all shadow-lg shadow-indigo-600/20"
-              >
-                Mi Panel
-              </Link>
-            )}
-            <button onClick={logoutTeacher} className="bg-kalian-gold/10 text-kalian-gold px-6 py-3 rounded-xl font-black text-[10px] uppercase tracking-widest hover:bg-kalian-gold hover:text-black transition-all">SALIR</button>
           </div>
         </header>
 

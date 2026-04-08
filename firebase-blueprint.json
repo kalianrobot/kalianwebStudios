@@ -31,18 +31,44 @@
     },
     "pagos_mensuales": {
       "title": "Pago Mensual",
-      "description": "Registro de pagos de socios por mes",
+      "description": "Registro de la aportación mensual de 15€",
       "type": "object",
       "properties": {
         "socioId": { "type": "string", "description": "DNI del socio" },
-        "mes": { "type": "number", "description": "Mes del pago (1-12)" },
-        "anio": { "type": "number", "description": "Año del pago" },
-        "aportacionKalian": { "type": "boolean", "description": "Aportación de 15€" },
-        "cuotaCurso": { "type": "boolean", "description": "Cuota del curso (común a todos)" },
-        "actualizadoPor": { "type": "string", "description": "UID del profesor que actualizó" },
+        "mes": { "type": "number" },
+        "anio": { "type": "number" },
+        "pagado": { "type": "boolean", "description": "Si ha pagado la aportación de 15€ este mes" },
+        "actualizadoPor": { "type": "string" },
         "fechaActualizacion": { "type": "string", "format": "date-time" }
       },
       "required": ["socioId", "mes", "anio"]
+    },
+    "pagos_inscripciones": {
+      "title": "Pago Inscripción",
+      "description": "Pago único por inscribirse en un curso",
+      "type": "object",
+      "properties": {
+        "socioId": { "type": "string" },
+        "cursoId": { "type": "string" },
+        "pagado": { "type": "boolean" },
+        "fechaPago": { "type": "string", "format": "date-time" }
+      },
+      "required": ["socioId", "cursoId"]
+    },
+    "socios": {
+      "title": "Socio",
+      "description": "Miembros de la asociación",
+      "type": "object",
+      "properties": {
+        "dni": { "type": "string" },
+        "nombre": { "type": "string" },
+        "email": { "type": "string" },
+        "uid": { "type": "string" },
+        "estado": { "type": "string", "enum": ["activo", "inactivo"] },
+        "fechaUltimaActividad": { "type": "string", "format": "date-time" },
+        "cursos": { "type": "array", "items": { "type": "string" } },
+        "expiraciones": { "type": "object" }
+      }
     }
   },
   "firestore": {
@@ -56,7 +82,15 @@
     },
     "/pagos_mensuales/{pagoId}": {
       "schema": "pagos_mensuales",
-      "description": "Colección de pagos mensuales (ID: anio_mes_dni)"
+      "description": "Aportación mensual (ID: anio_mes_dni)"
+    },
+    "/pagos_inscripciones/{pagoId}": {
+      "schema": "pagos_inscripciones",
+      "description": "Pago único por curso (ID: dni_cursoId)"
+    },
+    "/socios/{dni}": {
+      "schema": "socios",
+      "description": "Colección de socios"
     }
   }
 }

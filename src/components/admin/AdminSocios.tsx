@@ -1,18 +1,23 @@
 import React, { useState, useEffect } from 'react';
 import { db } from '../../firebase';
-import { collection, getDocs, doc, setDoc, getDoc, query, orderBy, DocumentData, deleteDoc } from 'firebase/firestore';
+import { collection, getDocs, doc, setDoc, getDoc, query, orderBy, DocumentData, deleteDoc, where } from 'firebase/firestore';
 import { Link } from 'react-router-dom';
 import { createSocioAuth } from '../../lib/adminAuth';
 import { sendWelcomeEmail } from '../../lib/brevoService';
 
 const AdminSocios = () => {
   const [socios, setSocios] = useState<DocumentData[]>([]);
+  const [pagosMensuales, setPagosMensuales] = useState<Record<string, any>>({});
   const [cursosExistentes, setCursosExistentes] = useState<Set<string>>(new Set());
   const [loading, setLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);
   const [form, setForm] = useState({ dni: '', nombre: '', email: '' });
   const [msg, setMsg] = useState('');
+  const [cleaning, setCleaning] = useState(false);
   const hoy = new Date().toISOString().split('T')[0];
+
+  const mesActual = new Date().getMonth() + 1;
+  const anioActual = new Date().getFullYear();
 
   const fetchSocios = async () => {
     setLoading(true);
@@ -24,6 +29,19 @@ const AdminSocios = () => {
       const cursosSnap = await getDocs(collection(db, "cursos"));
       const ids = new Set(cursosSnap.docs.map(d => d.id));
       setCursosExistentes(ids);
+
+      // Fetch all monthly payments for the current month
+      const qPagos = query(
+        collection(db, "pagos_mensuales"),
+        where("mes", "==", mesActual),
+        where("anio", "==", anioActual)
+      );
+      const snapPagos = await getDocs(qPagos);
+      const mapPagos: Record<string, any> = {};
+      snapPagos.docs.forEach(d => {
+        mapPagos[d.data().socioId] = d.data();
+      });
+      setPagosMensuales(mapPagos);
     } catch (err) {
       console.error(err);
     }
@@ -31,6 +49,37 @@ const AdminSocios = () => {
   };
 
   useEffect(() => { fetchSocios(); }, []);
+
+  const handleCleanup = async () => {
+    if (!window.confirm("¿Seguro que quieres limpiar la base de datos? Se eliminarán soci@s que lleven más de 4 meses inactivos.")) return;
+    setCleaning(true);
+    try {
+      const cuatroMesesAtras = new Date();
+      cuatroMesesAtras.setMonth(cuatroMesesAtras.getMonth() - 4);
+      const limiteIso = cuatroMesesAtras.toISOString().split('T')[0];
+
+      let eliminados = 0;
+      for (const s of socios) {
+        const exp = s.expiraciones || {};
+        const fechas = Object.values(exp) as string[];
+        
+        // Si no tiene ninguna fecha de expiración o todas son muy antiguas
+        const ultimaExp = fechas.length > 0 ? fechas.sort().reverse()[0] : s.fechaAlta?.split('T')[0] || '1900-01-01';
+
+        if (ultimaExp < limiteIso) {
+          await deleteDoc(doc(db, "socios", s.id));
+          eliminados++;
+        }
+      }
+      setMsg(`✅ Limpieza completada: ${eliminados} soci@s eliminados`);
+      fetchSocios();
+    } catch (err) {
+      console.error(err);
+      alert("Error en la limpieza");
+    }
+    setCleaning(false);
+    setTimeout(() => setMsg(''), 5000);
+  };
 
   const handleDelete = async (id: string) => {
     if (!window.confirm("¿Seguro que quieres eliminar este socio? Esta acción no se puede deshacer.")) return;
@@ -98,6 +147,8 @@ const AdminSocios = () => {
     setLoading(false);
   };
 
+  const meses = ["Enero", "Febrero", "Marzo", "Abril", "Mayo", "Junio", "Julio", "Agosto", "Septiembre", "Octubre", "Noviembre", "Diciembre"];
+
   return (
     <div className="min-h-screen bg-kalian-dark p-6 md:p-12 text-kalian-cream font-sans">
       <div className="max-w-6xl mx-auto">
@@ -107,6 +158,13 @@ const AdminSocios = () => {
             <h1 className="text-6xl kalian-poster-text text-kalian-gold mt-4 tracking-tight">SOCI@S <span className="text-kalian-cream">KALIAN</span></h1>
           </div>
           <div className="flex gap-4">
+            <button 
+              onClick={handleCleanup}
+              disabled={cleaning}
+              className="bg-red-500/10 text-red-500 border border-red-500/20 px-6 py-3 rounded-2xl font-black text-[10px] uppercase tracking-widest hover:bg-red-500 hover:text-white transition-all"
+            >
+              {cleaning ? 'LIMPIANDO...' : '🧹 LIMPIEZA 4 MESES'}
+            </button>
             <button 
               onClick={() => setShowForm(!showForm)} 
               className="bg-kalian-gold text-black px-8 py-3 rounded-2xl kalian-poster-text text-lg tracking-widest hover:bg-white transition-all shadow-xl shadow-kalian-gold/10"
@@ -194,6 +252,16 @@ const AdminSocios = () => {
                     </div>
                   </div>
                     <div className="flex gap-4 flex-wrap justify-end w-full md:w-auto">
+                      {/* Estado de Pago Mensual */}
+                      <div className="flex flex-col items-center bg-black/20 p-3 rounded-2xl border border-kalian-gold/5 min-w-[120px]">
+                        <p className="text-[7px] font-black text-kalian-gold/40 uppercase tracking-widest mb-2">Aportación {meses[mesActual-1]}</p>
+                        {pagosMensuales[s.dni]?.pagado ? (
+                          <span className="text-emerald-500 text-xs font-black">✅ PAGADO</span>
+                        ) : (
+                          <span className="text-red-500 text-xs font-black animate-pulse">❌ PENDIENTE</span>
+                        )}
+                      </div>
+
                       {activas.map(cat => (
                         <div key={cat} className="flex flex-col items-end">
                           <span className="px-4 py-1.5 bg-kalian-gold text-black text-[10px] font-black uppercase rounded-xl shadow-xl shadow-kalian-gold/10 tracking-widest">{cat}</span>

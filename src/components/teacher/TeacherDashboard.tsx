@@ -9,7 +9,9 @@ const TeacherDashboard = () => {
   const [cursos, setCursos] = useState<DocumentData[]>([]);
   const [loading, setLoading] = useState(true);
   const [cursoSeleccionado, setCursoSeleccionado] = useState<DocumentData | null>(null);
-  const [pagos, setPagos] = useState<Record<string, any>>({});
+  const [alumnosDetalles, setAlumnosDetalles] = useState<DocumentData[]>([]);
+  const [pagosMensuales, setPagosMensuales] = useState<Record<string, any>>({});
+  const [pagosInscripciones, setPagosInscripciones] = useState<Record<string, any>>({});
   const [archivo, setArchivo] = useState<File | null>(null);
   const [subiendo, setSubiendo] = useState(false);
   const [storageUsage, setStorageUsage] = useState(0);
@@ -52,25 +54,60 @@ const TeacherDashboard = () => {
 
   const fetchPagos = async () => {
     try {
-      const q = query(
+      // 1. Fetch monthly payments (Aportación Kalian)
+      const qM = query(
         collection(db, "pagos_mensuales"),
         where("mes", "==", mesActual),
         where("anio", "==", anioActual)
       );
-      const snap = await getDocs(q);
-      const pagosMap: Record<string, any> = {};
-      snap.docs.forEach(d => {
-        pagosMap[d.data().socioId] = d.data();
-      });
-      setPagos(pagosMap);
+      const snapM = await getDocs(qM);
+      const mapM: Record<string, any> = {};
+      snapM.docs.forEach(d => { mapM[d.data().socioId] = d.data(); });
+      setPagosMensuales(mapM);
+
+      // 2. Fetch one-time course payments (Inscripciones)
+      if (cursoSeleccionado) {
+        const qI = query(
+          collection(db, "pagos_inscripciones"),
+          where("cursoId", "==", cursoSeleccionado.id)
+        );
+        const snapI = await getDocs(qI);
+        const mapI: Record<string, any> = {};
+        snapI.docs.forEach(d => { mapI[d.data().socioId] = d.data(); });
+        setPagosInscripciones(mapI);
+      }
     } catch (err) { console.error(err); }
   };
 
   useEffect(() => { 
     fetchCursos(); 
-    fetchPagos();
     fetchStorageUsage();
   }, [user]);
+
+  useEffect(() => {
+    fetchPagos();
+  }, [user, cursoSeleccionado]);
+
+  useEffect(() => {
+    const fetchAlumnos = async () => {
+      if (!cursoSeleccionado || !cursoSeleccionado.alumnos || cursoSeleccionado.alumnos.length === 0) {
+        setAlumnosDetalles([]);
+        return;
+      }
+
+      try {
+        // Firestore 'in' query supports up to 30 items.
+        const dnis = cursoSeleccionado.alumnos;
+        const q = query(collection(db, "socios"), where("dni", "in", dnis));
+        const snap = await getDocs(q);
+        setAlumnosDetalles(snap.docs.map(d => ({ id: d.id, ...d.data() })));
+      } catch (err) {
+        console.error("Error fetching alumnos details:", err);
+      }
+    };
+
+    fetchAlumnos();
+  }, [cursoSeleccionado]);
 
   const toggleAforo = async (id: string, actual: boolean) => {
     try {
@@ -79,28 +116,47 @@ const TeacherDashboard = () => {
     } catch (err) { console.error(err); }
   };
 
-  const togglePago = async (socioId: string, campo: 'aportacionKalian' | 'cuotaCurso', valorActual: boolean) => {
-    const pagoId = `${anioActual}_${mesActual}_${socioId}`;
-    const pagoRef = doc(db, "pagos_mensuales", pagoId);
-    
+  const togglePago = async (socioId: string, tipo: 'mensual' | 'inscripcion', valorActual: boolean, cursoId?: string) => {
     try {
-      const snap = await getDoc(pagoRef);
-      if (snap.exists()) {
-        await updateDoc(pagoRef, {
-          [campo]: !valorActual,
-          actualizadoPor: user?.uid,
-          fechaActualizacion: new Date().toISOString()
-        });
-      } else {
-        await setDoc(pagoRef, {
-          socioId,
-          mes: mesActual,
-          anio: anioActual,
-          aportacionKalian: campo === 'aportacionKalian' ? !valorActual : false,
-          cuotaCurso: campo === 'cuotaCurso' ? !valorActual : false,
-          actualizadoPor: user?.uid,
-          fechaActualizacion: new Date().toISOString()
-        });
+      if (tipo === 'mensual') {
+        const pagoId = `${anioActual}_${mesActual}_${socioId}`;
+        const pagoRef = doc(db, "pagos_mensuales", pagoId);
+        const snap = await getDoc(pagoRef);
+        
+        if (snap.exists()) {
+          await updateDoc(pagoRef, {
+            pagado: !valorActual,
+            actualizadoPor: user?.uid,
+            fechaActualizacion: new Date().toISOString()
+          });
+        } else {
+          await setDoc(pagoRef, {
+            socioId,
+            mes: mesActual,
+            anio: anioActual,
+            pagado: !valorActual,
+            actualizadoPor: user?.uid,
+            fechaActualizacion: new Date().toISOString()
+          });
+        }
+      } else if (tipo === 'inscripcion' && cursoId) {
+        const pagoId = `${socioId}_${cursoId}`;
+        const pagoRef = doc(db, "pagos_inscripciones", pagoId);
+        const snap = await getDoc(pagoRef);
+
+        if (snap.exists()) {
+          await updateDoc(pagoRef, {
+            pagado: !valorActual,
+            fechaPago: !valorActual ? new Date().toISOString() : null
+          });
+        } else {
+          await setDoc(pagoRef, {
+            socioId,
+            cursoId,
+            pagado: !valorActual,
+            fechaPago: !valorActual ? new Date().toISOString() : null
+          });
+        }
       }
       fetchPagos();
     } catch (err) { console.error(err); }
@@ -317,47 +373,48 @@ const TeacherDashboard = () => {
                     </div>
                   </div>
 
-                  <div className="space-y-3">
-                    <div className="grid grid-cols-12 gap-4 px-6 py-3 text-[9px] font-black text-kalian-gold/30 uppercase tracking-widest border-b border-kalian-gold/10">
-                      <div className="col-span-6">Alumno</div>
-                      <div className="col-span-3 text-center">Aportación Kalian</div>
-                      <div className="col-span-3 text-center">Cuota Curso</div>
-                    </div>
-
-                    {cursoSeleccionado.alumnos?.map((alumno: any, idx: number) => {
-                      const pagoSocio = pagos[alumno.dni] || {};
-                      return (
-                        <div key={idx} className="grid grid-cols-12 gap-4 px-6 py-5 bg-kalian-gold/5 rounded-2xl items-center hover:bg-kalian-gold/10 transition-all group">
-                          <div className="col-span-6">
-                            <p className="font-black text-kalian-cream uppercase italic group-hover:text-kalian-gold transition-colors">{alumno.nombre}</p>
-                            <p className="text-[8px] text-kalian-gold/30 font-bold tracking-widest mt-1">{alumno.dni}</p>
-                          </div>
-                          <div className="col-span-3 flex justify-center">
-                            <button 
-                              onClick={() => togglePago(alumno.dni, 'aportacionKalian', !!pagoSocio.aportacionKalian)}
-                              className={`w-10 h-10 rounded-xl border flex items-center justify-center transition-all ${pagoSocio.aportacionKalian ? 'bg-emerald-500 border-emerald-400 text-white shadow-lg shadow-emerald-500/20' : 'bg-black/40 border-kalian-gold/20 text-transparent hover:border-kalian-gold/40'}`}
-                            >
-                              {pagoSocio.aportacionKalian ? '✓' : ''}
-                            </button>
-                          </div>
-                          <div className="col-span-3 flex justify-center">
-                            <button 
-                              onClick={() => togglePago(alumno.dni, 'cuotaCurso', !!pagoSocio.cuotaCurso)}
-                              className={`w-10 h-10 rounded-xl border flex items-center justify-center transition-all ${pagoSocio.cuotaCurso ? 'bg-indigo-500 border-indigo-400 text-white shadow-lg shadow-indigo-500/20' : 'bg-black/40 border-kalian-gold/20 text-transparent hover:border-kalian-gold/40'}`}
-                            >
-                              {pagoSocio.cuotaCurso ? '✓' : ''}
-                            </button>
-                          </div>
-                        </div>
-                      );
-                    })}
-
-                    {(!cursoSeleccionado.alumnos || cursoSeleccionado.alumnos.length === 0) && (
-                      <div className="py-20 text-center">
-                        <p className="text-kalian-gold/20 font-black uppercase tracking-widest italic text-xs">No hay alumnos inscritos en este curso</p>
+                    <div className="space-y-3">
+                      <div className="grid grid-cols-12 gap-4 px-6 py-3 text-[9px] font-black text-kalian-gold/80 uppercase tracking-widest border-b border-kalian-gold/10">
+                        <div className="col-span-6">Alumno</div>
+                        <div className="col-span-3 text-center">Aportación Kalian {meses[mesActual-1]}</div>
+                        <div className="col-span-3 text-center">Inscripción Curso</div>
                       </div>
-                    )}
-                  </div>
+
+                      {alumnosDetalles.map((alumno: any, idx: number) => {
+                        const pagoM = pagosMensuales[alumno.dni] || {};
+                        const pagoI = pagosInscripciones[alumno.dni] || {};
+                        return (
+                          <div key={idx} className="grid grid-cols-12 gap-4 px-6 py-5 bg-kalian-gold/5 rounded-2xl items-center hover:bg-kalian-gold/10 transition-all group">
+                            <div className="col-span-6">
+                              <p className="font-black text-kalian-cream uppercase italic group-hover:text-kalian-gold transition-colors">{alumno.nombre}</p>
+                              <p className="text-[8px] text-kalian-gold/60 font-bold tracking-widest mt-1">{alumno.dni}</p>
+                            </div>
+                            <div className="col-span-3 flex justify-center">
+                              <button 
+                                onClick={() => togglePago(alumno.dni, 'mensual', !!pagoM.pagado)}
+                                className={`w-10 h-10 rounded-xl border flex items-center justify-center transition-all ${pagoM.pagado ? 'bg-emerald-500 border-emerald-400 text-white shadow-lg shadow-emerald-500/20' : 'bg-black/40 border-kalian-gold/20 text-transparent hover:border-kalian-gold/40'}`}
+                              >
+                                {pagoM.pagado ? '✓' : ''}
+                              </button>
+                            </div>
+                            <div className="col-span-3 flex justify-center">
+                              <button 
+                                onClick={() => togglePago(alumno.dni, 'inscripcion', !!pagoI.pagado, cursoSeleccionado.id)}
+                                className={`w-10 h-10 rounded-xl border flex items-center justify-center transition-all ${pagoI.pagado ? 'bg-indigo-500 border-indigo-400 text-white shadow-lg shadow-indigo-500/20' : 'bg-black/40 border-kalian-gold/20 text-transparent hover:border-kalian-gold/40'}`}
+                              >
+                                {pagoI.pagado ? '✓' : ''}
+                              </button>
+                            </div>
+                          </div>
+                        );
+                      })}
+
+                      {alumnosDetalles.length === 0 && (
+                        <div className="py-20 text-center">
+                          <p className="text-kalian-gold/20 font-black uppercase tracking-widest italic text-xs">No hay alumnos inscritos en este curso</p>
+                        </div>
+                      )}
+                    </div>
                 </div>
               ) : (
                 <div className="h-full flex flex-col items-center justify-center bg-black/20 rounded-[3rem] border border-dashed border-kalian-gold/10 p-20 text-center">

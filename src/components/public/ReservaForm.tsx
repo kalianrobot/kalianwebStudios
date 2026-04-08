@@ -89,6 +89,19 @@ const ReservaForm = ({ item, alCerrar }: ReservaFormProps) => {
     try {
       const dniUpper = form.dni.trim().toUpperCase();
 
+      // VALIDACIÓN DE FECHA DE APERTURA (Prompt 3)
+      if (!socioData && !esCurso) {
+        const hoy = new Date();
+        const fechaEv = new Date(item.fecha);
+        const diffTime = fechaEv.getTime() - hoy.getTime();
+        const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+        if (diffDays > 7) {
+          setMensaje("⚠️ Las reservas para no soci@s abren 7 días antes del evento.");
+          setCargando(false);
+          return;
+        }
+      }
+
       // 1. VALIDACIÓN DE UNICIDAD (Solo si hay DNI)
       if (dniUpper) {
         const snapDuplicado = await getDocs(query(collection(db, "reservas"), where("eventoId", "==", item.id)));

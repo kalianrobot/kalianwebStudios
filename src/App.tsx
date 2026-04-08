@@ -23,6 +23,9 @@ import AdminLogin from './pages/AdminLogin';
 import TeacherDashboard from './components/teacher/TeacherDashboard';
 import TeacherLogin from './pages/TeacherLogin';
 
+import ProgramacionPublica from './pages/ProgramacionPublica';
+import AdminSolicitudes from './components/admin/AdminSolicitudes';
+
 function AppContent() {
   const { user, role, logoutAdmin } = useAuth();
   const location = useLocation();
@@ -39,6 +42,7 @@ function AppContent() {
         
         {/* RUTAS PÚBLICAS */}
         <Route path="/login" element={<LoginSocio />} />
+        <Route path="/programacion" element={<ProgramacionPublica />} />
         <Route path="/newsletter-kalian-privado" element={<NewsletterPage />} />
 
         {/* RUTAS STAFF (ADMIN) */}
@@ -60,6 +64,7 @@ function AppContent() {
         <Route path="/staff/socios" element={role === 'admin' ? <AdminSocios /> : <Navigate to="/staff/login" />} />
         <Route path="/staff/profesores" element={role === 'admin' ? <AdminProfesores /> : <Navigate to="/staff/login" />} />
         <Route path="/staff/locales" element={role === 'admin' ? <AdminLocales /> : <Navigate to="/staff/login" />} />
+        <Route path="/staff/solicitudes" element={role === 'admin' ? <AdminSolicitudes /> : <Navigate to="/staff/login" />} />
 
         {/* RUTAS PROFESORES (TEACHER) */}
         <Route path="/profesor/login" element={role !== 'teacher' ? <TeacherLogin /> : <Navigate to="/profesor" />} />

@@ -149,10 +149,10 @@ const HomeSocio = () => {
 
                     <div className="flex items-center gap-12 w-full md:w-auto justify-between md:justify-end">
                       <div className="text-center">
-                        <p className={`text-3xl kalian-poster-text ${isFull ? 'text-red-500' : 'text-kalian-gold'}`}>
-                          {isFull ? 'AGOTADO' : `${c.aforo_total - c.aforo_actual}`}
+                        <p className={`text-3xl kalian-poster-text ${c.aforo_disponible === false ? 'text-red-500' : 'text-kalian-gold'}`}>
+                          {c.aforo_disponible === false ? 'SIN PLAZAS' : 'LIBRES'}
                         </p>
-                        <p className="text-[8px] font-black uppercase text-kalian-gold/30 tracking-widest">Plazas Libres</p>
+                        <p className="text-[8px] font-black uppercase text-kalian-gold/30 tracking-widest">Disponibilidad</p>
                       </div>
                       <div className="text-right">
                         <p className="text-3xl kalian-poster-text text-kalian-cream">{c.precio}€</p>
@@ -182,9 +182,10 @@ const HomeSocio = () => {
 
                       <button 
                         onClick={() => setItemSeleccionado(c)}
-                        className="w-full bg-kalian-gold text-black p-6 rounded-2xl kalian-poster-text text-xl tracking-widest hover:bg-white transition-all shadow-2xl shadow-kalian-gold/20"
+                        disabled={c.aforo_disponible === false}
+                        className={`w-full p-6 rounded-2xl kalian-poster-text text-xl tracking-widest transition-all shadow-2xl ${c.aforo_disponible === false ? 'bg-slate-800 text-slate-500 cursor-not-allowed' : 'bg-kalian-gold text-black hover:bg-white shadow-kalian-gold/20'}`}
                       >
-                        Inscribirse al Curso
+                        {c.aforo_disponible === false ? 'CURSO CERRADO' : 'Inscribirse al Curso'}
                       </button>
                     </div>
                   )}

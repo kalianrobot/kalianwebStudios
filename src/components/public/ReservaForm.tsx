@@ -102,6 +102,14 @@ const ReservaForm = ({ item, alCerrar }: ReservaFormProps) => {
 
         // 1.1 VALIDACIÓN DE AFORO
         const aforoMax = Number(item.aforo_max || item.aforo_total || 0);
+        const aforoDisponibleManual = item.aforo_disponible !== false; // Por defecto true si no existe el campo
+
+        if (!aforoDisponibleManual) {
+          setMensaje("❌ Lo sentimos, este curso no tiene plazas disponibles actualmente.");
+          setCargando(false);
+          return;
+        }
+
         let ocupacionActual = 0;
         snapDuplicado.docs.forEach(d => {
           const rData = d.data();
@@ -109,7 +117,10 @@ const ReservaForm = ({ item, alCerrar }: ReservaFormProps) => {
         });
 
         const nuevosSolicitados = 1 + Number(form.acompañantes);
-        if (ocupacionActual + nuevosSolicitados > aforoMax) {
+        
+        // BDD: Si es curso, el aforo total es orientativo, pero si el profesor lo cierra manualmente, se respeta.
+        // Si no es curso (es evento), validamos aforo numérico estrictamente.
+        if (!esCurso && (ocupacionActual + nuevosSolicitados > aforoMax)) {
           setMensaje(`❌ Lo sentimos, no hay aforo suficiente. Quedan ${aforoMax - ocupacionActual} plazas.`);
           setCargando(false);
           return;

@@ -243,14 +243,14 @@ const TeacherDashboard = () => {
                     {c.horario} | {c.alumnos?.length || 0} Alumnos
                   </p>
                   <div className="mt-4 flex justify-between items-center">
-                    <span className={`text-[10px] font-black uppercase tracking-widest ${c.aforo_disponible ? 'text-emerald-500' : 'text-red-500'}`}>
-                      {c.aforo_disponible ? 'Abierto' : 'Completo'}
+                    <span className={`text-[10px] font-black uppercase tracking-widest ${c.aforo_disponible !== false ? 'text-emerald-500' : 'text-red-500'}`}>
+                      {c.aforo_disponible !== false ? 'Plazas Libres' : 'Sin Plazas'}
                     </span>
                     <button 
                       onClick={(e) => { e.stopPropagation(); toggleAforo(c.id, c.aforo_disponible !== false); }}
-                      className="text-[8px] font-black uppercase tracking-widest text-kalian-gold/30 hover:text-kalian-gold transition-all"
+                      className="bg-kalian-gold/10 text-kalian-gold px-4 py-2 rounded-xl text-[8px] font-black uppercase tracking-widest hover:bg-kalian-gold/20 transition-all"
                     >
-                      Alternar Aforo
+                      {c.aforo_disponible !== false ? 'Cerrar Plazas' : 'Abrir Plazas'}
                     </button>
                   </div>
                 </div>

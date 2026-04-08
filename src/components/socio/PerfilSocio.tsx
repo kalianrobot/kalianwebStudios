@@ -291,9 +291,9 @@ const PerfilSocio = () => {
             <div className="h-[1px] flex-1 bg-kalian-gold/20"></div>
           </div>
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-10">
-            {reservasActivas.length === 0 && cursosDetalle.length === 0 && !localDetalle ? (
+            {reservasActivas.length === 0 ? (
               <div className="col-span-full bg-black/20 p-20 rounded-[3rem] text-center border border-kalian-gold/10 border-dashed">
-                <p className="kalian-poster-text text-kalian-gold/30 text-4xl">No tienes actividades<br/>inscritas todavía</p>
+                <p className="kalian-poster-text text-kalian-gold/30 text-4xl">No tienes reservas<br/>de eventos activas</p>
               </div>
             ) : reservasActivas.map(res => (
           <div key={res.id} className="bg-kalian-cream rounded-[3rem] p-10 text-black shadow-2xl flex flex-col items-center transform hover:scale-[1.02] transition-all duration-500 group relative">
@@ -307,13 +307,13 @@ const PerfilSocio = () => {
             
             <div className="bg-white p-8 rounded-[2.5rem] mb-8 shadow-inner border border-black/5 flex flex-col items-center group-hover:shadow-2xl transition-all">
               <QRCodeSVG 
-                value={res.id} 
+                value={res.ticketID || res.id} 
                 size={140} 
                 level="H" 
                 includeMargin={true}
                 className="mix-blend-multiply"
               />
-              <p className="text-center font-mono text-[9px] mt-6 text-black/30 font-bold tracking-[0.3em]">{res.id}</p>
+              <p className="text-center font-mono text-[11px] mt-6 text-black font-black tracking-[0.3em] uppercase">Localizador: {res.ticketID || res.id}</p>
             </div>
 
             <div className="w-full bg-black/5 p-6 rounded-3xl flex justify-between items-center border border-black/5">

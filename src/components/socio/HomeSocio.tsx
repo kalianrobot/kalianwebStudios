@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { db } from '../../firebase';
 import { collection, getDocs, query, orderBy, DocumentData } from 'firebase/firestore';
+import { Link } from 'react-router-dom';
 import ReservaForm from '../public/ReservaForm';
 
 const HomeSocio = () => {
@@ -31,6 +32,15 @@ const HomeSocio = () => {
           CATÁLOGO <span className="text-kalian-cream">EXCLUSIVO</span>
         </h1>
         <p className="text-kalian-gold/60 text-xs md:text-sm font-black tracking-[0.6em] uppercase italic">Eventos y Cursos para Socios Kalian</p>
+        
+        <div className="pt-8 flex justify-center">
+          <Link 
+            to="/perfil" 
+            className="bg-kalian-gold text-black px-10 py-4 rounded-2xl kalian-poster-text text-xl tracking-widest hover:bg-white transition-all shadow-2xl shadow-kalian-gold/20"
+          >
+            IR A MI PANEL →
+          </Link>
+        </div>
       </div>
 
       <div className="max-w-6xl mx-auto px-6 space-y-24">

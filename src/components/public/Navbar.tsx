@@ -24,7 +24,7 @@ const Navbar = () => {
         {socioData ? (
           <div className="flex items-center gap-8">
             <Link to="/home" className="text-[10px] font-black uppercase hover:text-kalian-gold transition-colors tracking-[0.3em]">Catálogo</Link>
-            <Link to="/perfil" className="text-[10px] font-black uppercase hover:text-kalian-gold transition-colors tracking-[0.3em]">Mi Perfil</Link>
+            <Link to="/perfil" className="text-[10px] font-black uppercase hover:text-kalian-gold transition-colors tracking-[0.3em]">Mi Panel</Link>
             <button 
               onClick={handleLogout}
               className="bg-kalian-gold/10 hover:bg-red-500/20 text-kalian-gold hover:text-red-400 text-[10px] font-black uppercase px-4 py-2 rounded-full border border-kalian-gold/20 transition-all"

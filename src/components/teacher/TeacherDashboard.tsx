@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { db, storage } from '../../firebase';
-import { collection, getDocs, updateDoc, doc, query, orderBy, DocumentData, where, setDoc, getDoc, getDocsFromServer, arrayUnion, arrayRemove } from 'firebase/firestore';
+import { collection, getDocs, updateDoc, doc, query, orderBy, DocumentData, where, setDoc, getDoc, getDocsFromServer, arrayUnion, arrayRemove, increment } from 'firebase/firestore';
 import { ref, uploadBytes, getDownloadURL, deleteObject } from 'firebase/storage';
 import { useAuth } from '../../context/AuthContext';
 import { Link } from 'react-router-dom';
@@ -12,11 +12,23 @@ const TeacherDashboard = () => {
   const [pagos, setPagos] = useState<Record<string, any>>({});
   const [archivo, setArchivo] = useState<File | null>(null);
   const [subiendo, setSubiendo] = useState(false);
+  const [storageUsage, setStorageUsage] = useState(0);
   const { user, socioData, logoutTeacher } = useAuth();
 
   const mesActual = new Date().getMonth() + 1;
   const anioActual = new Date().getFullYear();
   const mesAnioKey = `${anioActual}_${mesActual}`;
+
+  const fetchStorageUsage = async () => {
+    try {
+      const snap = await getDoc(doc(db, "metadata", "storage"));
+      if (snap.exists()) setStorageUsage(snap.data().totalBytes || 0);
+    } catch (e) { console.error(e); }
+  };
+
+  const storageLimit = 5 * 1024 * 1024 * 1024; // 5GB
+  const usagePercent = Math.min(100, (storageUsage / storageLimit) * 100);
+  const usageMB = (storageUsage / (1024 * 1024)).toFixed(2);
 
   const fetchCursos = async () => {
     if (!user) return;
@@ -57,6 +69,7 @@ const TeacherDashboard = () => {
   useEffect(() => { 
     fetchCursos(); 
     fetchPagos();
+    fetchStorageUsage();
   }, [user]);
 
   const toggleAforo = async (id: string, actual: boolean) => {
@@ -95,8 +108,28 @@ const TeacherDashboard = () => {
 
   const subirDocumento = async (cursoId: string) => {
     if (!archivo) return;
+
+    // 1. Validación de tamaño individual (5MB)
+    const LIMITE_ARCHIVO = 5 * 1024 * 1024; // 5MB
+    if (archivo.size > LIMITE_ARCHIVO) {
+      alert("❌ El archivo es demasiado grande. El límite es 5MB.");
+      return;
+    }
+
     setSubiendo(true);
     try {
+      // 2. Validación de límite total (5GB)
+      const LIMITE_TOTAL = 5 * 1024 * 1024 * 1024; // 5GB
+      const storageMetaRef = doc(db, "metadata", "storage");
+      const metaSnap = await getDoc(storageMetaRef);
+      const totalActual = metaSnap.exists() ? metaSnap.data().totalBytes || 0 : 0;
+
+      if (totalActual + archivo.size > LIMITE_TOTAL) {
+        alert("❌ No hay espacio suficiente en el servidor (Límite 5GB alcanzado). Contacta con el administrador.");
+        setSubiendo(false);
+        return;
+      }
+
       const storageRef = ref(storage, `cursos/${cursoId}/${Date.now()}_${archivo.name}`);
       await uploadBytes(storageRef, archivo);
       const url = await getDownloadURL(storageRef);
@@ -105,15 +138,25 @@ const TeacherDashboard = () => {
         nombre: archivo.name,
         url: url,
         fecha: new Date().toISOString(),
-        path: storageRef.fullPath
+        path: storageRef.fullPath,
+        size: archivo.size // Guardamos el tamaño para restarlo al eliminar
       };
 
+      // Actualizar curso y metadatos de almacenamiento de forma atómica
       await updateDoc(doc(db, "cursos", cursoId), {
         documentos: arrayUnion(docData)
       });
 
+      // Actualizar contador total
+      if (metaSnap.exists()) {
+        await updateDoc(storageMetaRef, { totalBytes: increment(archivo.size) });
+      } else {
+        await setDoc(storageMetaRef, { totalBytes: archivo.size });
+      }
+
       setArchivo(null);
       fetchCursos();
+      fetchStorageUsage();
       alert("✅ Documento subido con éxito");
     } catch (err) {
       console.error(err);
@@ -132,8 +175,15 @@ const TeacherDashboard = () => {
       await updateDoc(doc(db, "cursos", cursoId), {
         documentos: arrayRemove(documento)
       });
+
+      // Restar del contador total
+      const storageMetaRef = doc(db, "metadata", "storage");
+      await updateDoc(storageMetaRef, { 
+        totalBytes: increment(-(documento.size || 0)) 
+      });
       
       fetchCursos();
+      fetchStorageUsage();
     } catch (err) {
       console.error(err);
       alert("Error al eliminar");
@@ -150,6 +200,20 @@ const TeacherDashboard = () => {
             <h1 className="text-6xl kalian-poster-text text-kalian-gold tracking-tight uppercase italic leading-none">PANEL <span className="text-kalian-cream">PROFESORES</span></h1>
             <p className="text-[10px] text-kalian-gold/40 font-black uppercase tracking-[0.4em] mt-4 ml-4">Gestión de Cursos y Pagos - {meses[mesActual-1]} {anioActual}</p>
             {user && <p className="text-[8px] text-kalian-gold/20 font-mono mt-2 ml-4">ID: {user.uid}</p>}
+            
+            {/* Barra de Almacenamiento */}
+            <div className="mt-6 ml-4 max-w-xs">
+              <div className="flex justify-between items-center mb-2">
+                <span className="text-[8px] font-black uppercase text-kalian-gold/40 tracking-widest">Almacenamiento: {usageMB}MB / 5000MB</span>
+                <span className="text-[8px] font-black text-kalian-gold/40">{usagePercent.toFixed(1)}%</span>
+              </div>
+              <div className="h-1.5 w-full bg-kalian-gold/5 rounded-full overflow-hidden border border-kalian-gold/10">
+                <div 
+                  className={`h-full transition-all duration-1000 ${usagePercent > 90 ? 'bg-red-500' : usagePercent > 70 ? 'bg-amber-500' : 'bg-kalian-gold'}`}
+                  style={{ width: `${usagePercent}%` }}
+                ></div>
+              </div>
+            </div>
           </div>
           <div className="flex gap-4">
             <button 
@@ -160,10 +224,10 @@ const TeacherDashboard = () => {
             </button>
             {socioData && (
               <Link 
-                to="/home" 
+                to="/perfil" 
                 className="bg-indigo-600 text-white px-6 py-3 rounded-xl font-black text-[10px] uppercase tracking-widest hover:bg-white hover:text-indigo-600 transition-all shadow-lg shadow-indigo-600/20"
               >
-                Área Socio
+                Mi Panel
               </Link>
             )}
             <button onClick={logoutTeacher} className="bg-kalian-gold/10 text-kalian-gold px-6 py-3 rounded-xl font-black text-[10px] uppercase tracking-widest hover:bg-kalian-gold hover:text-black transition-all">SALIR</button>

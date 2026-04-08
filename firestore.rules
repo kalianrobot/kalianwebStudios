@@ -97,5 +97,11 @@ service cloud.firestore {
       allow create: if true;
       allow read: if isAdmin();
     }
+
+    // METADATA: Almacenamiento total
+    match /metadata/storage {
+      allow read: if isAuthenticated();
+      allow write: if isAdmin() || isTeacher();
+    }
   }
 }

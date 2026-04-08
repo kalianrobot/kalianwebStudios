@@ -1,0 +1,43 @@
+rules_version = '2';
+service firebase.storage {
+  match /b/{bucket}/o {
+    
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+    
+    function isAdmin() {
+      return isAuthenticated() && 
+        (request.auth.token.email == "kalianrobot@gmail.com" ||
+         firestore.get(/databases/(default)/documents/users/$(request.auth.uid)).data.role == 'admin');
+    }
+
+    function isTeacherOf(cursoId) {
+      return isAuthenticated() && 
+        firestore.get(/databases/(default)/documents/cursos/$(cursoId)).data.profesorId == request.auth.uid;
+    }
+
+    // Simplificamos la comprobación de inscripción para evitar errores de CEL complejos
+    // Verificamos si el usuario tiene el rol de socio y si el curso existe
+    function isSocio() {
+      return isAuthenticated() && 
+        (firestore.get(/databases/(default)/documents/users/$(request.auth.uid)).data.role == 'socio' ||
+         exists(/databases/(default)/documents/socios/$(request.auth.uid)));
+    }
+
+    match /cursos/{cursoId}/{fileName} {
+      // Solo autenticados pueden leer. 
+      // Idealmente solo alumnos inscritos, pero la estructura de datos actual (array de objetos) 
+      // dificulta la validación estricta en reglas sin cambiar el modelo.
+      // Al menos restringimos a Socios, Profesores y Admins.
+      allow read: if isAuthenticated() && (isSocio() || isTeacherOf(cursoId) || isAdmin());
+      
+      // Límite de 5MB y solo profesores del curso o admins pueden subir
+      allow write: if isAuthenticated() && 
+                   (isTeacherOf(cursoId) || isAdmin()) && 
+                   request.resource.size < 5 * 1024 * 1024;
+                   
+      allow delete: if isAuthenticated() && (isTeacherOf(cursoId) || isAdmin());
+    }
+  }
+}

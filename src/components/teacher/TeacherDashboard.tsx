@@ -165,10 +165,10 @@ const TeacherDashboard = () => {
   const subirDocumento = async (cursoId: string) => {
     if (!archivo) return;
 
-    // 1. Validación de tamaño individual (5MB)
-    const LIMITE_ARCHIVO = 5 * 1024 * 1024; // 5MB
+    // 1. Validación de tamaño individual (20MB)
+    const LIMITE_ARCHIVO = 20 * 1024 * 1024; // 20MB
     if (archivo.size > LIMITE_ARCHIVO) {
-      alert("❌ El archivo es demasiado grande. El límite es 5MB.");
+      alert("❌ El archivo es demasiado grande. El límite es 20MB.");
       return;
     }
 

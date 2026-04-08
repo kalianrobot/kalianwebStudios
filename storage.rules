@@ -32,10 +32,10 @@ service firebase.storage {
       // Al menos restringimos a Socios, Profesores y Admins.
       allow read: if isAuthenticated() && (isSocio() || isTeacherOf(cursoId) || isAdmin());
       
-      // Límite de 5MB y solo profesores del curso o admins pueden subir
+      // Límite de 20MB y solo profesores del curso o admins pueden subir
       allow write: if isAuthenticated() && 
                    (isTeacherOf(cursoId) || isAdmin()) && 
-                   request.resource.size < 5 * 1024 * 1024;
+                   request.resource.size < 20 * 1024 * 1024;
                    
       allow delete: if isAuthenticated() && (isTeacherOf(cursoId) || isAdmin());
     }

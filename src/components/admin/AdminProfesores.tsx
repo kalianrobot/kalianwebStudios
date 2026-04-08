@@ -54,12 +54,19 @@ const AdminProfesores = () => {
           const findUidByEmail = async (colName: string) => {
             const q = query(collection(db, colName), where("email", "==", emailClean));
             const snap = await getDocs(q);
-            if (!snap.empty) return snap.docs[0].id === emailClean ? snap.docs[0].data().uid : snap.docs[0].id;
+            if (!snap.empty) {
+              const data = snap.docs[0].data();
+              // Priorizar el campo 'uid' si existe, si no, usar el ID del documento
+              return data.uid || snap.docs[0].id;
+            }
             
             // Intentar con el email original por si no estaba en minúsculas
             const qOrig = query(collection(db, colName), where("email", "==", form.email.trim()));
             const snapOrig = await getDocs(qOrig);
-            if (!snapOrig.empty) return snapOrig.docs[0].id === form.email.trim() ? snapOrig.docs[0].data().uid : snapOrig.docs[0].id;
+            if (!snapOrig.empty) {
+              const dataOrig = snapOrig.docs[0].data();
+              return dataOrig.uid || snapOrig.docs[0].id;
+            }
             
             return null;
           };
@@ -118,6 +125,60 @@ const AdminProfesores = () => {
       await deleteDoc(doc(db, "users", uid));
       fetchProfesores();
     }
+  };
+
+  const repararAcceso = async (p: DocumentData) => {
+    setLoading(true);
+    try {
+      const emailClean = p.email.trim().toLowerCase();
+      
+      // Buscar el UID real
+      const findUidByEmail = async (colName: string) => {
+        const q = query(collection(db, colName), where("email", "==", emailClean));
+        const snap = await getDocs(q);
+        if (!snap.empty) {
+          const data = snap.docs[0].data();
+          return data.uid || (snap.docs[0].id.includes('@') ? null : snap.docs[0].id);
+        }
+        return null;
+      };
+
+      // Intentar encontrar el UID real en socios o users
+      let realUid = await findUidByEmail("socios");
+      if (!realUid) realUid = await findUidByEmail("users");
+
+      if (!realUid || realUid === p.uid) {
+        alert("No se ha podido encontrar un UID diferente para este email. Si el problema persiste, borra al profesor y vuelve a crearlo.");
+      } else {
+        // 1. Crear el nuevo perfil correcto
+        await setDoc(doc(db, "profesores", realUid), {
+          nombre: p.nombre,
+          email: emailClean,
+          especialidad: p.especialidad || '',
+          activo: p.activo !== false,
+          uid: realUid,
+          fechaAlta: p.fechaAlta || new Date().toISOString()
+        });
+
+        await setDoc(doc(db, "users", realUid), {
+          uid: realUid,
+          email: emailClean,
+          nombre: p.nombre,
+          role: 'teacher'
+        }, { merge: true });
+
+        // 2. Borrar el perfil incorrecto
+        await deleteDoc(doc(db, "profesores", p.uid));
+        await deleteDoc(doc(db, "users", p.uid));
+
+        setMsg("✅ Acceso reparado con éxito");
+        fetchProfesores();
+      }
+    } catch (err) {
+      console.error(err);
+      alert("Error al reparar");
+    }
+    setLoading(false);
   };
 
   return (
@@ -185,6 +246,17 @@ const AdminProfesores = () => {
                   <h3 className="font-black text-lg uppercase italic leading-none">{p.nombre}</h3>
                   <p className="text-[10px] text-indigo-500 font-black mt-1 uppercase tracking-widest">{p.especialidad || 'Sin especialidad'}</p>
                   <p className="text-[9px] text-slate-400 font-bold mt-1">{p.email}</p>
+                  {p.uid && p.uid.length < 15 && (
+                    <div className="mt-2">
+                      <p className="text-[8px] text-red-500 font-bold uppercase mb-1">⚠️ UID Incorrecto (DNI detectado)</p>
+                      <button 
+                        onClick={() => repararAcceso(p)}
+                        className="text-[8px] bg-red-500 text-white px-2 py-1 rounded-md font-black uppercase hover:bg-slate-900 transition-colors"
+                      >
+                        Reparar Acceso
+                      </button>
+                    </div>
+                  )}
                 </div>
                 <div className="flex gap-2">
                   <button 

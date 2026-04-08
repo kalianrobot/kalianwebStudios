@@ -60,12 +60,33 @@ const ProgramacionPublica = () => {
 
   const hayLocalesLibres = locales.some(l => l.estado === 'libre');
 
-  const esReservaAbierta = (fechaEvento: string) => {
+  const esReservaAbierta = (ev: any) => {
     const hoy = new Date();
-    const fecha = new Date(fechaEvento);
-    const diffTime = fecha.getTime() - hoy.getTime();
-    const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
-    return diffDays <= 7; // Abierto si faltan 7 días o menos
+    const aperturaSocios = ev.apertura_socios ? new Date(ev.apertura_socios) : null;
+    const aperturaGral = ev.apertura_general ? new Date(ev.apertura_general) : null;
+    
+    if (!aperturaSocios && !aperturaGral) {
+      const fecha = new Date(ev.fecha);
+      const diffTime = fecha.getTime() - hoy.getTime();
+      const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+      return diffDays <= 7;
+    }
+
+    return (aperturaSocios && hoy >= aperturaSocios) || (aperturaGral && hoy >= aperturaGral);
+  };
+
+  const getMensajeApertura = (ev: any) => {
+    const hoy = new Date();
+    const aperturaSocios = ev.apertura_socios ? new Date(ev.apertura_socios) : null;
+    const aperturaGral = ev.apertura_general ? new Date(ev.apertura_general) : null;
+
+    if (aperturaSocios && hoy < aperturaSocios) {
+      return `Apertura Soci@s: ${aperturaSocios.toLocaleDateString()}`;
+    }
+    if (aperturaGral && hoy < aperturaGral) {
+      return `Apertura General: ${aperturaGral.toLocaleDateString()}`;
+    }
+    return "Apertura 7 días antes";
   };
 
   return (
@@ -128,14 +149,14 @@ const ProgramacionPublica = () => {
                         className="w-full bg-kalian-gold/10 text-kalian-gold border border-kalian-gold/20 p-4 rounded-2xl kalian-poster-text text-sm tracking-widest hover:bg-kalian-gold/20 transition-all"
                       >Ver Cartel</button>
                     )}
-                    {esReservaAbierta(ev.fecha) ? (
+                    {esReservaAbierta(ev) ? (
                       <button className="w-full bg-kalian-gold text-black p-5 rounded-2xl kalian-poster-text text-lg tracking-widest hover:bg-white transition-all shadow-xl shadow-kalian-gold/10">
                         Reservar Plaza
                       </button>
                     ) : (
                       <div className="w-full bg-slate-800/50 text-slate-500 p-5 rounded-2xl kalian-poster-text text-lg tracking-widest text-center border border-white/5">
                         Próximamente
-                        <p className="text-[8px] font-black uppercase tracking-widest mt-1">Apertura 7 días antes</p>
+                        <p className="text-[8px] font-black uppercase tracking-widest mt-1">{getMensajeApertura(ev)}</p>
                       </div>
                     )}
                   </div>

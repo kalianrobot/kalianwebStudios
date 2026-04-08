@@ -69,6 +69,27 @@
         "cursos": { "type": "array", "items": { "type": "string" } },
         "expiraciones": { "type": "object" }
       }
+    },
+    "eventos": {
+      "title": "Evento",
+      "description": "Eventos y conciertos",
+      "type": "object",
+      "properties": {
+        "titulo": { "type": "string" },
+        "fecha": { "type": "string", "format": "date-time" },
+        "precio_estandar": { "type": "number" },
+        "tiene_descuento": { "type": "boolean" },
+        "precio_descuento": { "type": "number", "description": "Precio para soci@s" },
+        "clave_descuento": { "type": "string" },
+        "precio_clave": { "type": "number", "description": "Precio usando la clave" },
+        "apertura_socios": { "type": "string", "format": "date-time" },
+        "apertura_general": { "type": "string", "format": "date-time" },
+        "aforo_max": { "type": "number" },
+        "aforo_actual": { "type": "number" },
+        "imagenUrl": { "type": "string" },
+        "descripcion": { "type": "string" },
+        "categoria": { "type": "string" }
+      }
     }
   },
   "firestore": {
@@ -91,6 +112,10 @@
     "/socios/{dni}": {
       "schema": "socios",
       "description": "Colección de socios"
+    },
+    "/eventos/{eventoId}": {
+      "schema": "eventos",
+      "description": "Colección de eventos"
     }
   }
 }

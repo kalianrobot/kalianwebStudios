@@ -17,7 +17,9 @@ const ReservaForm = ({ item, alCerrar }: ReservaFormProps) => {
   const [resultado, setResultado] = useState<{ ticketID: string, qrUrl: string, nombre: string } | null>(null);
   const [emailEnvio, setEmailEnvio] = useState('');
   const [emailEnviado, setEmailEnviado] = useState(false);
-  const [precioCalculado, setPrecioCalculado] = useState({ total: 0, esSocio: false });
+  const [claveInput, setClaveInput] = useState('');
+  const [claveValida, setClaveValida] = useState(false);
+  const [precioCalculado, setPrecioCalculado] = useState({ total: 0, esSocio: false, esClave: false });
   const navigate = useNavigate();
   
   const esCurso = item.fechaFin !== undefined;
@@ -54,23 +56,40 @@ const ReservaForm = ({ item, alCerrar }: ReservaFormProps) => {
         } catch (e) { console.error(e); }
       }
 
-      // BDD1: Descuento socio aplica a eventos y cursos si tienen precio_descuento
-      const socioParaPrecio = socio;
+      // Validación de Clave
+      const esClaveValida = item.clave_descuento && claveInput.trim().toUpperCase() === item.clave_descuento.toUpperCase();
+      setClaveValida(!!esClaveValida);
+
+      let precioTitular = precioBase;
+      let aplicadoSocio = false;
+      let aplicadoClave = false;
+
+      // Lógica de Descuentos NO Acumulables (Arquitecto: Elegir el mejor precio)
+      const pSocio = item.tiene_descuento ? Number(item.precio_descuento) : precioBase;
+      const pClave = esClaveValida ? Number(item.precio_clave) : precioBase;
+
+      if (socio && pSocio < precioTitular) {
+        precioTitular = pSocio;
+        aplicadoSocio = true;
+      }
+
+      if (esClaveValida && pClave < precioTitular) {
+        precioTitular = pClave;
+        aplicadoClave = true;
+        aplicadoSocio = false; // El de clave es mejor
+      }
       
       let total = 0;
-      const precioSocio = item.tiene_descuento ? Number(item.precio_descuento) : 0;
-      const precioTitular = socioParaPrecio ? precioSocio : precioBase;
-
       if (esCurso) {
         total = precioTitular;
       } else {
         total = precioTitular + (Number(form.acompañantes) * precioBase);
       }
       
-      setPrecioCalculado({ total, esSocio: socioParaPrecio });
+      setPrecioCalculado({ total, esSocio: aplicadoSocio, esClave: aplicadoClave });
     };
     calcular();
-  }, [form.dni, form.acompañantes, socioData, esCurso, categoriaActividad, precioBase, item.tiene_descuento, item.precio_descuento]);
+  }, [form.dni, form.acompañantes, claveInput, socioData, esCurso, categoriaActividad, precioBase, item.tiene_descuento, item.precio_descuento, item.clave_descuento, item.precio_clave]);
 
   const enviar = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -89,16 +108,30 @@ const ReservaForm = ({ item, alCerrar }: ReservaFormProps) => {
     try {
       const dniUpper = form.dni.trim().toUpperCase();
 
-      // VALIDACIÓN DE FECHA DE APERTURA (Prompt 3)
-      if (!socioData && !esCurso) {
-        const hoy = new Date();
-        const fechaEv = new Date(item.fecha);
-        const diffTime = fechaEv.getTime() - hoy.getTime();
-        const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
-        if (diffDays > 7) {
-          setMensaje("⚠️ Las reservas para no soci@s abren 7 días antes del evento.");
-          setCargando(false);
-          return;
+      // VALIDACIÓN DE FECHA DE APERTURA ESCALONADA (Arquitecto)
+      if (!esCurso) {
+        const ahora = new Date();
+        const esSocio = precioCalculado.esSocio || !!socioData;
+        
+        if (esSocio) {
+          if (item.apertura_socios) {
+            const aperturaSocios = new Date(item.apertura_socios);
+            if (ahora < aperturaSocios) {
+              setMensaje(`⚠️ Las reservas para soci@s abren el ${aperturaSocios.toLocaleString('es-ES')}`);
+              setCargando(false);
+              return;
+            }
+          }
+        } else {
+          // Público general o con clave
+          if (item.apertura_general) {
+            const aperturaGral = new Date(item.apertura_general);
+            if (ahora < aperturaGral) {
+              setMensaje(`⚠️ Las reservas para público general abren el ${aperturaGral.toLocaleString('es-ES')}`);
+              setCargando(false);
+              return;
+            }
+          }
         }
       }
 
@@ -363,6 +396,21 @@ const ReservaForm = ({ item, alCerrar }: ReservaFormProps) => {
           </div>
 
           {!esCurso && (
+            <div className="space-y-2">
+              <label className="text-[9px] font-black text-kalian-gold/40 uppercase tracking-[0.3em] ml-4">CLAVE DE DESCUENTO</label>
+              <div className="relative">
+                <input 
+                  type="text" placeholder="¿TIENES UN CUPÓN?" 
+                  className={`w-full p-5 bg-kalian-gold/5 rounded-2xl font-black uppercase outline-none border transition-all text-xl ${claveValida ? 'border-emerald-500 text-emerald-500' : 'border-kalian-gold/10 focus:border-kalian-gold text-kalian-gold'}`} 
+                  value={claveInput} 
+                  onChange={e => setClaveInput(e.target.value.toUpperCase())} 
+                />
+                {claveValida && <span className="absolute right-5 top-1/2 -translate-y-1/2 text-emerald-500">✓</span>}
+              </div>
+            </div>
+          )}
+
+          {!esCurso && (
             <div className="flex justify-between items-center bg-kalian-gold/5 p-6 rounded-3xl border border-kalian-gold/10">
               <div>
                 <span className="text-[9px] font-black uppercase text-kalian-gold/40 block mb-1 tracking-widest">Acompañantes</span>
@@ -383,16 +431,16 @@ const ReservaForm = ({ item, alCerrar }: ReservaFormProps) => {
               <span>Aportación Base</span>
               <span>{precioBase}€</span>
             </div>
-            {precioCalculado.esSocio && item.tiene_descuento && (
+            {precioCalculado.esSocio && (
               <div className="flex justify-between items-center text-[9px] font-black uppercase text-kalian-gold tracking-widest">
                 <span>Descuento Soci@s</span>
                 <span>{item.precio_descuento}€</span>
               </div>
             )}
-            {precioCalculado.esSocio && !item.tiene_descuento && (
-              <div className="flex justify-between items-center text-[9px] font-black uppercase text-kalian-gold tracking-widest">
-                <span>Descuento Soci@s</span>
-                <span>-100%</span>
+            {precioCalculado.esClave && (
+              <div className="flex justify-between items-center text-[9px] font-black uppercase text-emerald-500 tracking-widest">
+                <span>Descuento Cupón</span>
+                <span>{item.precio_clave}€</span>
               </div>
             )}
             <div className="flex justify-between items-center pt-3 border-t border-kalian-gold/10">
@@ -400,7 +448,9 @@ const ReservaForm = ({ item, alCerrar }: ReservaFormProps) => {
               <span className="text-4xl kalian-poster-text text-kalian-gold italic">{precioCalculado.total}€</span>
             </div>
             <p className="text-[8px] text-kalian-gold/20 font-black uppercase text-center pt-1 tracking-widest">
-              {precioCalculado.esSocio ? '✓ DESCUENTO APLICADO POR SER SOCI@S ACTIVO' : 'REGÍSTRATE COMO SOCI@S PARA OBTENER DESCUENTOS'}
+              {precioCalculado.esSocio ? '✓ DESCUENTO APLICADO POR SER SOCI@S ACTIVO' : 
+               precioCalculado.esClave ? '✓ DESCUENTO APLICADO POR CUPÓN' :
+               'REGÍSTRATE COMO SOCI@S PARA OBTENER DESCUENTOS'}
             </p>
           </div>
 

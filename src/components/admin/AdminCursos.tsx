@@ -326,12 +326,12 @@ const AdminCursos = () => {
                   checked={form.tiene_descuento} 
                   onChange={e => setForm({...form, tiene_descuento: e.target.checked})} 
                 />
-                <p className="text-[10px] font-black uppercase text-slate-900 tracking-widest">¿Descuento Socio?</p>
+                <p className="text-[10px] font-black uppercase text-slate-900 tracking-widest">¿Descuento Soci@s?</p>
               </div>
               {form.tiene_descuento && (
                 <div className="space-y-1">
-                  <label className="text-[10px] font-black uppercase text-slate-400 ml-4">Precio Socio (€)</label>
-                  <input type="number" placeholder="Precio Socio" className="w-full p-5 bg-slate-50 rounded-2xl outline-none border border-slate-200 text-slate-900 font-bold" value={form.precio_descuento} onChange={e => setForm({...form, precio_descuento: e.target.value})} required />
+                  <label className="text-[10px] font-black uppercase text-slate-400 ml-4">Precio Soci@s (€)</label>
+                  <input type="number" placeholder="Precio Soci@s" className="w-full p-5 bg-slate-50 rounded-2xl outline-none border border-slate-200 text-slate-900 font-bold" value={form.precio_descuento} onChange={e => setForm({...form, precio_descuento: e.target.value})} required />
                 </div>
               )}
             </div>

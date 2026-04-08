@@ -32,7 +32,7 @@ const HomeSocio = () => {
         <h1 className="text-5xl md:text-8xl kalian-poster-text text-kalian-gold tracking-[-0.05em]">
           CATÁLOGO <span className="text-kalian-cream">EXCLUSIVO</span>
         </h1>
-        <p className="text-kalian-gold/60 text-xs md:text-sm font-black tracking-[0.6em] uppercase italic">Eventos y Cursos para Socios Kalian</p>
+        <p className="text-kalian-gold/60 text-xs md:text-sm font-black tracking-[0.6em] uppercase italic">Eventos y Cursos para Soci@s Kalian</p>
         
         <div className="pt-8 flex justify-center">
           <Link 
@@ -150,7 +150,7 @@ const HomeSocio = () => {
                     <div className="flex items-center gap-12 w-full md:w-auto justify-between md:justify-end">
                       <div className="text-center">
                         <p className={`text-3xl kalian-poster-text ${c.aforo_disponible === false ? 'text-red-500' : 'text-kalian-gold'}`}>
-                          {c.aforo_disponible === false ? 'SIN PLAZAS' : 'LIBRES'}
+                          {c.aforo_disponible === false ? 'AGOTADO' : 'HAY PLAZAS'}
                         </p>
                         <p className="text-[8px] font-black uppercase text-kalian-gold/30 tracking-widest">Disponibilidad</p>
                       </div>
@@ -176,7 +176,7 @@ const HomeSocio = () => {
                           </div>
                         </div>
                         <div className="bg-kalian-gold/5 p-8 rounded-3xl border border-kalian-gold/10">
-                          <p className="text-sm text-kalian-gold/70 italic leading-relaxed">"Este curso otorga la condición de <b>Socio {c.categoria.toUpperCase()}</b> hasta la fecha de finalización, permitiendo el acceso gratuito a eventos de la misma categoría."</p>
+                          <p className="text-sm text-kalian-gold/70 italic leading-relaxed">"Este curso otorga la condición de <b>Soci@ {c.categoria.toUpperCase()}</b> hasta la fecha de finalización, permitiendo el acceso gratuito a eventos de la misma categoría."</p>
                         </div>
                       </div>
 
@@ -192,6 +192,31 @@ const HomeSocio = () => {
                 </div>
               );
             })}
+          </div>
+        </section>
+
+        {/* SECCIÓN CONTACTO */}
+        <section className="pb-20">
+          <div className="bg-black/40 border border-kalian-gold/10 rounded-[3rem] p-12 text-center space-y-8 shadow-2xl relative overflow-hidden group">
+            <div className="absolute inset-0 bg-kalian-gold/5 opacity-0 group-hover:opacity-100 transition-opacity duration-700"></div>
+            <div className="relative z-10 space-y-4">
+              <h2 className="text-4xl kalian-poster-text text-kalian-gold uppercase italic">¿Necesitas <span className="text-kalian-cream">Ayuda?</span></h2>
+              <p className="text-kalian-gold/40 text-[10px] font-black uppercase tracking-[0.4em]">Estamos a tu disposición para cualquier consulta</p>
+            </div>
+            
+            <div className="relative z-10 flex flex-col items-center gap-6">
+              <p className="text-kalian-cream/70 text-sm max-w-md mx-auto leading-relaxed">
+                Si tienes dudas sobre tu suscripción, problemas con las reservas o quieres proponer una actividad, no dudes en escribirnos.
+              </p>
+              <a 
+                href="mailto:info@kalian.es"
+                className="bg-kalian-gold text-black px-12 py-5 rounded-2xl kalian-poster-text text-2xl tracking-[0.1em] hover:bg-white transition-all shadow-xl shadow-kalian-gold/20 flex items-center gap-4 group/btn"
+              >
+                CONTACTAR POR EMAIL
+                <span className="group-hover/btn:translate-x-2 transition-transform duration-300">✉️</span>
+              </a>
+              <p className="text-kalian-gold/30 font-mono text-[10px] tracking-widest">info@kalian.es</p>
+            </div>
           </div>
         </section>
       </div>

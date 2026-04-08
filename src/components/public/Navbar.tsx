@@ -72,7 +72,7 @@ const Navbar = () => {
           </div>
         ) : (
           <div className="flex items-center gap-4">
-            <Link to="/login" className="text-[10px] font-black uppercase hover:text-kalian-gold transition-colors tracking-[0.3em]">Acceso Socios</Link>
+            <Link to="/login" className="text-[10px] font-black uppercase hover:text-kalian-gold transition-colors tracking-[0.3em]">Acceso Soci@s</Link>
           </div>
         )}
       </div>

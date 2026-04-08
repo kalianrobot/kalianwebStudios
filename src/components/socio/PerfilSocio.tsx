@@ -191,7 +191,7 @@ const PerfilSocio = () => {
       <div className="min-h-screen bg-kalian-dark flex flex-col items-center justify-center p-6 text-center">
         <div className="w-24 h-24 bg-red-500/10 text-red-500 rounded-full flex items-center justify-center text-4xl mb-6 border border-red-500/20 shadow-2xl shadow-red-500/10">🚫</div>
         <h2 className="text-4xl kalian-poster-text text-kalian-cream mb-4">Acceso Restringido</h2>
-        <p className="text-kalian-cream/50 font-bold max-w-md text-sm uppercase tracking-widest leading-relaxed">Lo sentimos, este panel es exclusivo para socios registrados con DNI. Si crees que esto es un error, contacta con administración.</p>
+        <p className="text-kalian-cream/50 font-bold max-w-md text-sm uppercase tracking-widest leading-relaxed">Lo sentimos, este panel es exclusivo para soci@s registrad@s con DNI. Si crees que esto es un error, contacta con administración.</p>
         <button 
           onClick={() => navigate('/')} 
           className="mt-12 bg-kalian-gold text-black px-10 py-4 rounded-2xl kalian-poster-text text-xl tracking-widest hover:bg-white transition-all shadow-2xl shadow-kalian-gold/20"
@@ -206,10 +206,10 @@ const PerfilSocio = () => {
     <div className="min-h-screen bg-kalian-dark p-6 md:p-12 text-kalian-cream font-sans">
       <header className="max-w-6xl mx-auto mb-20 flex flex-col md:flex-row justify-between items-start md:items-end gap-8">
         <div>
-          <h1 className="text-6xl md:text-8xl kalian-poster-text text-kalian-gold tracking-[-0.05em]">MI PANEL <span className="text-kalian-cream">KALIAN</span></h1>
+          <h1 className="text-6xl md:text-8xl kalian-poster-text text-kalian-gold tracking-[-0.05em]">MI PANEL <span className="text-kalian-cream">SOCI@S</span></h1>
           {usuario && (
             <div className="mt-6 space-y-3">
-              <p className="font-black text-kalian-gold/40 uppercase tracking-[0.4em] text-[10px]">Socio: {usuario.nombre} • {usuario.dni}</p>
+              <p className="font-black text-kalian-gold/40 uppercase tracking-[0.4em] text-[10px]">Soci@s: {usuario.nombre} • {usuario.dni}</p>
               {usuario.cursos && usuario.cursos.filter((cId: string) => cursosDetalle.some(cd => cd.id === cId)).length > 0 && (
                 <div className="flex gap-3 flex-wrap">
                   {usuario.cursos.filter((cId: string) => cursosDetalle.some(cd => cd.id === cId)).map((cId: string) => (

@@ -57,7 +57,7 @@ const AdminCheckIn = () => {
   };
 
   const validarSocioExtra = async (index: number) => {
-    const dni = prompt("Introduce el DNI del acompañante para validar su carnet de socio:");
+    const dni = prompt("Introduce el DNI del acompañante para validar su carnet de soci@s:");
     if (!dni) return;
 
     try {
@@ -75,7 +75,7 @@ const AdminCheckIn = () => {
           alert("Socio inactivo en esta categoría");
         }
       } else {
-        alert("DNI no registrado como socio");
+        alert("DNI no registrado como soci@s");
       }
     } catch (err) {
       alert("Error en la validación");

@@ -140,7 +140,7 @@ const AdminLocales = () => {
                   
                   <div className="flex gap-4 mb-6">
                     <div className="flex-1 bg-slate-50 p-3 rounded-2xl text-center">
-                      <p className="text-[8px] font-black uppercase text-slate-400">Socios</p>
+                      <p className="text-[8px] font-black uppercase text-slate-400">Soci@s</p>
                       <p className="font-black text-lg">{l.inquilinos?.length || 0}</p>
                     </div>
                     <div className={`flex-1 p-3 rounded-2xl text-center ${l.alquilado ? 'bg-red-50' : 'bg-emerald-50'}`}>
@@ -163,7 +163,7 @@ const AdminLocales = () => {
                     onClick={() => setEditando(l)}
                     className="w-full bg-slate-900 text-white p-4 rounded-2xl font-black uppercase tracking-widest text-[10px] hover:bg-indigo-600 transition-all shadow-md"
                   >
-                    Editar Alquiler / Socios
+                    Editar Alquiler / Soci@s
                   </button>
                   <button 
                     onClick={() => toggleEstado(l.id, l.estado)}
@@ -227,7 +227,7 @@ const AdminLocales = () => {
 
                   <div className="space-y-4">
                     <div className="flex justify-between items-center mb-2">
-                      <h3 className="font-black uppercase text-xs text-slate-400">Inquilinos / Socios de Local</h3>
+                      <h3 className="font-black uppercase text-xs text-slate-400">Inquilinos / Soci@s de Local</h3>
                       {editando.alquilado && (
                         <button type="button" onClick={addInquilino} className="bg-indigo-600 text-white px-4 py-2 rounded-xl font-black uppercase text-[9px] hover:bg-indigo-700">+ Añadir</button>
                       )}

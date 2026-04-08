@@ -54,7 +54,7 @@ export const sendWelcomeEmail = async (email: string, nombre: string, activation
               </div>
               <div class="content">
                 <p>Hola <span class="accent">${nombre}</span>,</p>
-                <p>Estamos encantados de tenerte como nuevo socio de nuestra comunidad cultural. Prepárate para vivir experiencias únicas.</p>
+                <p>Estamos encantados de tenerte como nuevo soci@s de nuestra comunidad cultural. Prepárate para vivir experiencias únicas.</p>
                 <div class="divider"></div>
                 <p>Para empezar a disfrutar de todas las ventajas en nuestra plataforma web, necesitas activar tu cuenta y definir tu contraseña.</p>
                 <div style="margin: 40px 0;">
@@ -64,7 +64,7 @@ export const sendWelcomeEmail = async (email: string, nombre: string, activation
               </div>
               <div class="footer">
                 <p style="margin-bottom: 10px;">CENTRO CULTURAL KALIAN</p>
-                <p>Responsable: Kalian. Finalidad: Gestión de socios. Derechos: Acceso y supresión.</p>
+                <p>Responsable: Kalian. Finalidad: Gestión de soci@s. Derechos: Acceso y supresión.</p>
               </div>
             </div>
           </body>

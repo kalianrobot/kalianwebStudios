@@ -104,14 +104,14 @@ const AdminSocios = () => {
         <header className="mb-12 flex flex-col md:flex-row justify-between items-start md:items-end gap-6">
           <div>
             <Link to="/staff" className="text-kalian-gold/40 font-black text-[10px] uppercase tracking-[0.3em] hover:text-kalian-gold transition-colors">← Volver al Panel</Link>
-            <h1 className="text-6xl kalian-poster-text text-kalian-gold mt-4 tracking-tight">SOCIOS <span className="text-kalian-cream">KALIAN</span></h1>
+            <h1 className="text-6xl kalian-poster-text text-kalian-gold mt-4 tracking-tight">SOCI@S <span className="text-kalian-cream">KALIAN</span></h1>
           </div>
           <div className="flex gap-4">
             <button 
               onClick={() => setShowForm(!showForm)} 
               className="bg-kalian-gold text-black px-8 py-3 rounded-2xl kalian-poster-text text-lg tracking-widest hover:bg-white transition-all shadow-xl shadow-kalian-gold/10"
             >
-              {showForm ? 'CANCELAR' : '+ NUEVO SOCIO'}
+              {showForm ? 'CANCELAR' : '+ NUEVO SOCI@S'}
             </button>
             <button onClick={fetchSocios} className="p-3 bg-kalian-gold/10 text-kalian-gold rounded-2xl border border-kalian-gold/20 hover:bg-kalian-gold/20 transition-all">🔄</button>
           </div>
@@ -121,7 +121,7 @@ const AdminSocios = () => {
 
         {showForm && (
           <form onSubmit={handleCreate} className="bg-black/40 border border-kalian-gold/20 p-10 rounded-[3rem] mb-12 space-y-6 animate-in slide-in-from-top-4 duration-500">
-            <h2 className="text-3xl kalian-poster-text text-kalian-gold mb-6">ALTA DE SOCIO</h2>
+            <h2 className="text-3xl kalian-poster-text text-kalian-gold mb-6">ALTA DE SOCI@S</h2>
             <div className="grid md:grid-cols-3 gap-6">
               <div className="space-y-2">
                 <p className="text-[9px] font-black text-kalian-gold/40 uppercase tracking-[0.3em] ml-4">DNI / NIE</p>
@@ -158,16 +158,16 @@ const AdminSocios = () => {
               disabled={loading}
               className="w-full bg-kalian-gold text-black p-6 rounded-2xl kalian-poster-text text-xl tracking-widest hover:bg-white transition-all shadow-2xl shadow-kalian-gold/20 disabled:opacity-50"
             >
-              {loading ? 'PROCESANDO...' : 'CREAR SOCIO Y ENVIAR BIENVENIDA'}
+              {loading ? 'PROCESANDO...' : 'CREAR SOCI@S Y ENVIAR BIENVENIDA'}
             </button>
           </form>
         )}
 
         {loading && !showForm ? (
-          <div className="text-center py-32 kalian-poster-text text-4xl text-kalian-gold/20 animate-pulse">CARGANDO SOCIOS...</div>
+          <div className="text-center py-32 kalian-poster-text text-4xl text-kalian-gold/20 animate-pulse">CARGANDO SOCI@S...</div>
         ) : (
           <div className="grid gap-6">
-            {socios.length === 0 && <div className="text-center py-32 bg-black/20 rounded-[3rem] border border-kalian-gold/10 border-dashed text-kalian-gold/20 kalian-poster-text text-4xl">NO HAY SOCIOS REGISTRADOS</div>}
+            {socios.length === 0 && <div className="text-center py-32 bg-black/20 rounded-[3rem] border border-kalian-gold/10 border-dashed text-kalian-gold/20 kalian-poster-text text-4xl">NO HAY SOCI@S REGISTRADOS</div>}
             {socios.map(s => {
               const exp = s.expiraciones || {};
               const activas = Object.keys(exp).filter(cat => exp[cat] >= hoy);

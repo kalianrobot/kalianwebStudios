@@ -14,7 +14,14 @@ const AdminEventos = () => {
     aforo_max: '50',
     tiene_descuento: false,
     precio_descuento: '',
-    imagenUrl: ''
+    imagenUrl: '',
+    descripcion: `LA RESERVA ES FUNDAMENTAL PARA ASISTIR AL EVENTO.
+
+SI HACES LA RESERVA PERO AL FINAL NO VAS A VENIR, CAMBIA EL NÚMERO DE ASISTENTES PARA PERMITIR QUE OTRA PERSONA OCUPE TU ENTRADA.
+
+ESPACIO LIBRE DE REDES SOCIALES. PROHIBIDA LA DIFUSIÓN DE VÍDEOS O IMÁGENES.
+
+ENTRADA HASTA LAS 00:00. RESERVAS DISPONIBLES HASTA COMPLETAR AFORO.`
   });
   const [archivo, setArchivo] = useState<File | null>(null);
   const [subiendo, setSubiendo] = useState(false);
@@ -61,7 +68,23 @@ const AdminEventos = () => {
         setMsg("✅ Evento publicado con éxito");
       }
 
-      setForm({ titulo: '', fecha: '', precio_estandar: '', categoria: 'musica', aforo_max: '50', tiene_descuento: false, precio_descuento: '', imagenUrl: '' });
+      setForm({ 
+        titulo: '', 
+        fecha: '', 
+        precio_estandar: '', 
+        categoria: 'musica', 
+        aforo_max: '50', 
+        tiene_descuento: false, 
+        precio_descuento: '', 
+        imagenUrl: '',
+        descripcion: `LA RESERVA ES FUNDAMENTAL PARA ASISTIR AL EVENTO.
+
+SI HACES LA RESERVA PERO AL FINAL NO VAS A VENIR, CAMBIA EL NÚMERO DE ASISTENTES PARA PERMITIR QUE OTRA PERSONA OCUPE TU ENTRADA.
+
+ESPACIO LIBRE DE REDES SOCIALES. PROHIBIDA LA DIFUSIÓN DE VÍDEOS O IMÁGENES.
+
+ENTRADA HASTA LAS 00:00. RESERVAS DISPONIBLES HASTA COMPLETAR AFORO.`
+      });
       setArchivo(null);
       setEditando(null);
       fetchEventos();
@@ -122,7 +145,7 @@ const AdminEventos = () => {
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
             <div className="space-y-2">
-              <label className="text-[9px] font-black uppercase text-kalian-gold/40 ml-4 tracking-widest">¿Tiene Descuento para Socios?</label>
+              <label className="text-[9px] font-black uppercase text-kalian-gold/40 ml-4 tracking-widest">¿Tiene Descuento para Soci@s?</label>
               <button 
                 type="button"
                 onClick={() => setForm({...form, tiene_descuento: !form.tiene_descuento})}
@@ -133,10 +156,21 @@ const AdminEventos = () => {
             </div>
             {form.tiene_descuento && (
               <div className="space-y-2">
-                <label className="text-[9px] font-black uppercase text-kalian-gold/40 ml-4 tracking-widest">Precio con Descuento (€)</label>
-                <input type="number" placeholder="PRECIO SOCIO (€)" className="w-full p-5 bg-kalian-gold/5 rounded-2xl outline-none border border-kalian-gold/10 focus:border-kalian-gold transition-all text-kalian-gold font-black text-xl" value={form.precio_descuento} onChange={e => setForm({...form, precio_descuento: e.target.value})} required />
+                <label className="text-[9px] font-black uppercase text-kalian-gold/40 ml-4 tracking-widest">Precio Soci@s (€)</label>
+                <input type="number" placeholder="PRECIO SOCI@S (€)" className="w-full p-5 bg-kalian-gold/5 rounded-2xl outline-none border border-kalian-gold/10 focus:border-kalian-gold transition-all text-kalian-gold font-black text-xl" value={form.precio_descuento} onChange={e => setForm({...form, precio_descuento: e.target.value})} required />
               </div>
             )}
+          </div>
+
+          <div className="space-y-2">
+            <label className="text-[9px] font-black uppercase text-kalian-gold/40 ml-4 tracking-widest">Descripción y Reglas</label>
+            <textarea 
+              placeholder="Información del evento..." 
+              className="w-full p-5 bg-kalian-gold/5 rounded-2xl outline-none border border-kalian-gold/10 focus:border-kalian-gold transition-all text-kalian-cream font-bold min-h-[200px]" 
+              value={form.descripcion} 
+              onChange={e => setForm({...form, descripcion: e.target.value})} 
+              required 
+            />
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
@@ -165,7 +199,23 @@ const AdminEventos = () => {
                 type="button"
                 onClick={() => {
                   setEditando(null);
-                  setForm({ titulo: '', fecha: '', precio_estandar: '', categoria: 'musica', aforo_max: '50', tiene_descuento: false, precio_descuento: '', imagenUrl: '' });
+                  setForm({ 
+                    titulo: '', 
+                    fecha: '', 
+                    precio_estandar: '', 
+                    categoria: 'musica', 
+                    aforo_max: '50', 
+                    tiene_descuento: false, 
+                    precio_descuento: '', 
+                    imagenUrl: '',
+                    descripcion: `LA RESERVA ES FUNDAMENTAL PARA ASISTIR AL EVENTO.
+
+SI HACES LA RESERVA PERO AL FINAL NO VAS A VENIR, CAMBIA EL NÚMERO DE ASISTENTES PARA PERMITIR QUE OTRA PERSONA OCUPE TU ENTRADA.
+
+ESPACIO LIBRE DE REDES SOCIALES. PROHIBIDA LA DIFUSIÓN DE VÍDEOS O IMÁGENES.
+
+ENTRADA HASTA LAS 00:00. RESERVAS DISPONIBLES HASTA COMPLETAR AFORO.`
+                  });
                   setArchivo(null);
                 }}
                 className="bg-kalian-gold/10 text-kalian-gold px-8 rounded-2xl font-black uppercase"
@@ -187,7 +237,7 @@ const AdminEventos = () => {
                 <div>
                   <h3 className="text-3xl kalian-poster-text text-kalian-cream group-hover:text-kalian-gold transition-colors uppercase italic">{ev.titulo}</h3>
                   <p className="text-[10px] text-kalian-gold/40 font-black uppercase tracking-[0.3em] mt-2">
-                    {new Date(ev.fecha).toLocaleString('es-ES', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })} | {ev.categoria.toUpperCase()} | {ev.precio_estandar}€ {ev.tiene_descuento ? `(Socio: ${ev.precio_descuento}€)` : '(Sin dto)'} | AFORO: {ev.aforo_actual || 0}/{ev.aforo_max}
+                    {new Date(ev.fecha).toLocaleString('es-ES', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })} | {ev.categoria.toUpperCase()} | {ev.precio_estandar}€ {ev.tiene_descuento ? `(Soci@s: ${ev.precio_descuento}€)` : '(Sin dto)'} | AFORO: {ev.aforo_actual || 0}/{ev.aforo_max}
                   </p>
                 </div>
               </div>
@@ -203,7 +253,8 @@ const AdminEventos = () => {
                       aforo_max: ev.aforo_max.toString(),
                       tiene_descuento: ev.tiene_descuento || false,
                       precio_descuento: ev.precio_descuento?.toString() || '',
-                      imagenUrl: ev.imagenUrl || ''
+                      imagenUrl: ev.imagenUrl || '',
+                      descripcion: ev.descripcion || ''
                     });
                     window.scrollTo({ top: 0, behavior: 'smooth' });
                   }}

@@ -54,7 +54,7 @@ const LandingPage = () => {
               <p className="text-kalian-cream text-2xl kalian-poster-text tracking-widest">
                 {isAdmin && 'ADMINISTRADOR '}
                 {isTeacher && 'PROFESOR '}
-                {socioData && 'SOCIO'}
+                {socioData && 'SOCI@S'}
               </p>
               <p className="text-kalian-gold/30 text-[9px] font-mono">{user.email}</p>
             </div>
@@ -82,7 +82,7 @@ const LandingPage = () => {
                     onClick={() => navigate('/home')}
                     className="bg-kalian-gold text-black px-8 py-4 rounded-2xl kalian-poster-text text-lg tracking-[0.2em] hover:bg-white transition-all shadow-2xl shadow-kalian-gold/20"
                   >
-                    PANEL SOCIO →
+                    PANEL SOCI@S →
                   </button>
                 )}
               </div>
@@ -103,7 +103,7 @@ const LandingPage = () => {
               className="group flex flex-col items-center gap-3"
             >
               <span className="text-kalian-cream/50 group-hover:text-kalian-gold font-black uppercase tracking-[0.4em] text-[10px] transition-all duration-500">
-                Acceso Socios
+                Acceso Soci@s
               </span>
               <div className="w-8 group-hover:w-24 h-[2px] bg-kalian-gold transition-all duration-700 ease-in-out"></div>
             </Link>

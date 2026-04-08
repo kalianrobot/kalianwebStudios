@@ -311,7 +311,7 @@ const ReservaForm = ({ item, alCerrar }: ReservaFormProps) => {
         <form onSubmit={enviar} className="space-y-6">
           <div className="space-y-2">
             <label className="text-[9px] font-black text-kalian-gold/40 uppercase tracking-[0.3em] ml-4">
-              {esCurso ? 'DNI (OBLIGATORIO)' : 'TU IDENTIFICACIÓN (DNI SI ERES SOCIO)'}
+              {esCurso ? 'DNI (OBLIGATORIO)' : 'TU IDENTIFICACIÓN (DNI SI ERES SOCI@S)'}
             </label>
             <input 
               type="text" placeholder={esCurso ? "DNI OBLIGATORIO" : "DNI PARA DESCUENTO"} 
@@ -372,13 +372,13 @@ const ReservaForm = ({ item, alCerrar }: ReservaFormProps) => {
             </div>
             {precioCalculado.esSocio && item.tiene_descuento && (
               <div className="flex justify-between items-center text-[9px] font-black uppercase text-kalian-gold tracking-widest">
-                <span>Descuento Socio</span>
+                <span>Descuento Soci@s</span>
                 <span>{item.precio_descuento}€</span>
               </div>
             )}
             {precioCalculado.esSocio && !item.tiene_descuento && (
               <div className="flex justify-between items-center text-[9px] font-black uppercase text-kalian-gold tracking-widest">
-                <span>Descuento Socio</span>
+                <span>Descuento Soci@s</span>
                 <span>-100%</span>
               </div>
             )}
@@ -387,7 +387,7 @@ const ReservaForm = ({ item, alCerrar }: ReservaFormProps) => {
               <span className="text-4xl kalian-poster-text text-kalian-gold italic">{precioCalculado.total}€</span>
             </div>
             <p className="text-[8px] text-kalian-gold/20 font-black uppercase text-center pt-1 tracking-widest">
-              {precioCalculado.esSocio ? '✓ DESCUENTO APLICADO POR SER SOCIO ACTIVO' : 'REGÍSTRATE COMO SOCIO PARA OBTENER DESCUENTOS'}
+              {precioCalculado.esSocio ? '✓ DESCUENTO APLICADO POR SER SOCI@S ACTIVO' : 'REGÍSTRATE COMO SOCI@S PARA OBTENER DESCUENTOS'}
             </p>
           </div>
 

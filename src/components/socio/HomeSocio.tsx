@@ -8,6 +8,7 @@ const HomeSocio = () => {
   const [eventos, setEventos] = useState<DocumentData[]>([]);
   const [cursos, setCursos] = useState<DocumentData[]>([]);
   const [itemSeleccionado, setItemSeleccionado] = useState<any | null>(null);
+  const [posterSeleccionado, setPosterSeleccionado] = useState<string | null>(null);
   const [expandido, setExpandido] = useState<string | null>(null);
 
   useEffect(() => {
@@ -93,7 +94,22 @@ const HomeSocio = () => {
                     </div>
                   </div>
                   
-                  <button className="w-full bg-kalian-gold text-black p-5 rounded-2xl kalian-poster-text text-lg tracking-widest hover:bg-white transition-all shadow-xl shadow-kalian-gold/10 mt-4">Reservar Plaza</button>
+                  <div className="flex flex-col gap-3 mt-4">
+                    {ev.imagenUrl && (
+                      <button 
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setPosterSeleccionado(ev.imagenUrl);
+                        }}
+                        className="w-full bg-kalian-gold/10 text-kalian-gold border border-kalian-gold/20 p-4 rounded-2xl kalian-poster-text text-sm tracking-widest hover:bg-kalian-gold/20 transition-all"
+                      >
+                        Ver Cartel
+                      </button>
+                    )}
+                    <button className="w-full bg-kalian-gold text-black p-5 rounded-2xl kalian-poster-text text-lg tracking-widest hover:bg-white transition-all shadow-xl shadow-kalian-gold/10">
+                      Reservar Plaza
+                    </button>
+                  </div>
                 </div>
               </div>
             ))}
@@ -184,6 +200,29 @@ const HomeSocio = () => {
         <div className="fixed inset-0 bg-kalian-dark/95 backdrop-blur-md flex items-center justify-center p-6 z-[1000] animate-in fade-in duration-500">
           <div className="w-full max-w-2xl bg-black border border-kalian-gold/20 rounded-[3rem] shadow-2xl overflow-hidden">
             <ReservaForm item={itemSeleccionado} alCerrar={() => setItemSeleccionado(null)} />
+          </div>
+        </div>
+      )}
+
+      {/* MODAL CARTEL */}
+      {posterSeleccionado && (
+        <div 
+          className="fixed inset-0 bg-black/95 backdrop-blur-xl flex items-center justify-center p-4 md:p-10 z-[2000] animate-in fade-in duration-300 cursor-zoom-out"
+          onClick={() => setPosterSeleccionado(null)}
+        >
+          <div className="relative max-w-5xl w-full h-full flex items-center justify-center">
+            <img 
+              src={posterSeleccionado} 
+              alt="Cartel del evento" 
+              className="max-w-full max-h-full object-contain shadow-2xl rounded-lg"
+              referrerPolicy="no-referrer"
+            />
+            <button 
+              className="absolute top-0 right-0 m-4 bg-white/10 hover:bg-white/20 text-white w-12 h-12 rounded-full flex items-center justify-center transition-all"
+              onClick={() => setPosterSeleccionado(null)}
+            >
+              ✕
+            </button>
           </div>
         </div>
       )}

@@ -7,6 +7,7 @@ import { sendWelcomeEmail } from '../../lib/brevoService';
 
 const AdminSocios = () => {
   const [socios, setSocios] = useState<DocumentData[]>([]);
+  const [cursosExistentes, setCursosExistentes] = useState<Set<string>>(new Set());
   const [loading, setLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);
   const [form, setForm] = useState({ dni: '', nombre: '', email: '' });
@@ -18,6 +19,11 @@ const AdminSocios = () => {
     try {
       const snap = await getDocs(query(collection(db, "socios"), orderBy("nombre", "asc")));
       setSocios(snap.docs.map(d => ({ id: d.id, ...d.data() })));
+      
+      // Fetch existing courses to filter UI
+      const cursosSnap = await getDocs(collection(db, "cursos"));
+      const ids = new Set(cursosSnap.docs.map(d => d.id));
+      setCursosExistentes(ids);
     } catch (err) {
       console.error(err);
     }
@@ -178,9 +184,9 @@ const AdminSocios = () => {
                         <p className="text-[10px] text-kalian-gold/40 font-mono font-black tracking-[0.2em] uppercase">{s.dni || s.id}</p>
                         <p className="text-[10px] text-kalian-gold/20 italic font-bold">{s.email}</p>
                       </div>
-                      {s.cursos && s.cursos.length > 0 && (
+                      {s.cursos && s.cursos.filter((cId: string) => cursosExistentes.has(cId)).length > 0 && (
                         <div className="mt-4 flex gap-2 flex-wrap">
-                          {s.cursos.map((cId: string) => (
+                          {s.cursos.filter((cId: string) => cursosExistentes.has(cId)).map((cId: string) => (
                             <span key={cId} className="text-[8px] font-black uppercase bg-kalian-gold/5 text-kalian-gold/60 px-3 py-1 rounded-full border border-kalian-gold/10 tracking-widest">{cId}</span>
                           ))}
                         </div>

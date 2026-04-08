@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { db } from '../../firebase';
-import { collection, setDoc, doc, getDocs, deleteDoc, query, orderBy, DocumentData, updateDoc, getDoc, arrayUnion, increment, where } from 'firebase/firestore';
+import { collection, setDoc, doc, getDocs, deleteDoc, query, orderBy, DocumentData, updateDoc, getDoc, arrayUnion, increment, where, writeBatch, arrayRemove } from 'firebase/firestore';
 import { Link } from 'react-router-dom';
 
 import { createSocioAuth } from '../../lib/adminAuth';
@@ -450,8 +450,30 @@ const AdminCursos = () => {
                     <button 
                       onClick={async () => { 
                         if (window.confirm("¿Seguro que quieres eliminar este curso?")) {
-                          await deleteDoc(doc(db, "cursos", c.id)); 
-                          fetchCursos(); 
+                          try {
+                            // 1. Limpiar referencias en socios
+                            const sociosQuery = query(collection(db, "socios"), where("cursos", "array-contains", c.id));
+                            const sociosSnap = await getDocs(sociosQuery);
+                            
+                            if (!sociosSnap.empty) {
+                              const batch = writeBatch(db);
+                              sociosSnap.docs.forEach(socioDoc => {
+                                batch.update(socioDoc.ref, {
+                                  cursos: arrayRemove(c.id)
+                                });
+                              });
+                              await batch.commit();
+                            }
+
+                            // 2. Borrar el curso
+                            await deleteDoc(doc(db, "cursos", c.id)); 
+                            fetchCursos(); 
+                            setMsg("✅ Curso eliminado y socios actualizados");
+                            setTimeout(() => setMsg(''), 3000);
+                          } catch (err) {
+                            console.error(err);
+                            alert("Error al eliminar el curso");
+                          }
                         }
                       }} 
                       className="text-red-300 hover:text-red-500 font-bold text-[10px] uppercase"

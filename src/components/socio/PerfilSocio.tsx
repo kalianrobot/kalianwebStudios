@@ -210,9 +210,9 @@ const PerfilSocio = () => {
           {usuario && (
             <div className="mt-6 space-y-3">
               <p className="font-black text-kalian-gold/40 uppercase tracking-[0.4em] text-[10px]">Socio: {usuario.nombre} • {usuario.dni}</p>
-              {usuario.cursos && usuario.cursos.length > 0 && (
+              {usuario.cursos && usuario.cursos.filter((cId: string) => cursosDetalle.some(cd => cd.id === cId)).length > 0 && (
                 <div className="flex gap-3 flex-wrap">
-                  {usuario.cursos.map((cId: string) => (
+                  {usuario.cursos.filter((cId: string) => cursosDetalle.some(cd => cd.id === cId)).map((cId: string) => (
                     <span key={cId} className="bg-kalian-gold/10 text-kalian-gold px-4 py-1.5 rounded-full text-[9px] font-black uppercase tracking-widest border border-kalian-gold/20">Curso: {cId}</span>
                   ))}
                 </div>

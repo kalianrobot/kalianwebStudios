@@ -16,7 +16,7 @@ const LandingPage = () => {
   const getRoleName = () => {
     if (role === 'admin') return 'ADMINISTRADOR';
     if (role === 'teacher') return 'PROFESOR';
-    return 'SOCIO';
+    return 'SOCI@S';
   };
 
   return (

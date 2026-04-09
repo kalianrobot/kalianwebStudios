@@ -84,3 +84,96 @@ export const sendWelcomeEmail = async (email: string, nombre: string, activation
     throw error;
   }
 };
+
+export const sendMembershipUpdateEmail = async (email: string, nombre: string, uid: string, membresias: Record<string, string>) => {
+  if (!BREVO_API_KEY) {
+    console.warn("BREVO_API_KEY is not defined.");
+    return;
+  }
+
+  const qrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${uid}`;
+  const hoy = new Date().toISOString().split('T')[0];
+  
+  const membresiasHtml = Object.entries(membresias)
+    .filter(([_, fecha]) => fecha >= hoy)
+    .map(([cat, fecha]) => {
+      const nombreCat = cat === 'musica' ? 'Music Is Cool' : cat === 'danza' ? 'Club de Baile' : cat === 'local' ? 'Locales' : cat;
+      return `
+        <div style="background-color: #1A1A1A; border: 1px solid #D4AF3733; padding: 15px; margin-bottom: 10px; border-radius: 12px; text-align: left;">
+          <p style="margin: 0; color: #D4AF37; font-weight: 900; text-transform: uppercase; font-size: 12px; letter-spacing: 1px;">${nombreCat}</p>
+          <p style="margin: 5px 0 0 0; font-size: 10px; color: #F5F5F066; font-weight: 700;">VÁLIDO HASTA: ${fecha}</p>
+        </div>
+      `;
+    }).join('');
+
+  try {
+    const response = await fetch('https://api.brevo.com/v3/smtp/email', {
+      method: 'POST',
+      headers: {
+        'accept': 'application/json',
+        'api-key': BREVO_API_KEY,
+        'content-type': 'application/json'
+      },
+      body: JSON.stringify({
+        sender: {
+          name: "Centro Cultural Kalian",
+          email: "hola@kalian.es"
+        },
+        to: [{
+          email: email,
+          name: nombre
+        }],
+        subject: "Tu Carnet Digital Kalian ha sido actualizado",
+        htmlContent: `
+          <!DOCTYPE html>
+          <html>
+          <head>
+            <style>
+              @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;700;900&display=swap');
+              body { margin: 0; padding: 0; background-color: #0A0A0A; font-family: 'Inter', sans-serif; color: #F5F5F0; }
+              .container { max-width: 600px; margin: 0 auto; background-color: #0A0A0A; border: 1px solid #D4AF3733; }
+              .header { padding: 40px; text-align: center; border-bottom: 1px solid #D4AF3733; }
+              .content { padding: 40px; text-align: center; }
+              .footer { padding: 30px; text-align: center; background-color: #000; border-top: 1px solid #D4AF3733; font-size: 10px; color: #666; }
+              h1 { color: #D4AF37; font-size: 32px; font-weight: 900; text-transform: uppercase; margin: 0; font-style: italic; letter-spacing: -1px; }
+              .qr-box { background-color: #FFFFFF; padding: 20px; display: inline-block; border-radius: 24px; margin: 30px 0; }
+              .accent { color: #D4AF37; font-weight: 700; }
+              .membresias-container { max-width: 400px; margin: 0 auto; padding-top: 20px; }
+            </style>
+          </head>
+          <body>
+            <div class="container">
+              <div class="header">
+                <h1>CARNET DIGITAL</h1>
+              </div>
+              <div class="content">
+                <p>Hola <span class="accent">${nombre}</span>,</p>
+                <p>Tu membresía en Kalian ha sido actualizada. Aquí tienes tu carnet digital actualizado para acceder al centro:</p>
+                
+                <div class="qr-box">
+                  <img src="${qrUrl}" width="200" height="200" style="display: block;">
+                </div>
+                
+                <p style="font-size: 10px; color: #666; text-transform: uppercase; letter-spacing: 2px; margin-bottom: 40px;">UID: ${uid}</p>
+                
+                <div class="membresias-container">
+                  <p style="font-size: 12px; font-weight: 900; text-transform: uppercase; color: #D4AF37; margin-bottom: 15px; text-align: left; letter-spacing: 1px;">Tus Membresías Activas:</p>
+                  ${membresiasHtml || '<p style="color: #666; font-size: 12px; font-style: italic;">No tienes membresías activas en este momento.</p>'}
+                </div>
+              </div>
+              <div class="footer">
+                <p>CENTRO CULTURAL KALIAN</p>
+                <p>Este carnet es personal e intransferible.</p>
+              </div>
+            </div>
+          </body>
+          </html>
+        `
+      })
+    });
+    return await response.json();
+  } catch (error) {
+    console.error("Error in sendMembershipUpdateEmail:", error);
+    throw error;
+  }
+};

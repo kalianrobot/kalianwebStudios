@@ -22,12 +22,55 @@
         "profesorId": { "type": "string", "description": "UID del profesor asignado" },
         "profesorNombre": { "type": "string" },
         "categoria": { "type": "string", "enum": ["musica", "danza", "local"] },
+        "subcategoria": { "type": "string", "description": "Subcategoría para filtrado (Instrumento, Salsa, etc.)" },
+        "modalidades": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "tipo": { "type": "string", "enum": ["presencial", "online"] },
+              "frecuencia": { "type": "string", "enum": ["semanal", "quincenal", "mensual"] },
+              "precio": { "type": "number" }
+            }
+          }
+        },
         "alumnos": { "type": "array", "items": { "type": "string" }, "description": "Lista de DNIs de alumnos" },
         "aforo_disponible": { "type": "boolean" },
         "aforo_actual": { "type": "number" },
-        "precio": { "type": "number" },
-        "horario": { "type": "string" }
+        "horario": { "type": "string" },
+        "fechaInicio": { "type": "string", "format": "date" },
+        "fechaFin": { "type": "string", "format": "date" },
+        "ventajas": { "type": "string", "description": "Texto de ventajas de branding" }
       }
+    },
+    "solicitudes_cursos": {
+      "title": "Solicitud de Curso",
+      "description": "Consultas e inscripciones a cursos de la academia",
+      "type": "object",
+      "properties": {
+        "nombre": { "type": "string" },
+        "email": { "type": "string", "format": "email" },
+        "telefono": { "type": "string" },
+        "dni": { "type": "string", "description": "Opcional para consultas, obligatorio para inscripciones" },
+        "mensaje": { "type": "string" },
+        "cursoId": { "type": "string" },
+        "cursoTitulo": { "type": "string" },
+        "categoria": { "type": "string" },
+        "subcategoria": { "type": "string" },
+        "modalidad": {
+          "type": "object",
+          "properties": {
+            "tipo": { "type": "string" },
+            "frecuencia": { "type": "string" },
+            "precio": { "type": "number" }
+          }
+        },
+        "tipo": { "type": "string", "enum": ["consulta", "solicitud_inscripcion"] },
+        "fechaSolicitud": { "type": "string", "format": "date-time" },
+        "estado": { "type": "string", "enum": ["pendiente", "contactado", "finalizado"] },
+        "aceptoTerminos": { "type": "boolean" }
+      },
+      "required": ["nombre", "email", "telefono", "cursoId", "tipo", "fechaSolicitud"]
     },
     "pagos_mensuales": {
       "title": "Pago Mensual",
@@ -67,7 +110,7 @@
         "estado": { "type": "string", "enum": ["activo", "inactivo"] },
         "fechaUltimaActividad": { "type": "string", "format": "date-time" },
         "cursos": { "type": "array", "items": { "type": "string" } },
-        "expiraciones": { "type": "object" }
+        "membresias": { "type": "object", "description": "Mapa de categorías y fechas de expiración" }
       }
     },
     "eventos": {
@@ -89,6 +132,28 @@
         "imagenUrl": { "type": "string" },
         "descripcion": { "type": "string" },
         "categoria": { "type": "string" }
+      }
+    },
+    "asistencia_eventos": {
+      "title": "Asistencia Evento",
+      "description": "Registro de check-in en eventos",
+      "type": "object",
+      "properties": {
+        "eventoId": { "type": "string" },
+        "socioId": { "type": "string", "description": "DNI del socio (opcional para walk-ins)" },
+        "nombre": { "type": "string" },
+        "fecha": { "type": "string", "format": "date-time" },
+        "precio": { "type": "number" },
+        "tipo": { "type": "string", "enum": ["socio", "walk-in", "socio_reserva"] }
+      }
+    },
+    "caja_eventos": {
+      "title": "Caja Eventos",
+      "description": "Resumen de recaudación mensual por eventos",
+      "type": "object",
+      "properties": {
+        "total": { "type": "number" },
+        "ultimaActualizacion": { "type": "string", "format": "date-time" }
       }
     }
   },
@@ -116,6 +181,18 @@
     "/eventos/{eventoId}": {
       "schema": "eventos",
       "description": "Colección de eventos"
+    },
+    "/asistencia_eventos/{asistenciaId}": {
+      "schema": "asistencia_eventos",
+      "description": "Registro de check-in (ID: eventoId_socioId o auto)"
+    },
+    "/caja_eventos/{mesAnio}": {
+      "schema": "caja_eventos",
+      "description": "Recaudación mensual (ID: YYYY-MM)"
+    },
+    "/solicitudes_cursos/{solicitudId}": {
+      "schema": "solicitudes_cursos",
+      "description": "Colección de solicitudes de cursos"
     }
   }
 }

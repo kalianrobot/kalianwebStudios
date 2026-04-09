@@ -75,7 +75,8 @@ const AdminLocales = () => {
             cuentaBancaria: inq.cuentaBancaria || '',
             verificado: true,
             localId: editando.id, // Guardamos el ID del local para el perfil
-            [`expiraciones.local`]: editando.fechaExpiracion || ''
+            [`membresias.local`]: editando.fechaExpiracion || '',
+            estado: 'activo' // Al asignar local, se activa
           };
 
           if (!socioSnap.exists()) {
@@ -86,7 +87,7 @@ const AdminLocales = () => {
         }
       }
 
-      setMsg("✅ Local actualizado y socios sincronizados");
+      setMsg("✅ Local actualizado y soci@s sincronizados");
       setTimeout(() => setMsg(''), 3000);
       setEditando(null);
       fetchLocales();

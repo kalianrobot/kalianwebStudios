@@ -40,8 +40,8 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   const hoy = new Date().toISOString().split('T')[0];
 
   const esSocioActivo = (categoria: string) => {
-    if (!socioData?.expiraciones) return false;
-    const fechaExp = socioData.expiraciones[categoria];
+    if (!socioData?.membresias) return false;
+    const fechaExp = socioData.membresias[categoria];
     return fechaExp && fechaExp >= hoy;
   };
 
@@ -147,7 +147,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     if (isTeacher) return 'teacher';
     if (!user) return 'invitado';
     
-    const tieneContratoActivo = Object.values(socioData?.expiraciones || {})
+    const tieneContratoActivo = socioData?.estado === 'activo' || Object.values(socioData?.membresias || {})
       .some(fecha => (fecha as string) >= hoy);
       
     return tieneContratoActivo ? 'socio' : 'invitado_registrado';

@@ -8,16 +8,26 @@ import { sendWelcomeEmail, sendMembershipUpdateEmail } from '../../lib/brevoServ
 const AdminSolicitudes = () => {
   const [solicitudes, setSolicitudes] = useState<DocumentData[]>([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   const [msg, setMsg] = useState('');
 
   const fetchSolicitudes = async () => {
     setLoading(true);
+    setError(null);
     try {
-      const q = query(collection(db, "solicitudes_cursos"), where("estado", "==", "pendiente"), orderBy("fechaSolicitud", "desc"));
+      const q = query(collection(db, "solicitudes_cursos"), where("estado", "==", "pendiente"));
       const snap = await getDocs(q);
-      setSolicitudes(snap.docs.map(d => ({ id: d.id, ...d.data() })));
+      const data = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+      // Orden manual por fecha descendente
+      data.sort((a: any, b: any) => {
+        const dateA = new Date(a.fechaSolicitud || 0).getTime();
+        const dateB = new Date(b.fechaSolicitud || 0).getTime();
+        return dateB - dateA;
+      });
+      setSolicitudes(data);
     } catch (err) {
-      console.error(err);
+      console.error("Error fetching solicitudes:", err);
+      setError("Error al cargar las solicitudes. Por favor, intenta de nuevo.");
     }
     setLoading(false);
   };
@@ -25,12 +35,36 @@ const AdminSolicitudes = () => {
   useEffect(() => { fetchSolicitudes(); }, []);
 
   const aprobarSolicitud = async (sol: any) => {
+    if (sol.tipo === 'consulta') {
+      if (!window.confirm(`¿Marcar consulta de ${sol.nombre} como contactada?`)) return;
+      setLoading(true);
+      try {
+        await updateDoc(doc(db, "solicitudes_cursos", sol.id), {
+          estado: 'contactado',
+          fechaContacto: new Date().toISOString()
+        });
+        setMsg("✅ Consulta marcada como contactada");
+        setTimeout(() => setMsg(''), 3000);
+        fetchSolicitudes();
+      } catch (err) {
+        console.error(err);
+        alert("Error al actualizar consulta");
+      }
+      setLoading(false);
+      return;
+    }
+
     if (!window.confirm(`¿Aprobar solicitud de ${sol.nombre} para el curso ${sol.cursoTitulo}?`)) return;
     
     setLoading(true);
     try {
       const emailClean = sol.email.trim().toLowerCase();
-      const dniUpper = sol.dni.toUpperCase();
+      const dniUpper = (sol.dni || "").toUpperCase();
+      if (!dniUpper) {
+        alert("Error: La solicitud de inscripción no tiene DNI");
+        setLoading(false);
+        return;
+      }
       const socioRef = doc(db, "socios", dniUpper);
       const socioSnap = await getDoc(socioRef);
 
@@ -151,6 +185,7 @@ const AdminSolicitudes = () => {
         </header>
 
         {msg && <div className="bg-kalian-gold text-black p-5 rounded-3xl mb-12 kalian-poster-text text-xl text-center shadow-2xl animate-bounce">{msg}</div>}
+        {error && <div className="bg-red-500 text-white p-5 rounded-3xl mb-12 kalian-poster-text text-xl text-center shadow-2xl">{error}</div>}
 
         {loading ? (
           <div className="text-center py-32 kalian-poster-text text-4xl text-kalian-gold/20 animate-pulse">CARGANDO SOLICITUDES...</div>
@@ -166,7 +201,10 @@ const AdminSolicitudes = () => {
                   <div>
                     <p className="text-3xl kalian-poster-text text-kalian-cream group-hover:text-kalian-gold transition-colors leading-none mb-2">{sol.nombre}</p>
                     <div className="flex gap-4 items-center flex-wrap">
-                      <p className="text-[10px] text-kalian-gold/40 font-mono font-black tracking-[0.2em] uppercase">{sol.dni}</p>
+                      <span className={`text-[8px] font-black px-2 py-0.5 rounded-md tracking-widest uppercase ${sol.tipo === 'consulta' ? 'bg-blue-500/20 text-blue-400 border border-blue-500/30' : 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30'}`}>
+                        {sol.tipo === 'consulta' ? 'Consulta' : 'Inscripción'}
+                      </span>
+                      {sol.dni && <p className="text-[10px] text-kalian-gold/40 font-mono font-black tracking-[0.2em] uppercase">{sol.dni}</p>}
                       <p className="text-[10px] text-kalian-gold/20 italic font-bold">{sol.email}</p>
                       <p className="text-[10px] text-kalian-gold/20 font-bold uppercase tracking-widest">Tel: {sol.telefono}</p>
                     </div>
@@ -181,7 +219,7 @@ const AdminSolicitudes = () => {
                     onClick={() => aprobarSolicitud(sol)}
                     className="flex-1 md:flex-none bg-emerald-500 text-black px-8 py-4 rounded-2xl kalian-poster-text text-lg tracking-widest hover:bg-white transition-all shadow-xl shadow-emerald-500/10"
                   >
-                    APROBAR
+                    {sol.tipo === 'consulta' ? 'CONTACTADO' : 'APROBAR'}
                   </button>
                   <button 
                     onClick={() => rechazarSolicitud(sol.id)}

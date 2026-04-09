@@ -12,6 +12,7 @@ const PerfilSocio = () => {
   const [usuario, setUsuario] = useState<DocumentData | null>(null);
   const [cargando, setCargando] = useState(true);
   const navigate = useNavigate();
+  const [membresiasAMostrar, setMembresiasAMostrar] = useState<{cat: string, fecha: string}[]>([]);
 
   useEffect(() => {
     const cargarDatos = async () => {
@@ -23,6 +24,7 @@ const PerfilSocio = () => {
       try {
         const qSocio = query(collection(db, "socios"), where("uid", "==", auth.currentUser.uid));
         const snapSocio = await getDocs(qSocio);
+        let snapEmail: any = null;
         let sData = null;
 
         if (!snapSocio.empty) {
@@ -30,7 +32,7 @@ const PerfilSocio = () => {
         } else if (auth.currentUser.email) {
           // Fallback por email para vincular socios creados por admin
           const qEmail = query(collection(db, "socios"), where("email", "==", auth.currentUser.email));
-          const snapEmail = await getDocs(qEmail);
+          snapEmail = await getDocs(qEmail);
           if (!snapEmail.empty) {
             sData = snapEmail.docs[0].data();
             await updateDoc(snapEmail.docs[0].ref, { uid: auth.currentUser.uid });
@@ -39,13 +41,14 @@ const PerfilSocio = () => {
 
         if (sData) {
           setUsuario(sData);
+          let cursosRes: any[] = [];
           // Cargar cursos detallados
           if (sData.cursos && sData.cursos.length > 0) {
             const cursosProm = sData.cursos.map(async (cId: string) => {
               const cSnap = await getDoc(doc(db, "cursos", cId));
               return cSnap.exists() ? { id: cSnap.id, ...cSnap.data() } : null;
             });
-            const cursosRes = await Promise.all(cursosProm);
+            cursosRes = await Promise.all(cursosProm);
             const hoy = new Date().toISOString().split('T')[0];
             setCursosDetalle(cursosRes.filter(c => c !== null && (c.fechaFin >= hoy)));
           }
@@ -92,6 +95,50 @@ const PerfilSocio = () => {
           const verificadas = (await Promise.all(promVerificar)).filter(r => r !== null);
           setReservasActivas(verificadas.filter(r => r.activa));
           setHistorialReservas(verificadas.filter(r => !r.activa));
+
+          // --- LÓGICA DE MEMBRESÍAS ROBUSTA ---
+          const m: Record<string, string> = { ...(sData.membresias || {}) };
+          let huboCambios = false;
+
+          // Sincronizar desde cursos activos
+          cursosRes.forEach(c => {
+            if (c && c.categoria && c.fechaFin) {
+              if (!m[c.categoria] || m[c.categoria] < c.fechaFin) {
+                m[c.categoria] = c.fechaFin;
+                huboCambios = true;
+              }
+            }
+          });
+
+          // Sincronizar desde local
+          if (sData.localId) {
+            const lSnap = await getDoc(doc(db, "locales", sData.localId));
+            if (lSnap.exists()) {
+              const lData = lSnap.data();
+              if (lData.fechaExpiracion) {
+                if (!m['local'] || m['local'] < lData.fechaExpiracion) {
+                  m['local'] = lData.fechaExpiracion;
+                  huboCambios = true;
+                }
+              }
+            }
+          }
+
+          // Si hubo cambios o faltaba el mapa, actualizamos en BDD para futuras sesiones
+          if (huboCambios || !sData.membresias) {
+            const socioRef = snapSocio.empty ? snapEmail.docs[0].ref : snapSocio.docs[0].ref;
+            await updateDoc(socioRef, { 
+              membresias: m,
+              estado: Object.values(m).some(f => f >= hoy) ? 'activo' : 'inactivo'
+            });
+          }
+
+          // Filtrar las que vamos a mostrar (solo activas)
+          const activas = Object.entries(m)
+            .filter(([_, fecha]) => fecha >= hoy)
+            .map(([cat, fecha]) => ({ cat, fecha }));
+          
+          setMembresiasAMostrar(activas);
         }
       } catch (err) {
         console.error("Error cargando perfil:", err);
@@ -101,6 +148,13 @@ const PerfilSocio = () => {
     };
     cargarDatos();
   }, [navigate]);
+
+  const getNombreCategoria = (cat: string) => {
+    if (cat === 'musica') return 'Music Is Cool';
+    if (cat === 'danza') return 'Club de Baile';
+    if (cat === 'local') return 'Kalian Hub';
+    return cat;
+  };
 
   const cancelarReserva = async (reserva: any) => {
     if (!window.confirm("¿Seguro que quieres cancelar esta reserva?")) return;
@@ -210,13 +264,6 @@ const PerfilSocio = () => {
           {usuario && (
             <div className="mt-6 space-y-3">
               <p className="font-black text-kalian-gold/40 uppercase tracking-[0.4em] text-[10px]">Soci@s: {usuario.nombre} • {usuario.dni}</p>
-              {usuario.cursos && usuario.cursos.filter((cId: string) => cursosDetalle.some(cd => cd.id === cId)).length > 0 && (
-                <div className="flex gap-3 flex-wrap">
-                  {usuario.cursos.filter((cId: string) => cursosDetalle.some(cd => cd.id === cId)).map((cId: string) => (
-                    <span key={cId} className="bg-kalian-gold/10 text-kalian-gold px-4 py-1.5 rounded-full text-[9px] font-black uppercase tracking-widest border border-kalian-gold/20">Curso: {cId}</span>
-                  ))}
-                </div>
-              )}
             </div>
           )}
         </div>
@@ -229,11 +276,66 @@ const PerfilSocio = () => {
       </header>
 
       <main className="max-w-6xl mx-auto space-y-24">
-        {/* SECCIÓN CURSOS Y LOCALES */}
+        {/* CARNET DIGITAL ESTÁTICO */}
+        <section className="flex flex-col lg:flex-row gap-12 items-center bg-black/40 border border-kalian-gold/20 rounded-[4rem] p-10 md:p-16 shadow-2xl relative overflow-hidden group">
+          <div className="absolute top-0 right-0 w-64 h-64 bg-kalian-gold/5 rounded-full blur-3xl -mr-32 -mt-32 group-hover:bg-kalian-gold/10 transition-all duration-1000"></div>
+          
+          <div className="relative z-10 flex-shrink-0 bg-white p-8 rounded-[3rem] shadow-2xl shadow-kalian-gold/10 transform group-hover:rotate-1 transition-transform duration-500">
+            <QRCodeSVG 
+              value={usuario?.uid || 'anon'} 
+              size={200} 
+              level="H" 
+              includeMargin={true}
+              className="mix-blend-multiply"
+            />
+            <div className="mt-6 flex flex-col items-center">
+              <div className="flex items-center gap-2 mb-2">
+                <div className={`w-2 h-2 rounded-full ${usuario?.estado === 'activo' ? 'bg-emerald-500 animate-pulse' : 'bg-red-500'}`}></div>
+                <p className="text-[10px] font-black uppercase tracking-[0.3em] text-black/40">CARNET DIGITAL</p>
+              </div>
+              <p className="font-mono text-[9px] text-black/20 font-bold uppercase tracking-widest">ID: {usuario?.uid?.substring(0, 12)}</p>
+            </div>
+          </div>
+
+          <div className="relative z-10 flex-grow space-y-8 text-center lg:text-left">
+            <div>
+              <div className="flex flex-col lg:flex-row lg:items-center gap-4 mb-4">
+                <span className="text-kalian-gold font-black text-[10px] uppercase tracking-[0.5em]">Tarjeta de Membresía</span>
+                <span className={`inline-block px-4 py-1 rounded-full text-[8px] font-black uppercase tracking-widest w-fit mx-auto lg:mx-0 ${usuario?.estado === 'activo' ? 'bg-emerald-500/20 text-emerald-500 border border-emerald-500/30' : 'bg-red-500/20 text-red-500 border border-red-500/30'}`}>
+                  {usuario?.estado === 'activo' ? 'SOCI@ ACTIVO' : 'SOCI@ INACTIVO'}
+                </span>
+              </div>
+              <h2 className="text-5xl md:text-7xl kalian-poster-text text-kalian-cream leading-none uppercase italic">{usuario?.nombre}</h2>
+              
+              <div className="mt-8 space-y-4">
+                <p className="text-[10px] font-black text-kalian-gold/40 uppercase tracking-[0.3em]">Membresías Activas:</p>
+                <div className="flex flex-wrap justify-center lg:justify-start gap-4">
+                  {membresiasAMostrar.length > 0 ? (
+                    membresiasAMostrar.map(({cat, fecha}) => (
+                      <div key={cat} className="flex flex-col bg-kalian-gold/10 border border-kalian-gold/20 px-6 py-3 rounded-2xl group/item hover:bg-kalian-gold/20 transition-colors">
+                        <span className="text-kalian-gold text-[10px] font-black uppercase tracking-widest">{getNombreCategoria(cat)}</span>
+                        <span className="text-kalian-cream/40 text-[8px] font-bold uppercase tracking-tighter">Válido hasta: {fecha}</span>
+                      </div>
+                    ))
+                  ) : (
+                    <div className="bg-red-500/10 border border-red-500/20 px-6 py-3 rounded-2xl">
+                      <span className="text-red-500/60 text-[10px] font-black uppercase tracking-widest italic">Sin membresías activas</span>
+                    </div>
+                  )}
+                </div>
+              </div>
+            </div>
+            <p className="text-kalian-cream/40 text-sm font-bold leading-relaxed max-w-xl mx-auto lg:mx-0 uppercase tracking-widest">
+              Este carnet es personal e intransferible. Identifícate en la entrada para disfrutar de tus beneficios como soci@s de Kalian.
+            </p>
+          </div>
+        </section>
+
+        {/* SECCIÓN CURSOS Y KALIAN HUB */}
         {(cursosDetalle.length > 0 || localDetalle) && (
           <section className="space-y-12">
             <div className="flex items-center gap-6">
-              <h2 className="text-3xl kalian-poster-text text-kalian-gold">MIS <span className="text-kalian-cream">CURSOS Y LOCALES</span></h2>
+              <h2 className="text-3xl kalian-poster-text text-kalian-gold">MIS <span className="text-kalian-cream">CURSOS Y KALIAN HUB</span></h2>
               <div className="h-[1px] flex-1 bg-kalian-gold/20"></div>
             </div>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
@@ -274,7 +376,7 @@ const PerfilSocio = () => {
                 <div className="bg-black/40 border border-kalian-gold/10 rounded-3xl p-8 flex items-center gap-8 hover:border-kalian-gold/30 transition-all">
                   <div className="w-20 h-20 bg-kalian-gold/10 border border-kalian-gold/20 rounded-2xl flex items-center justify-center text-4xl">🏠</div>
                   <div>
-                    <p className="text-[9px] font-black text-kalian-gold uppercase tracking-[0.3em] mb-2">Alquiler de Local</p>
+                    <p className="text-[9px] font-black text-kalian-gold uppercase tracking-[0.3em] mb-2">Kalian Hub</p>
                     <h3 className="text-3xl kalian-poster-text text-kalian-cream">{localDetalle.nombre}</h3>
                     <p className="text-xs font-bold text-kalian-cream/40 mt-2 tracking-widest uppercase">Grupo: {localDetalle.nombreGrupo}</p>
                   </div>

@@ -3,7 +3,7 @@ import { db } from '../../firebase';
 import { collection, getDocs, doc, setDoc, getDoc, query, where, orderBy, DocumentData, deleteDoc, updateDoc, arrayUnion } from 'firebase/firestore';
 import { Link } from 'react-router-dom';
 import { createSocioAuth } from '../../lib/adminAuth';
-import { sendWelcomeEmail } from '../../lib/brevoService';
+import { sendWelcomeEmail, sendMembershipUpdateEmail } from '../../lib/brevoService';
 
 const AdminSolicitudes = () => {
   const [solicitudes, setSolicitudes] = useState<DocumentData[]>([]);
@@ -62,7 +62,7 @@ const AdminSolicitudes = () => {
           const authResult = await createSocioAuth(emailClean);
           if (authResult.uid) realUid = authResult.uid;
           
-          await sendWelcomeEmail(emailClean, sol.nombre || "Socio Kalian", "https://kalian.es/login");
+          await sendWelcomeEmail(emailClean, sol.nombre || "Soci@s Kalian", "https://kalian.es/login");
         } catch (err) {
           console.error("Error creating auth user:", err);
         }
@@ -72,20 +72,32 @@ const AdminSolicitudes = () => {
           nombre: sol.nombre,
           email: emailClean,
           uid: realUid,
-          expiraciones: fechaFin ? { [categoria]: fechaFin } : {},
+          membresias: fechaFin ? { [categoria]: fechaFin } : {},
+          estado: fechaFin ? 'activo' : 'inactivo',
           cursos: [sol.cursoId],
           verificado: true,
           fechaAlta: new Date().toISOString()
         });
+
+        // Trigger membership update email for new socio
+        await sendMembershipUpdateEmail(emailClean, sol.nombre, realUid, fechaFin ? { [categoria]: fechaFin } : {});
       } else {
         // Si ya es socio, solo añadimos el curso si no lo tiene y actualizamos expiración
         const updateData: any = {
-          cursos: arrayUnion(sol.cursoId)
+          cursos: arrayUnion(sol.cursoId),
+          estado: 'activo'
         };
         if (fechaFin) {
-          updateData[`expiraciones.${categoria}`] = fechaFin;
+          updateData[`membresias.${categoria}`] = fechaFin;
         }
         await updateDoc(socioRef, updateData);
+        
+        // Trigger membership update email
+        const finalSocioSnap = await getDoc(socioRef);
+        if (finalSocioSnap.exists()) {
+          const sData = finalSocioSnap.data();
+          await sendMembershipUpdateEmail(sData.email, sData.nombre, sData.uid, sData.membresias || {});
+        }
       }
 
       // 3. Inicializar registro de pago de inscripción (pendiente)

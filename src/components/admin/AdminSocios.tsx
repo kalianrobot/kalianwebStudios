@@ -3,7 +3,8 @@ import { db } from '../../firebase';
 import { collection, getDocs, doc, setDoc, getDoc, query, orderBy, DocumentData, deleteDoc, where } from 'firebase/firestore';
 import { Link } from 'react-router-dom';
 import { createSocioAuth } from '../../lib/adminAuth';
-import { sendWelcomeEmail } from '../../lib/brevoService';
+import { sendWelcomeEmail, sendMembershipUpdateEmail } from '../../lib/brevoService';
+import { updateDoc } from 'firebase/firestore';
 
 const AdminSocios = () => {
   const [socios, setSocios] = useState<DocumentData[]>([]);
@@ -14,6 +15,8 @@ const AdminSocios = () => {
   const [form, setForm] = useState({ dni: '', nombre: '', email: '' });
   const [msg, setMsg] = useState('');
   const [cleaning, setCleaning] = useState(false);
+  const [editando, setEditando] = useState<any | null>(null);
+  const [formEdit, setFormEdit] = useState<any>({});
   const hoy = new Date().toISOString().split('T')[0];
 
   const mesActual = new Date().getMonth() + 1;
@@ -60,7 +63,7 @@ const AdminSocios = () => {
 
       let eliminados = 0;
       for (const s of socios) {
-        const exp = s.expiraciones || {};
+        const exp = s.membresias || {};
         const fechas = Object.values(exp) as string[];
         
         // Si no tiene ninguna fecha de expiración o todas son muy antiguas
@@ -85,7 +88,7 @@ const AdminSocios = () => {
     if (!window.confirm("¿Seguro que quieres eliminar este socio? Esta acción no se puede deshacer.")) return;
     try {
       await deleteDoc(doc(db, "socios", id));
-      setMsg("✅ Socio eliminado");
+      setMsg("✅ Soci@s eliminado");
       setTimeout(() => setMsg(''), 3000);
       fetchSocios();
     } catch (err) {
@@ -106,7 +109,7 @@ const AdminSocios = () => {
       const socioSnap = await getDoc(socioRef);
 
       if (socioSnap.exists()) {
-        alert("Este DNI ya está registrado como socio.");
+        alert("Este DNI ya está registrado como soci@s.");
         setLoading(false);
         return;
       }
@@ -129,20 +132,38 @@ const AdminSocios = () => {
         nombre: form.nombre,
         email: emailClean,
         uid: realUid,
-        expiraciones: {},
+        membresias: {},
+        estado: 'inactivo',
         cursos: [],
         verificado: true,
         fechaAlta: new Date().toISOString()
       });
 
-      setMsg("✅ Socio creado y email enviado");
+      setMsg("✅ Soci@s creado y email enviado");
       setTimeout(() => setMsg(''), 3000);
       setForm({ dni: '', nombre: '', email: '' });
       setShowForm(false);
       fetchSocios();
     } catch (err) {
       console.error(err);
-      alert("Error al crear socio");
+      alert("Error al crear soci@s");
+    }
+    setLoading(false);
+  };
+
+  const handleUpdate = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setLoading(true);
+    try {
+      await updateDoc(doc(db, "socios", editando.id), formEdit);
+      await sendMembershipUpdateEmail(formEdit.email, formEdit.nombre, editando.uid, formEdit.membresias || {});
+      setMsg("✅ Soci@s actualizado y email enviado");
+      setTimeout(() => setMsg(''), 3000);
+      setEditando(null);
+      fetchSocios();
+    } catch (err) {
+      console.error(err);
+      alert("Error al actualizar");
     }
     setLoading(false);
   };
@@ -227,14 +248,16 @@ const AdminSocios = () => {
           <div className="grid gap-6">
             {socios.length === 0 && <div className="text-center py-32 bg-black/20 rounded-[3rem] border border-kalian-gold/10 border-dashed text-kalian-gold/20 kalian-poster-text text-4xl">NO HAY SOCI@S REGISTRADOS</div>}
             {socios.map(s => {
-              const exp = s.expiraciones || {};
+              const exp = s.membresias || {};
               const activas = Object.keys(exp).filter(cat => exp[cat] >= hoy);
+              const estadoCalculado = activas.length > 0 ? 'activo' : 'inactivo';
               
               return (
                 <div key={s.id} className="bg-black/40 p-8 rounded-[2.5rem] flex flex-col md:flex-row justify-between items-center gap-8 border border-kalian-gold/10 group hover:border-kalian-gold/40 transition-all duration-500">
                   <div className="flex items-center gap-8 w-full md:w-auto">
-                    <div className="w-16 h-16 bg-kalian-gold/10 rounded-2xl flex items-center justify-center text-3xl border border-kalian-gold/20">
+                    <div className="w-16 h-16 bg-kalian-gold/10 rounded-2xl flex items-center justify-center text-3xl border border-kalian-gold/20 relative">
                       👤
+                      <div className={`absolute -top-1 -right-1 w-4 h-4 rounded-full border-2 border-black ${estadoCalculado === 'activo' ? 'bg-emerald-500' : 'bg-red-500'}`}></div>
                     </div>
                     <div>
                       <p className="text-3xl kalian-poster-text text-kalian-cream group-hover:text-kalian-gold transition-colors leading-none mb-2">{s.nombre || 'Sin nombre'}</p>
@@ -270,8 +293,30 @@ const AdminSocios = () => {
                       ))}
                       {activas.length === 0 && <span className="px-6 py-2 bg-black/40 text-kalian-gold/20 font-black text-[10px] uppercase rounded-xl border border-kalian-gold/10 tracking-widest italic">Inactivo</span>}
                       <button 
+                        onClick={() => {
+                          setEditando(s);
+                          setFormEdit({
+                            nombre: s.nombre || '',
+                            email: s.email || '',
+                            membresias: s.membresias || {},
+                            estado: s.estado || 'inactivo'
+                          });
+                        }}
+                        className="p-3 bg-kalian-gold/10 text-kalian-gold rounded-xl border border-kalian-gold/20 hover:bg-kalian-gold/20 transition-all text-[10px] font-black uppercase tracking-widest"
+                      >
+                        EDITAR
+                      </button>
+                      <button 
                         onClick={() => handleDelete(s.id)}
-                        className="p-3 bg-red-500/10 text-red-500 rounded-xl border border-red-500/20 hover:bg-red-500 hover:text-white transition-all text-[10px] font-black uppercase tracking-widest"
+                        disabled={(() => {
+                          const fechas = Object.values(exp) as string[];
+                          const ultimaExp = fechas.length > 0 ? fechas.sort().reverse()[0] : s.fechaAlta?.split('T')[0] || '1900-01-01';
+                          const diff = new Date().getTime() - new Date(ultimaExp).getTime();
+                          const dias = diff / (1000 * 60 * 60 * 24);
+                          return dias < 120;
+                        })()}
+                        className="p-3 bg-red-500/10 text-red-500 rounded-xl border border-red-500/20 hover:bg-red-500 hover:text-white transition-all text-[10px] font-black uppercase tracking-widest disabled:opacity-20 disabled:cursor-not-allowed"
+                        title="Solo eliminable tras 120 días de inactividad"
                       >
                         ELIMINAR
                       </button>
@@ -279,6 +324,66 @@ const AdminSocios = () => {
                 </div>
               );
             })}
+          </div>
+        )}
+
+        {/* MODAL EDICIÓN */}
+        {editando && (
+          <div className="fixed inset-0 bg-black/90 backdrop-blur-sm flex items-center justify-center p-6 z-50">
+            <div className="bg-kalian-dark border border-kalian-gold/20 p-10 rounded-[3rem] w-full max-w-2xl shadow-2xl relative overflow-y-auto max-h-[90vh]">
+              <button onClick={() => setEditando(null)} className="absolute top-8 right-8 text-kalian-gold/40 hover:text-kalian-gold text-2xl">✕</button>
+              <h2 className="text-4xl kalian-poster-text text-kalian-gold mb-8 italic uppercase tracking-tight">Editar Soci@s</h2>
+              
+              <form onSubmit={handleUpdate} className="space-y-6">
+                <div className="grid md:grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <p className="text-[9px] font-black text-kalian-gold/40 uppercase tracking-[0.3em] ml-4">Nombre</p>
+                    <input type="text" className="w-full p-4 bg-kalian-gold/5 rounded-xl border border-kalian-gold/10 text-kalian-cream outline-none focus:border-kalian-gold" value={formEdit.nombre} onChange={e => setFormEdit({...formEdit, nombre: e.target.value})} required />
+                  </div>
+                  <div className="space-y-2">
+                    <p className="text-[9px] font-black text-kalian-gold/40 uppercase tracking-[0.3em] ml-4">Email</p>
+                    <input type="email" className="w-full p-4 bg-kalian-gold/5 rounded-xl border border-kalian-gold/10 text-kalian-cream outline-none focus:border-kalian-gold" value={formEdit.email} onChange={e => setFormEdit({...formEdit, email: e.target.value})} required />
+                  </div>
+                </div>
+
+                <div className="space-y-4">
+                  <p className="text-[10px] font-black text-kalian-gold uppercase tracking-[0.3em] border-b border-kalian-gold/10 pb-2">Vigencia Membresías</p>
+                  {['musica', 'danza', 'local'].map(cat => (
+                    <div key={cat} className="flex items-center justify-between gap-4 bg-black/20 p-4 rounded-2xl border border-kalian-gold/5">
+                      <span className="text-[10px] font-black uppercase text-kalian-cream/60 tracking-widest">{cat === 'musica' ? 'Music Is Cool' : cat === 'danza' ? 'Club de Baile' : 'Locales'}</span>
+                      <input 
+                        type="date" 
+                        className="bg-transparent text-kalian-gold font-bold outline-none border-b border-kalian-gold/20 focus:border-kalian-gold"
+                        value={formEdit.membresias?.[cat] || ''}
+                        onChange={e => setFormEdit({
+                          ...formEdit,
+                          membresias: { ...formEdit.membresias, [cat]: e.target.value }
+                        })}
+                      />
+                    </div>
+                  ))}
+                </div>
+
+                <div className="space-y-2">
+                  <p className="text-[9px] font-black text-kalian-gold/40 uppercase tracking-[0.3em] ml-4">Estado General</p>
+                  <select 
+                    className="w-full p-4 bg-kalian-gold/5 rounded-xl border border-kalian-gold/10 text-kalian-gold font-bold outline-none"
+                    value={formEdit.estado}
+                    onChange={e => setFormEdit({...formEdit, estado: e.target.value})}
+                  >
+                    <option value="activo">ACTIVO</option>
+                    <option value="inactivo">INACTIVO</option>
+                  </select>
+                </div>
+
+                <button 
+                  disabled={loading}
+                  className="w-full bg-kalian-gold text-black p-5 rounded-2xl kalian-poster-text text-xl tracking-widest hover:bg-white transition-all shadow-xl shadow-kalian-gold/20"
+                >
+                  {loading ? 'GUARDANDO...' : 'ACTUALIZAR Y ENVIAR EMAIL'}
+                </button>
+              </form>
+            </div>
           </div>
         )}
       </div>

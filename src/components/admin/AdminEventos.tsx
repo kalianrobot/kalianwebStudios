@@ -5,6 +5,14 @@ import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 import { Link } from 'react-router-dom';
 
 const AdminEventos = () => {
+  const defaultReglas = `LA RESERVA ES FUNDAMENTAL PARA ASISTIR AL EVENTO.
+
+SI HACES LA RESERVA PERO AL FINAL NO VAS A VENIR, CAMBIA EL NÚMERO DE ASISTENTES PARA PERMITIR QUE OTRA PERSONA OCUPE TU ENTRADA.
+
+ESPACIO LIBRE DE REDES SOCIALES. PROHIBIDA LA DIFUSIÓN DE VÍDEOS O IMÁGENES.
+
+ENTRADA HASTA LAS 00:00. RESERVAS DISPONIBLES HASTA COMPLETAR AFORO.`;
+
   const [eventos, setEventos] = useState<DocumentData[]>([]);
   const [form, setForm] = useState({ 
     titulo: '', 
@@ -12,6 +20,7 @@ const AdminEventos = () => {
     precio_estandar: '', 
     categoria: 'musica', 
     aforo_max: '50',
+    max_acompanantes: '4',
     tiene_descuento: false,
     precio_descuento: '',
     clave_descuento: '',
@@ -19,13 +28,8 @@ const AdminEventos = () => {
     apertura_socios: '',
     apertura_general: '',
     imagenUrl: '',
-    descripcion: `LA RESERVA ES FUNDAMENTAL PARA ASISTIR AL EVENTO.
-
-SI HACES LA RESERVA PERO AL FINAL NO VAS A VENIR, CAMBIA EL NÚMERO DE ASISTENTES PARA PERMITIR QUE OTRA PERSONA OCUPE TU ENTRADA.
-
-ESPACIO LIBRE DE REDES SOCIALES. PROHIBIDA LA DIFUSIÓN DE VÍDEOS O IMÁGENES.
-
-ENTRADA HASTA LAS 00:00. RESERVAS DISPONIBLES HASTA COMPLETAR AFORO.`
+    reglas: defaultReglas,
+    descripcion: ''
   });
   const [archivo, setArchivo] = useState<File | null>(null);
   const [subiendo, setSubiendo] = useState(false);
@@ -60,6 +64,7 @@ ENTRADA HASTA LAS 00:00. RESERVAS DISPONIBLES HASTA COMPLETAR AFORO.`
         precio_descuento: form.tiene_descuento ? Number(form.precio_descuento) : Number(form.precio_estandar),
         precio_clave: form.clave_descuento ? Number(form.precio_clave) : Number(form.precio_estandar),
         aforo_max: Number(form.aforo_max),
+        max_acompanantes: Number(form.max_acompanantes),
         aforo_actual: editando ? (eventos.find(ev => ev.id === editando)?.aforo_actual || 0) : 0
       };
 
@@ -86,13 +91,8 @@ ENTRADA HASTA LAS 00:00. RESERVAS DISPONIBLES HASTA COMPLETAR AFORO.`
         apertura_socios: '',
         apertura_general: '',
         imagenUrl: '',
-        descripcion: `LA RESERVA ES FUNDAMENTAL PARA ASISTIR AL EVENTO.
-
-SI HACES LA RESERVA PERO AL FINAL NO VAS A VENIR, CAMBIA EL NÚMERO DE ASISTENTES PARA PERMITIR QUE OTRA PERSONA OCUPE TU ENTRADA.
-
-ESPACIO LIBRE DE REDES SOCIALES. PROHIBIDA LA DIFUSIÓN DE VÍDEOS O IMÁGENES.
-
-ENTRADA HASTA LAS 00:00. RESERVAS DISPONIBLES HASTA COMPLETAR AFORO.`
+        reglas: defaultReglas,
+        descripcion: ''
       });
       setArchivo(null);
       setEditando(null);
@@ -197,27 +197,45 @@ ENTRADA HASTA LAS 00:00. RESERVAS DISPONIBLES HASTA COMPLETAR AFORO.`
             </div>
           </div>
 
-          <div className="space-y-2">
-            <label className="text-[9px] font-black uppercase text-kalian-gold/40 ml-4 tracking-widest">Descripción y Reglas</label>
-            <textarea 
-              placeholder="Información del evento..." 
-              className="w-full p-5 bg-kalian-gold/5 rounded-2xl outline-none border border-kalian-gold/10 focus:border-kalian-gold transition-all text-kalian-cream font-bold min-h-[200px]" 
-              value={form.descripcion} 
-              onChange={e => setForm({...form, descripcion: e.target.value})} 
-              required 
-            />
+          <div className="space-y-4">
+            <div className="space-y-2">
+              <label className="text-[9px] font-black uppercase text-kalian-gold/40 ml-4 tracking-widest">IMPORTANTE (Reglas)</label>
+              <textarea 
+                placeholder="Normas del evento..." 
+                className="w-full p-5 bg-kalian-gold/5 rounded-2xl outline-none border border-kalian-gold/10 focus:border-kalian-gold transition-all text-kalian-cream font-bold min-h-[150px]" 
+                value={form.reglas} 
+                onChange={e => setForm({...form, reglas: e.target.value})} 
+                required 
+              />
+            </div>
+
+            <div className="space-y-2">
+              <label className="text-[9px] font-black uppercase text-kalian-gold/40 ml-4 tracking-widest">Descripción del evento</label>
+              <textarea 
+                placeholder="Información libre sobre el evento..." 
+                className="w-full p-5 bg-kalian-gold/5 rounded-2xl outline-none border border-kalian-gold/10 focus:border-kalian-gold transition-all text-kalian-cream font-bold min-h-[150px]" 
+                value={form.descripcion} 
+                onChange={e => setForm({...form, descripcion: e.target.value})} 
+                required 
+              />
+            </div>
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
             <div className="space-y-2">
               <label className="text-[9px] font-black uppercase text-kalian-gold/40 ml-4 tracking-widest">Aforo Máximo</label>
               <input type="number" placeholder="AFORO MÁX" className="w-full p-5 bg-kalian-gold/5 rounded-2xl outline-none border border-kalian-gold/10 focus:border-kalian-gold transition-all text-kalian-cream font-bold" value={form.aforo_max} onChange={e => setForm({...form, aforo_max: e.target.value})} required />
             </div>
             <div className="space-y-2">
-              <label className="text-[9px] font-black uppercase text-kalian-gold/40 ml-4 tracking-widest">Categoría</label>
+              <label className="text-[9px] font-black uppercase text-kalian-gold/40 ml-4 tracking-widest">Máx. Acompañantes</label>
+              <input type="number" placeholder="MÁX ACOMP." className="w-full p-5 bg-kalian-gold/5 rounded-2xl outline-none border border-kalian-gold/10 focus:border-kalian-gold transition-all text-kalian-cream font-bold" value={form.max_acompanantes} onChange={e => setForm({...form, max_acompanantes: e.target.value})} required />
+            </div>
+            <div className="space-y-2">
+              <label className="text-[9px] font-black uppercase text-kalian-gold/40 ml-4 tracking-widest">Descuento Soci@s</label>
               <select className="w-full p-5 bg-kalian-gold/5 rounded-2xl font-black uppercase border border-kalian-gold/10 focus:border-kalian-gold transition-all text-kalian-gold" value={form.categoria} onChange={e => setForm({...form, categoria: e.target.value})}>
-                <option value="musica">🎸 Música</option>
-                <option value="danza">💃 Danza</option>
+                <option value="musica">Descuento Soci@s Music Is Cool</option>
+                <option value="danza">Descuento Soci@s Club De Baile</option>
+                <option value="ninguno">Ninguno (sin descuento)</option>
               </select>
             </div>
           </div>
@@ -247,13 +265,8 @@ ENTRADA HASTA LAS 00:00. RESERVAS DISPONIBLES HASTA COMPLETAR AFORO.`
                     apertura_socios: '',
                     apertura_general: '',
                     imagenUrl: '',
-                    descripcion: `LA RESERVA ES FUNDAMENTAL PARA ASISTIR AL EVENTO.
-
-SI HACES LA RESERVA PERO AL FINAL NO VAS A VENIR, CAMBIA EL NÚMERO DE ASISTENTES PARA PERMITIR QUE OTRA PERSONA OCUPE TU ENTRADA.
-
-ESPACIO LIBRE DE REDES SOCIALES. PROHIBIDA LA DIFUSIÓN DE VÍDEOS O IMÁGENES.
-
-ENTRADA HASTA LAS 00:00. RESERVAS DISPONIBLES HASTA COMPLETAR AFORO.`
+                    reglas: defaultReglas,
+                    descripcion: ''
                   });
                   setArchivo(null);
                 }}
@@ -276,7 +289,7 @@ ENTRADA HASTA LAS 00:00. RESERVAS DISPONIBLES HASTA COMPLETAR AFORO.`
                 <div>
                   <h3 className="text-3xl kalian-poster-text text-kalian-cream group-hover:text-kalian-gold transition-colors uppercase italic">{ev.titulo}</h3>
                   <p className="text-[10px] text-kalian-gold/40 font-black uppercase tracking-[0.3em] mt-2">
-                    {new Date(ev.fecha).toLocaleString('es-ES', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })} | {ev.categoria.toUpperCase()} | {ev.precio_estandar}€ {ev.tiene_descuento ? `(Soci@s: ${ev.precio_descuento}€)` : '(Sin dto)'} | AFORO: {ev.aforo_actual || 0}/{ev.aforo_max}
+                    {new Date(ev.fecha).toLocaleString('es-ES', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })} | {ev.categoria.toUpperCase()} | {ev.precio_estandar}€ {ev.tiene_descuento ? `(Soci@s: ${ev.precio_descuento}€)` : '(Sin dto)'} | AFORO: {ev.aforo_actual || 0}/{ev.aforo_max} | MÁX ACOMP: {ev.max_acompanantes || 4}
                   </p>
                 </div>
               </div>
@@ -297,7 +310,9 @@ ENTRADA HASTA LAS 00:00. RESERVAS DISPONIBLES HASTA COMPLETAR AFORO.`
                       apertura_socios: ev.apertura_socios || '',
                       apertura_general: ev.apertura_general || '',
                       imagenUrl: ev.imagenUrl || '',
-                      descripcion: ev.descripcion || ''
+                      reglas: ev.reglas || defaultReglas,
+                      descripcion: ev.descripcion || '',
+                      max_acompanantes: ev.max_acompanantes?.toString() || '4'
                     });
                     window.scrollTo({ top: 0, behavior: 'smooth' });
                   }}

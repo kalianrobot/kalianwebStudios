@@ -26,6 +26,12 @@ const ReservaForm = ({ item, alCerrar }: ReservaFormProps) => {
   const categoriaActividad = item.categoria || 'musica';
   const precioBase = Number(item.precio_estandar || item.precio || 0);
 
+  const getNombreCategoria = (cat: string) => {
+    if (cat === 'musica') return 'Music Is Cool';
+    if (cat === 'danza') return 'Club de Baile';
+    return cat;
+  };
+
   useEffect(() => {
     if (socioData) {
       setForm(f => ({ ...f, dni: socioData.dni, nombre: socioData.nombre, email: socioData.email || '' }));
@@ -35,13 +41,20 @@ const ReservaForm = ({ item, alCerrar }: ReservaFormProps) => {
   // Cálculo de precio en tiempo real
   useEffect(() => {
     const calcular = async () => {
-      let socio = esSocioActivo(categoriaActividad);
+      let socio = false;
       
-      // BDD: Socios de "local" tienen mismos descuentos que "musica"
-      if (!socio && categoriaActividad === 'musica') {
-        socio = esSocioActivo('local');
+      // Lógica de Descuentos Cruzados (Arquitecto):
+      if (categoriaActividad === 'musica') {
+        // Music Is Cool se aplica si tiene musica O local
+        socio = esSocioActivo('musica') || esSocioActivo('local');
+      } else if (categoriaActividad === 'danza') {
+        // Club de Baile solo si tiene danza
+        socio = esSocioActivo('danza');
+      } else {
+        // Otros casos (ej. local o ninguno)
+        socio = esSocioActivo(categoriaActividad);
       }
-
+      
       const dniUpper = form.dni.trim().toUpperCase();
 
       if (!socio && dniUpper && !esCurso) {
@@ -49,9 +62,16 @@ const ReservaForm = ({ item, alCerrar }: ReservaFormProps) => {
           const snap = await getDoc(doc(db, "socios", dniUpper));
           if (snap.exists()) {
             const hoy = new Date().toISOString().split('T')[0];
-            const expData = snap.data().expiraciones || {};
-            const exp = expData[categoriaActividad] || (categoriaActividad === 'musica' ? expData['local'] : '') || '';
-            if (exp >= hoy) socio = true;
+            const expData = snap.data().membresias || {};
+            
+            if (categoriaActividad === 'musica') {
+              const expM = expData['musica'] || '';
+              const expL = expData['local'] || '';
+              if (expM >= hoy || expL >= hoy) socio = true;
+            } else {
+              const exp = expData[categoriaActividad] || '';
+              if (exp >= hoy) socio = true;
+            }
           }
         } catch (e) { console.error(e); }
       }
@@ -66,8 +86,9 @@ const ReservaForm = ({ item, alCerrar }: ReservaFormProps) => {
 
       // Lógica de Descuentos NO Acumulables (Arquitecto: Elegir el mejor precio)
       const pSocio = item.tiene_descuento ? Number(item.precio_descuento) : precioBase;
-      const pClave = esClaveValida ? Number(item.precio_clave) : precioBase;
+      const pClave = (esClaveValida && item.precio_clave) ? Number(item.precio_clave) : precioBase;
 
+      // Determinamos cuál es el mejor precio disponible para el titular
       if (socio && pSocio < precioTitular) {
         precioTitular = pSocio;
         aplicadoSocio = true;
@@ -76,7 +97,7 @@ const ReservaForm = ({ item, alCerrar }: ReservaFormProps) => {
       if (esClaveValida && pClave < precioTitular) {
         precioTitular = pClave;
         aplicadoClave = true;
-        aplicadoSocio = false; // El de clave es mejor
+        aplicadoSocio = false; // Priorizamos el mejor precio, si la clave es mejor que el de socio
       }
       
       let total = 0;
@@ -133,6 +154,14 @@ const ReservaForm = ({ item, alCerrar }: ReservaFormProps) => {
             }
           }
         }
+      }
+
+      // 1.0 VALIDACIÓN DE ACOMPAÑANTES (Arquitecto)
+      const maxPermitidos = Number(item.max_acompanantes || 4);
+      if (Number(form.acompañantes) > maxPermitidos) {
+        setMensaje(`⚠️ El máximo de acompañantes para este evento es ${maxPermitidos}.`);
+        setCargando(false);
+        return;
       }
 
       // 1. VALIDACIÓN DE UNICIDAD (Solo si hay DNI)
@@ -287,45 +316,46 @@ const ReservaForm = ({ item, alCerrar }: ReservaFormProps) => {
 
   if (resultado) {
     return (
-      <div className="bg-white p-10 rounded-[3rem] shadow-2xl max-w-md w-full text-center space-y-6 animate-in zoom-in duration-300 overflow-y-auto max-h-[90vh]">
-        <h2 className="text-3xl font-black italic uppercase text-emerald-600">¡Reserva Lista!</h2>
-        <p className="text-slate-500 font-bold uppercase text-[10px] tracking-widest">Presenta este código en la entrada</p>
+      <div className="bg-white rounded-[3rem] shadow-2xl max-w-lg w-full text-center p-10 space-y-6 animate-in zoom-in duration-300 overflow-y-auto max-h-[90vh] relative">
+        <div className="absolute top-0 left-0 w-full h-2 bg-emerald-500 rounded-t-[3rem]"></div>
+        <h2 className="text-4xl kalian-poster-text italic uppercase text-emerald-600 tracking-tight">¡Reserva Lista!</h2>
+        <p className="text-slate-500 font-black uppercase text-[10px] tracking-[0.4em]">Presenta este código en la entrada</p>
         
-        <div className="bg-slate-50 p-8 rounded-[2.5rem] border-2 border-emerald-100 inline-block">
-          <img src={resultado.qrUrl} alt="QR Ticket" className="w-48 h-48 mx-auto" />
-          <p className="mt-4 font-mono font-black text-2xl text-slate-900 tracking-[0.3em]">{resultado.ticketID}</p>
+        <div className="bg-slate-50 p-10 rounded-[3rem] border-2 border-emerald-100 inline-block shadow-inner">
+          <img src={resultado.qrUrl} alt="QR Ticket" className="w-56 h-56 mx-auto" />
+          <p className="mt-6 font-mono font-black text-3xl text-slate-900 tracking-[0.4em]">{resultado.ticketID}</p>
         </div>
 
-        <div className="flex flex-col gap-3">
+        <div className="flex flex-col gap-4 max-w-sm mx-auto">
           <button 
             onClick={descargarTicket}
-            className="w-full bg-indigo-600 text-white p-4 rounded-2xl font-black uppercase text-xs tracking-widest hover:bg-indigo-500 transition-all flex items-center justify-center gap-2"
+            className="w-full bg-indigo-600 text-white p-5 rounded-2xl font-black uppercase text-xs tracking-widest hover:bg-indigo-500 transition-all flex items-center justify-center gap-3 shadow-xl shadow-indigo-600/20"
           >
             📥 Descargar Ticket
           </button>
 
           {!emailEnviado ? (
-            <div className="bg-slate-50 p-4 rounded-2xl space-y-3">
-              <p className="text-[9px] font-black uppercase text-slate-400">¿Quieres recibirlo por email?</p>
+            <div className="bg-slate-50 p-6 rounded-[2rem] space-y-4 border border-slate-100">
+              <p className="text-[10px] font-black uppercase text-slate-400 tracking-widest">¿Quieres recibirlo por email?</p>
               <div className="flex gap-2">
                 <input 
                   type="email" 
                   placeholder="tu@email.com" 
-                  className="flex-1 p-3 bg-white rounded-xl text-xs outline-none border border-slate-200"
+                  className="flex-1 p-4 bg-white rounded-xl text-xs outline-none border border-slate-200 focus:border-indigo-500 transition-colors"
                   value={emailEnvio}
                   onChange={e => setEmailEnvio(e.target.value)}
                 />
                 <button 
                   onClick={enviarEmailManual}
                   disabled={cargando || !emailEnvio}
-                  className="bg-slate-900 text-white px-4 rounded-xl font-bold text-[10px] uppercase disabled:opacity-50"
+                  className="bg-slate-900 text-white px-6 rounded-xl font-black text-[10px] uppercase disabled:opacity-50 hover:bg-black transition-colors"
                 >
                   Enviar
                 </button>
               </div>
             </div>
           ) : (
-            <div className="bg-emerald-50 p-4 rounded-2xl text-emerald-600 font-bold text-xs uppercase">
+            <div className="bg-emerald-50 p-6 rounded-[2rem] text-emerald-600 font-black text-xs uppercase tracking-widest border border-emerald-100">
               ✅ Email enviado con éxito
             </div>
           )}
@@ -333,139 +363,214 @@ const ReservaForm = ({ item, alCerrar }: ReservaFormProps) => {
 
         <button 
           onClick={alCerrar}
-          className="w-full bg-slate-200 text-slate-600 p-5 rounded-2xl font-black uppercase tracking-widest hover:bg-slate-300 transition-all"
-        >Cerrar</button>
+          className="w-full bg-slate-100 text-slate-500 p-6 rounded-2xl font-black uppercase tracking-[0.3em] text-[10px] hover:bg-slate-200 transition-all"
+        >Cerrar Ventana</button>
       </div>
     );
   }
 
   return (
-    <div className="bg-kalian-dark p-8 md:p-12 rounded-[3rem] shadow-2xl max-w-md w-full relative text-kalian-cream border border-kalian-gold/20 overflow-hidden">
-      <div className="absolute top-0 left-0 w-full h-1 bg-kalian-gold"></div>
-      <button onClick={alCerrar} className="absolute top-8 right-8 text-kalian-gold/40 font-black text-2xl hover:text-kalian-gold transition-colors">✕</button>
-      
-      <h2 className="text-4xl kalian-poster-text text-kalian-gold leading-none mb-2 tracking-tight uppercase italic">{item.titulo}</h2>
-      <p className="text-[10px] font-black text-kalian-gold/40 uppercase mb-10 tracking-[0.3em]">
-        {esCurso ? '📚 INSCRIPCIÓN CURSO' : '🎟️ RESERVA DE EVENTO'}
-      </p>
-
-      {mensaje ? (
-        <div className="bg-kalian-gold/5 border border-kalian-gold/20 text-kalian-gold p-12 rounded-[2.5rem] text-center font-black kalian-poster-text text-2xl animate-in fade-in zoom-in italic">
-          {mensaje}
+    <div className="bg-kalian-dark rounded-[2.5rem] shadow-2xl max-w-lg w-full relative text-kalian-cream border border-kalian-gold/20 flex flex-col max-h-[90vh] animate-in fade-in slide-in-from-bottom-4 duration-500 overflow-hidden">
+      {/* CABECERA CON IMAGEN */}
+      <div className="relative h-56 flex-shrink-0">
+        {item.imagenUrl ? (
+          <img 
+            src={item.imagenUrl} 
+            alt={item.titulo} 
+            className="w-full h-full object-cover" 
+            referrerPolicy="no-referrer" 
+          />
+        ) : (
+          <div className="w-full h-full bg-kalian-gold/5 flex items-center justify-center">
+            <span className="text-8xl kalian-poster-text text-kalian-gold/10 uppercase italic">{item.titulo.charAt(0)}</span>
+          </div>
+        )}
+        <div className="absolute inset-0 bg-gradient-to-t from-kalian-dark via-kalian-dark/40 to-transparent"></div>
+        <button 
+          onClick={alCerrar} 
+          className="absolute top-6 right-6 w-10 h-10 bg-black/40 backdrop-blur-md text-kalian-gold rounded-full flex items-center justify-center font-black text-xl hover:bg-kalian-gold hover:text-black transition-all z-20"
+        >
+          ✕
+        </button>
+        
+        <div className="absolute bottom-6 left-8 right-8 z-10">
+          <div className="flex items-center gap-3 mb-2">
+            <span className="text-[10px] font-black text-kalian-gold uppercase tracking-[0.3em] bg-kalian-gold/10 px-3 py-1 rounded-full border border-kalian-gold/20 backdrop-blur-sm">
+              {esCurso ? '📚 CURSO' : '🎟️ EVENTO'}
+            </span>
+            {item.tiene_descuento && (
+              <span className="text-[10px] font-black text-emerald-400 uppercase tracking-[0.3em] bg-emerald-400/10 px-3 py-1 rounded-full border border-emerald-400/20 backdrop-blur-sm">
+                Dto. {getNombreCategoria(categoriaActividad)}
+              </span>
+            )}
+          </div>
+          <h2 className="text-4xl md:text-5xl kalian-poster-text text-kalian-gold leading-none tracking-tight uppercase italic drop-shadow-2xl">{item.titulo}</h2>
         </div>
-      ) : (
-        <form onSubmit={enviar} className="space-y-6">
-          <div className="space-y-2">
-            <label className="text-[9px] font-black text-kalian-gold/40 uppercase tracking-[0.3em] ml-4">
-              {esCurso ? 'DNI (OBLIGATORIO)' : 'TU IDENTIFICACIÓN (DNI SI ERES SOCI@S)'}
-            </label>
-            <input 
-              type="text" placeholder={esCurso ? "DNI OBLIGATORIO" : "DNI PARA DESCUENTO"} 
-              className="w-full p-5 bg-kalian-gold/5 rounded-2xl font-black uppercase outline-none border border-kalian-gold/10 focus:border-kalian-gold transition-all text-xl text-kalian-gold" 
-              value={form.dni} 
-              onChange={e => setForm({...form, dni: e.target.value.toUpperCase()})} 
-              disabled={!!socioData}
-              required={esCurso}
-            />
+      </div>
+
+      {/* CONTENIDO SCROLLABLE */}
+      <div className="flex-1 overflow-y-auto p-8 md:p-10 space-y-10 custom-scrollbar">
+        
+        {/* BLOQUE IMPORTANTE (REGLAS) */}
+        {item.reglas && (
+          <div className="bg-kalian-gold/5 p-8 rounded-[2.5rem] border border-kalian-gold/20 relative overflow-hidden group">
+            <div className="absolute top-0 right-0 w-24 h-24 bg-kalian-gold/5 rounded-full blur-2xl -mr-12 -mt-12"></div>
+            <h3 className="text-[10px] font-black text-kalian-gold uppercase tracking-[0.5em] mb-6 flex items-center gap-3">
+              <span className="w-2 h-2 bg-kalian-gold rounded-full animate-pulse"></span>
+              IMPORTANTE
+            </h3>
+            <ul className="space-y-4">
+              {item.reglas.split('\n').filter((r: string) => r.trim()).map((regla: string, idx: number) => (
+                <li key={idx} className="text-xs text-kalian-cream/90 font-bold leading-relaxed flex gap-4">
+                  <span className="text-kalian-gold flex-shrink-0 mt-1">✦</span>
+                  <span>{regla}</span>
+                </li>
+              ))}
+            </ul>
           </div>
+        )}
 
-          <div className="space-y-2">
-            <label className="text-[9px] font-black text-kalian-gold/40 uppercase tracking-[0.3em] ml-4">NOMBRE COMPLETO</label>
-            <input 
-              type="text" placeholder="NOMBRE Y APELLIDOS" 
-              className="w-full p-5 bg-kalian-gold/5 rounded-2xl font-bold outline-none border border-kalian-gold/10 focus:border-kalian-gold transition-all text-kalian-cream" 
-              value={form.nombre} 
-              onChange={e => setForm({...form, nombre: e.target.value})} 
-              required 
-              disabled={!!socioData}
-            />
-          </div>
-
-          <div className="space-y-2">
-            <label className="text-[9px] font-black text-kalian-gold/40 uppercase tracking-[0.3em] ml-4">
-              EMAIL {esCurso ? '(OBLIGATORIO)' : '(OPCIONAL PARA RECIBIR EL QR)'}
-            </label>
-            <input 
-              type="email" placeholder="tu@email.com" 
-              className="w-full p-5 bg-kalian-gold/5 rounded-2xl font-bold outline-none border border-kalian-gold/10 focus:border-kalian-gold transition-all text-kalian-cream" 
-              value={form.email} 
-              onChange={e => setForm({...form, email: e.target.value})} 
-              required={esCurso}
-              disabled={!!socioData}
-            />
-          </div>
-
-          {!esCurso && (
-            <div className="space-y-2">
-              <label className="text-[9px] font-black text-kalian-gold/40 uppercase tracking-[0.3em] ml-4">CLAVE DE DESCUENTO</label>
-              <div className="relative">
-                <input 
-                  type="text" placeholder="¿TIENES UN CUPÓN?" 
-                  className={`w-full p-5 bg-kalian-gold/5 rounded-2xl font-black uppercase outline-none border transition-all text-xl ${claveValida ? 'border-emerald-500 text-emerald-500' : 'border-kalian-gold/10 focus:border-kalian-gold text-kalian-gold'}`} 
-                  value={claveInput} 
-                  onChange={e => setClaveInput(e.target.value.toUpperCase())} 
-                />
-                {claveValida && <span className="absolute right-5 top-1/2 -translate-y-1/2 text-emerald-500">✓</span>}
-              </div>
-            </div>
-          )}
-
-          {!esCurso && (
-            <div className="flex justify-between items-center bg-kalian-gold/5 p-6 rounded-3xl border border-kalian-gold/10">
-              <div>
-                <span className="text-[9px] font-black uppercase text-kalian-gold/40 block mb-1 tracking-widest">Acompañantes</span>
-                <span className="text-[10px] text-kalian-gold/20 font-bold italic uppercase">Máximo 4 personas</span>
-              </div>
-              <input 
-                type="number" min="0" max="4"
-                className="w-20 bg-kalian-gold/10 p-3 rounded-xl text-center font-black text-2xl text-kalian-gold shadow-sm outline-none border border-kalian-gold/20" 
-                value={form.acompañantes} 
-                onChange={e => setForm({...form, acompañantes: Number(e.target.value)})} 
-              />
-            </div>
-          )}
-
-          {/* DESGLOSE DE PRECIO */}
-          <div className="bg-black/40 p-6 rounded-3xl border border-kalian-gold/10 space-y-3">
-            <div className="flex justify-between items-center text-[9px] font-black uppercase text-kalian-gold/40 tracking-widest">
-              <span>Aportación Base</span>
-              <span>{precioBase}€</span>
-            </div>
-            {precioCalculado.esSocio && (
-              <div className="flex justify-between items-center text-[9px] font-black uppercase text-kalian-gold tracking-widest">
-                <span>Descuento Soci@s</span>
-                <span>{item.precio_descuento}€</span>
-              </div>
-            )}
-            {precioCalculado.esClave && (
-              <div className="flex justify-between items-center text-[9px] font-black uppercase text-emerald-500 tracking-widest">
-                <span>Descuento Cupón</span>
-                <span>{item.precio_clave}€</span>
-              </div>
-            )}
-            <div className="flex justify-between items-center pt-3 border-t border-kalian-gold/10">
-              <span className="text-xs font-black uppercase text-kalian-cream tracking-widest">Total</span>
-              <span className="text-4xl kalian-poster-text text-kalian-gold italic">{precioCalculado.total}€</span>
-            </div>
-            <p className="text-[8px] text-kalian-gold/20 font-black uppercase text-center pt-1 tracking-widest">
-              {precioCalculado.esSocio ? '✓ DESCUENTO APLICADO POR SER SOCI@S ACTIVO' : 
-               precioCalculado.esClave ? '✓ DESCUENTO APLICADO POR CUPÓN' :
-               'REGÍSTRATE COMO SOCI@S PARA OBTENER DESCUENTOS'}
+        {/* BLOQUE DESCRIPCIÓN */}
+        {item.descripcion && (
+          <div className="px-4">
+            <h3 className="text-[10px] font-black text-kalian-gold/40 uppercase tracking-[0.5em] mb-4">Descripción del evento</h3>
+            <p className="text-sm text-kalian-cream/70 font-medium leading-relaxed whitespace-pre-line">
+              {item.descripcion}
             </p>
           </div>
+        )}
 
-          <button 
-            disabled={cargando}
-            className="w-full bg-kalian-gold text-black p-6 rounded-2xl kalian-poster-text text-xl tracking-widest hover:bg-white transition-all flex items-center justify-center gap-3 active:scale-95 shadow-2xl shadow-kalian-gold/20"
-          >
-            {cargando ? 'PROCESANDO...' : (esCurso ? 'CONSULTAR INSCRIPCIÓN' : 'CONFIRMAR RESERVA')}
-          </button>
-          
-          <p className="text-center text-[9px] text-kalian-gold/20 font-black uppercase tracking-[0.2em]">
-            El pago se realizará en efectivo en el centro
-          </p>
-        </form>
-      )}
+        {/* SECCIÓN DE RESERVA / MENSAJE */}
+        <div className="pt-4">
+          {mensaje ? (
+            <div className="bg-kalian-gold/5 border border-kalian-gold/20 text-kalian-gold p-10 rounded-[2.5rem] text-center font-black kalian-poster-text text-2xl animate-in fade-in zoom-in italic leading-tight">
+              {mensaje}
+            </div>
+          ) : (
+            <form onSubmit={enviar} className="space-y-8">
+              <div className="grid grid-cols-1 gap-6">
+                <div className="space-y-2">
+                  <label className="text-[9px] font-black text-kalian-gold/40 uppercase tracking-[0.3em] ml-4">
+                    {esCurso ? 'DNI (OBLIGATORIO)' : 'TU IDENTIFICACIÓN (DNI SI ERES SOCI@S)'}
+                  </label>
+                  <input 
+                    type="text" placeholder={esCurso ? "DNI OBLIGATORIO" : "DNI PARA DESCUENTO"} 
+                    className="w-full p-5 bg-kalian-gold/5 rounded-2xl font-black uppercase outline-none border border-kalian-gold/10 focus:border-kalian-gold transition-all text-xl text-kalian-gold" 
+                    value={form.dni} 
+                    onChange={e => setForm({...form, dni: e.target.value.toUpperCase()})} 
+                    disabled={!!socioData}
+                    required={esCurso}
+                  />
+                </div>
+
+                <div className="space-y-2">
+                  <label className="text-[9px] font-black text-kalian-gold/40 uppercase tracking-[0.3em] ml-4">NOMBRE COMPLETO</label>
+                  <input 
+                    type="text" placeholder="NOMBRE Y APELLIDOS" 
+                    className="w-full p-5 bg-kalian-gold/5 rounded-2xl font-bold outline-none border border-kalian-gold/10 focus:border-kalian-gold transition-all text-kalian-cream" 
+                    value={form.nombre} 
+                    onChange={e => setForm({...form, nombre: e.target.value})} 
+                    required 
+                    disabled={!!socioData}
+                  />
+                </div>
+
+                <div className="space-y-2">
+                  <label className="text-[9px] font-black text-kalian-gold/40 uppercase tracking-[0.3em] ml-4">
+                    EMAIL {esCurso ? '(OBLIGATORIO)' : '(OPCIONAL PARA RECIBIR EL QR)'}
+                  </label>
+                  <input 
+                    type="email" placeholder="tu@email.com" 
+                    className="w-full p-5 bg-kalian-gold/5 rounded-2xl font-bold outline-none border border-kalian-gold/10 focus:border-kalian-gold transition-all text-kalian-cream" 
+                    value={form.email} 
+                    onChange={e => setForm({...form, email: e.target.value})} 
+                    required={esCurso}
+                    disabled={!!socioData}
+                  />
+                </div>
+
+                {!esCurso && (
+                  <div className="space-y-2">
+                    <label className="text-[9px] font-black text-kalian-gold/40 uppercase tracking-[0.3em] ml-4">CLAVE DE DESCUENTO</label>
+                    <div className="relative">
+                      <input 
+                        type="text" placeholder="¿TIENES UN CUPÓN?" 
+                        className={`w-full p-5 bg-kalian-gold/5 rounded-2xl font-black uppercase outline-none border transition-all text-xl ${claveValida ? 'border-emerald-500 text-emerald-500' : 'border-kalian-gold/10 focus:border-kalian-gold text-kalian-gold'}`} 
+                        value={claveInput} 
+                        onChange={e => setClaveInput(e.target.value.toUpperCase())} 
+                      />
+                      {claveValida && <span className="absolute right-5 top-1/2 -translate-y-1/2 text-emerald-500 text-xl">✓</span>}
+                    </div>
+                  </div>
+                )}
+
+                {!esCurso && (
+                  <div className="flex justify-between items-center bg-kalian-gold/5 p-6 rounded-3xl border border-kalian-gold/10">
+                    <div>
+                      <span className="text-[9px] font-black uppercase text-kalian-gold/40 block mb-1 tracking-widest">Acompañantes</span>
+                      <span className="text-[10px] text-kalian-gold/20 font-bold italic uppercase">Máximo {item.max_acompanantes || 4} personas</span>
+                    </div>
+                    <div className="flex items-center gap-4">
+                      <button 
+                        type="button"
+                        onClick={() => setForm(f => ({...f, acompañantes: Math.max(0, f.acompañantes - 1)}))}
+                        className="w-10 h-10 bg-kalian-gold/10 rounded-xl text-kalian-gold font-black text-xl hover:bg-kalian-gold hover:text-black transition-all"
+                      >-</button>
+                      <span className="text-2xl font-black text-kalian-gold w-8 text-center">{form.acompañantes}</span>
+                      <button 
+                        type="button"
+                        onClick={() => setForm(f => ({...f, acompañantes: Math.min(item.max_acompanantes || 4, f.acompañantes + 1)}))}
+                        className="w-10 h-10 bg-kalian-gold/10 rounded-xl text-kalian-gold font-black text-xl hover:bg-kalian-gold hover:text-black transition-all"
+                      >+</button>
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              {/* DESGLOSE DE PRECIO */}
+              <div className="bg-black/40 p-8 rounded-[2.5rem] border border-kalian-gold/10 space-y-4 shadow-inner">
+                <div className="flex justify-between items-center text-[10px] font-black uppercase text-kalian-gold/40 tracking-[0.2em]">
+                  <span>Aportación Base</span>
+                  <span>{precioBase}€</span>
+                </div>
+                {precioCalculado.esSocio && (
+                  <div className="flex justify-between items-center text-[10px] font-black uppercase text-kalian-gold tracking-[0.2em]">
+                    <span>Descuento Soci@s</span>
+                    <span>{item.precio_descuento}€</span>
+                  </div>
+                )}
+                {precioCalculado.esClave && (
+                  <div className="flex justify-between items-center text-[10px] font-black uppercase text-emerald-500 tracking-[0.2em]">
+                    <span>Descuento Cupón</span>
+                    <span>{item.precio_clave}€</span>
+                  </div>
+                )}
+                <div className="flex justify-between items-center pt-4 border-t border-kalian-gold/10">
+                  <span className="text-sm font-black uppercase text-kalian-cream tracking-[0.3em]">Total</span>
+                  <span className="text-5xl kalian-poster-text text-kalian-gold italic drop-shadow-lg">{precioCalculado.total}€</span>
+                </div>
+                <p className="text-[9px] text-kalian-gold/30 font-black uppercase text-center pt-2 tracking-widest leading-relaxed">
+                  {precioCalculado.esSocio ? `✓ DESCUENTO APLICADO (SOCI@S ${getNombreCategoria(categoriaActividad).toUpperCase()})` : 
+                   precioCalculado.esClave ? '✓ DESCUENTO APLICADO POR CUPÓN' :
+                   categoriaActividad !== 'ninguno' ? `DESCUENTO DISPONIBLE PARA SOCI@S ${getNombreCategoria(categoriaActividad).toUpperCase()}` :
+                   'SIN DESCUENTO PARA SOCI@S'}
+                </p>
+              </div>
+
+              <button 
+                disabled={cargando}
+                className="w-full bg-kalian-gold text-black p-6 rounded-2xl kalian-poster-text text-2xl tracking-widest hover:bg-white transition-all flex items-center justify-center gap-4 active:scale-95 shadow-2xl shadow-kalian-gold/20 disabled:opacity-50"
+              >
+                {cargando ? 'PROCESANDO...' : (esCurso ? 'CONSULTAR INSCRIPCIÓN' : 'CONFIRMAR RESERVA')}
+              </button>
+              
+              <p className="text-center text-[9px] text-kalian-gold/20 font-black uppercase tracking-[0.4em]">
+                El pago se realizará en efectivo en el centro
+              </p>
+            </form>
+          )}
+        </div>
+      </div>
     </div>
   );
 };

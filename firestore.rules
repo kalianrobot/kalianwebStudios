@@ -98,6 +98,25 @@ service cloud.firestore {
       allow read: if isAdmin();
     }
 
+    // ASISTENCIA Y CAJA: Solo admin.
+    match /asistencia_eventos/{asistenciaId} {
+      allow read, write: if isAdmin();
+    }
+    match /caja_eventos/{mesAnio} {
+      allow read, write: if isAdmin();
+    }
+
+    // SOLICITUDES CURSOS: Creación pública con validación básica. Lectura admin o profesor.
+    match /solicitudes_cursos/{solicitudId} {
+      allow create: if request.resource.data.nombre is string && 
+                      request.resource.data.nombre.size() > 0 &&
+                      isValidEmail(request.resource.data.email) &&
+                      request.resource.data.telefono is string &&
+                      request.resource.data.tipo in ['consulta', 'solicitud_inscripcion'] &&
+                      (request.resource.data.tipo == 'consulta' || (request.resource.data.dni is string && request.resource.data.dni.size() > 0));
+      allow read, update, delete: if isAdmin() || isTeacher();
+    }
+
     // METADATA: Almacenamiento total
     match /metadata/storage {
       allow read: if isAuthenticated();

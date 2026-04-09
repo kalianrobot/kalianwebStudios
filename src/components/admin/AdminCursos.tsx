@@ -4,7 +4,7 @@ import { collection, setDoc, doc, getDocs, deleteDoc, query, orderBy, DocumentDa
 import { Link } from 'react-router-dom';
 
 import { createSocioAuth } from '../../lib/adminAuth';
-import { sendWelcomeEmail } from '../../lib/brevoService';
+import { sendWelcomeEmail, sendMembershipUpdateEmail } from '../../lib/brevoService';
 
 const AdminCursos = () => {
   const [cursos, setCursos] = useState<DocumentData[]>([]);
@@ -12,21 +12,29 @@ const AdminCursos = () => {
   const [msg, setMsg] = useState('');
   const [form, setForm] = useState({ 
     titulo: '', 
-    precio: '', 
-    tiene_descuento: false,
-    precio_descuento: '',
-    precioTipo: 'mes', // 'mes' o 'clase'
     categoria: 'musica', 
+    subcategoria: '',
+    modalidades: [{ tipo: 'presencial', frecuencia: 'semanal', precio: '' }],
     fechaInicio: '2025-09-01', 
     fechaFin: '2026-06-30', 
     aforo_disponible: true, 
     horario: '',
-    tipoClase: 'presencial', // 'presencial' o 'online'
-    frecuencia: 'semanal', // 'semanal', 'quincenal', 'mensual'
     profesorId: '',
     profesorNombre: '',
-    descripcion: ''
+    descripcion: '',
+    ventajas: ''
   });
+
+  const subcategorias = {
+    musica: ['Instrumento', 'Combo', 'Armonía moderna', 'Big Band', 'Master classes'],
+    danza: ['Bachata', 'Bachata coreográfico', 'Salsa'],
+    local: []
+  };
+
+  const getVentajasText = (cat: string) => {
+    const catName = cat === 'musica' ? 'Music is Cool' : cat === 'danza' ? 'Club de Baile' : 'Kalian Hub';
+    return `Este curso incluye el alta como soci@ de ${catName} y acceso a descuentos en actividades de la misma categoría.`;
+  };
   const [editando, setEditando] = useState<string | null>(null);
   const [cursoSeleccionado, setCursoSeleccionado] = useState<string | null>(null);
   const [solicitudes, setSolicitudes] = useState<DocumentData[]>([]);
@@ -54,8 +62,8 @@ const AdminCursos = () => {
       const cursoData = { 
         ...form, 
         profesorNombre: prof ? prof.nombre : form.profesorNombre,
-        precio: Number(form.precio),
-        precio_descuento: form.tiene_descuento ? Number(form.precio_descuento) : 0,
+        modalidades: form.modalidades.map(m => ({ ...m, precio: Number(m.precio) })),
+        ventajas: getVentajasText(form.categoria),
         aforo_actual: editando ? (cursos.find(c => c.id === editando)?.aforo_actual || 0) : 0,
         alumnos: editando ? (cursos.find(c => c.id === editando)?.alumnos || []) : [],
       };
@@ -74,20 +82,17 @@ const AdminCursos = () => {
       setTimeout(() => setMsg(''), 3000);
       setForm({ 
         titulo: '', 
-        precio: '', 
-        tiene_descuento: false,
-        precio_descuento: '',
-        precioTipo: 'mes',
         categoria: 'musica', 
+        subcategoria: '',
+        modalidades: [{ tipo: 'presencial', frecuencia: 'semanal', precio: '' }],
         fechaInicio: '2025-09-01', 
         fechaFin: '2026-06-30', 
         aforo_disponible: true, 
         horario: '',
-        tipoClase: 'presencial',
-        frecuencia: 'semanal',
         profesorId: '',
         profesorNombre: '',
-        descripcion: ''
+        descripcion: '',
+        ventajas: ''
       });
       setEditando(null);
       fetchCursos();
@@ -122,7 +127,7 @@ const AdminCursos = () => {
             // Send welcome email via Brevo
             // Note: Since we can't get the link string from client SDK, we inform the user
             // that they will receive a separate email from Firebase for activation.
-            await sendWelcomeEmail(email, nombre || "Socio Kalian", "https://kalian.es/login"); 
+            await sendWelcomeEmail(email, nombre || "Soci@s Kalian", "https://kalian.es/login"); 
             // We use the login link as a fallback, explaining in the email that they need to check their inbox for the activation link.
           } catch (err) {
             console.error("Error creating auth user or sending email:", err);
@@ -134,15 +139,20 @@ const AdminCursos = () => {
           nombre: nombre || "Pendiente de registro",
           email: email || "",
           uid: realUid,
-          expiraciones: { [categoria]: fechaFin },
+          membresias: { [categoria]: fechaFin },
+          estado: 'activo',
           cursos: [cursoId], // Link to course
           verificado: true,
           fechaAlta: new Date().toISOString()
         });
+
+        // Trigger membership update email for new socio
+        await sendMembershipUpdateEmail(email || "", nombre || "Soci@s Kalian", realUid, { [categoria]: fechaFin });
       } else {
         // 2. Si existe, actualizamos su vigencia y datos si vienen de solicitud
         const updateData: any = {
-          [`expiraciones.${categoria}`]: fechaFin,
+          [`membresias.${categoria}`]: fechaFin,
+          estado: 'activo',
           cursos: arrayUnion(cursoId), // Link to course
           verificado: true
         };
@@ -150,6 +160,13 @@ const AdminCursos = () => {
         if (email) updateData.email = email;
         
         await updateDoc(socioRef, updateData);
+
+        // Trigger membership update email
+        const finalSocioSnap = await getDoc(socioRef);
+        if (finalSocioSnap.exists()) {
+          const sData = finalSocioSnap.data();
+          await sendMembershipUpdateEmail(sData.email, sData.nombre, sData.uid, sData.membresias || {});
+        }
       }
 
       // 3. Añadir al curso y subir aforo
@@ -238,27 +255,46 @@ const AdminCursos = () => {
 
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-1">
-                <label className="text-[9px] font-black uppercase text-slate-400 ml-4">Profesor/a</label>
+                <label className="text-[9px] font-black uppercase text-slate-400 ml-4">Categoría</label>
                 <select 
                   className="w-full p-5 bg-slate-50 rounded-2xl font-black uppercase border border-slate-200 text-slate-900" 
-                  value={form.profesorId} 
-                  onChange={e => setForm({...form, profesorId: e.target.value})} 
-                  required
+                  value={form.categoria} 
+                  onChange={e => setForm({...form, categoria: e.target.value as any, subcategoria: ''})}
                 >
-                  <option value="">Seleccionar Profesor</option>
-                  {profesores.map(p => (
-                    <option key={p.id} value={p.id}>{p.nombre}</option>
-                  ))}
-                </select>
-              </div>
-              <div className="space-y-1">
-                <label className="text-[9px] font-black uppercase text-slate-400 ml-4">Categoría</label>
-                <select className="w-full p-5 bg-slate-50 rounded-2xl font-black uppercase border border-slate-200 text-slate-900" value={form.categoria} onChange={e => setForm({...form, categoria: e.target.value})}>
                   <option value="musica">🎸 Music is cool</option>
                   <option value="danza">💃 Club de baile</option>
                   <option value="local">🏠 Locales</option>
                 </select>
               </div>
+              <div className="space-y-1">
+                <label className="text-[9px] font-black uppercase text-slate-400 ml-4">Subcategoría</label>
+                <select 
+                  className="w-full p-5 bg-slate-50 rounded-2xl font-black uppercase border border-slate-200 text-slate-900" 
+                  value={form.subcategoria} 
+                  onChange={e => setForm({...form, subcategoria: e.target.value})}
+                  required
+                >
+                  <option value="">Seleccionar...</option>
+                  {subcategorias[form.categoria as keyof typeof subcategorias].map(sub => (
+                    <option key={sub} value={sub}>{sub}</option>
+                  ))}
+                </select>
+              </div>
+            </div>
+
+            <div className="space-y-1">
+              <label className="text-[9px] font-black uppercase text-slate-400 ml-4">Profesor/a</label>
+              <select 
+                className="w-full p-5 bg-slate-50 rounded-2xl font-black uppercase border border-slate-200 text-slate-900" 
+                value={form.profesorId} 
+                onChange={e => setForm({...form, profesorId: e.target.value})} 
+                required
+              >
+                <option value="">Seleccionar Profesor</option>
+                {profesores.map(p => (
+                  <option key={p.id} value={p.id}>{p.nombre}</option>
+                ))}
+              </select>
             </div>
 
             <div className="space-y-1">
@@ -266,21 +302,67 @@ const AdminCursos = () => {
               <input type="text" placeholder="ej: Lunes y Martes 14:00-15:00" className="w-full p-5 bg-slate-50 rounded-2xl outline-none border border-slate-200 text-slate-900" value={form.horario} onChange={e => setForm({...form, horario: e.target.value})} required />
             </div>
 
-            <div className="grid grid-cols-2 gap-4">
-              <div className="space-y-1">
-                <label className="text-[9px] font-black uppercase text-slate-400 ml-4">Tipo de Clase</label>
-                <select className="w-full p-5 bg-slate-50 rounded-2xl font-black uppercase border border-slate-200 text-slate-900" value={form.tipoClase} onChange={e => setForm({...form, tipoClase: e.target.value})}>
-                  <option value="presencial">Presencial</option>
-                  <option value="online">Online</option>
-                </select>
+            <div className="space-y-4">
+              <div className="flex justify-between items-center ml-4">
+                <label className="text-[9px] font-black uppercase text-slate-400">Configurador de Modalidades</label>
+                <button 
+                  type="button"
+                  onClick={() => setForm({...form, modalidades: [...form.modalidades, { tipo: 'presencial', frecuencia: 'semanal', precio: '' }]})}
+                  className="text-[10px] font-black text-indigo-600 uppercase tracking-widest"
+                >+ Añadir Fila</button>
               </div>
-              <div className="space-y-1">
-                <label className="text-[9px] font-black uppercase text-slate-400 ml-4">Frecuencia</label>
-                <select className="w-full p-5 bg-slate-50 rounded-2xl font-black uppercase border border-slate-200 text-slate-900" value={form.frecuencia} onChange={e => setForm({...form, frecuencia: e.target.value})}>
-                  <option value="semanal">Semanal</option>
-                  <option value="quincenal">Quincenal</option>
-                  <option value="mensual">Mensual</option>
-                </select>
+              
+              <div className="space-y-3">
+                {form.modalidades.map((mod, idx) => (
+                  <div key={idx} className="grid grid-cols-3 gap-2 bg-slate-50 p-4 rounded-2xl border border-slate-200 relative group">
+                    <select 
+                      className="p-3 bg-white rounded-xl text-[10px] font-black uppercase border border-slate-100"
+                      value={mod.tipo}
+                      onChange={e => {
+                        const newMods = [...form.modalidades];
+                        newMods[idx].tipo = e.target.value;
+                        setForm({...form, modalidades: newMods});
+                      }}
+                    >
+                      <option value="presencial">Presencial</option>
+                      <option value="online">Online</option>
+                    </select>
+                    <select 
+                      className="p-3 bg-white rounded-xl text-[10px] font-black uppercase border border-slate-100"
+                      value={mod.frecuencia}
+                      onChange={e => {
+                        const newMods = [...form.modalidades];
+                        newMods[idx].frecuencia = e.target.value;
+                        setForm({...form, modalidades: newMods});
+                      }}
+                    >
+                      <option value="semanal">Semanal</option>
+                      <option value="quincenal">Quincenal</option>
+                      <option value="mensual">Mensual</option>
+                    </select>
+                    <div className="relative">
+                      <input 
+                        type="number" 
+                        placeholder="€"
+                        className="w-full p-3 bg-white rounded-xl text-[10px] font-black border border-slate-100"
+                        value={mod.precio}
+                        onChange={e => {
+                          const newMods = [...form.modalidades];
+                          newMods[idx].precio = e.target.value;
+                          setForm({...form, modalidades: newMods});
+                        }}
+                        required
+                      />
+                      {form.modalidades.length > 1 && (
+                        <button 
+                          type="button"
+                          onClick={() => setForm({...form, modalidades: form.modalidades.filter((_, i) => i !== idx)})}
+                          className="absolute -right-2 -top-2 w-5 h-5 bg-red-500 text-white rounded-full text-[8px] flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity"
+                        >×</button>
+                      )}
+                    </div>
+                  </div>
+                ))}
               </div>
             </div>
 
@@ -295,45 +377,26 @@ const AdminCursos = () => {
               </div>
             </div>
 
-            <div className="grid grid-cols-2 gap-4">
-              <div className="space-y-1">
-                <label className="text-[10px] font-black uppercase text-slate-400 ml-4">Precio (€)</label>
-                <div className="flex gap-2">
-                  <input type="number" placeholder="Precio" className="flex-1 p-5 bg-slate-50 rounded-2xl outline-none font-bold border border-slate-200 text-slate-900" value={form.precio} onChange={e => setForm({...form, precio: e.target.value})} required />
-                  <select className="p-5 bg-slate-50 rounded-2xl font-black uppercase border border-slate-200 text-slate-900" value={form.precioTipo} onChange={e => setForm({...form, precioTipo: e.target.value})}>
-                    <option value="mes">/mes</option>
-                    <option value="clase">/clase</option>
-                  </select>
-                </div>
-              </div>
-              <div className="space-y-1">
-                <label className="text-[10px] font-black uppercase text-slate-400 ml-4">Disponibilidad</label>
-                <button 
-                  type="button"
-                  onClick={() => setForm({...form, aforo_disponible: !form.aforo_disponible})}
-                  className={`w-full p-5 rounded-2xl font-black uppercase tracking-widest transition-all ${form.aforo_disponible ? 'bg-emerald-100 text-emerald-600 border-emerald-200' : 'bg-red-100 text-red-600 border-red-200'} border`}
-                >
-                  {form.aforo_disponible ? 'Plazas Libres' : 'Sin Plazas'}
-                </button>
-              </div>
+            <div className="space-y-1">
+              <label className="text-[10px] font-black uppercase text-slate-400 ml-4">Disponibilidad</label>
+              <button 
+                type="button"
+                onClick={() => setForm({...form, aforo_disponible: !form.aforo_disponible})}
+                className={`w-full p-5 rounded-2xl font-black uppercase tracking-widest transition-all ${form.aforo_disponible ? 'bg-emerald-100 text-emerald-600 border-emerald-200' : 'bg-red-100 text-red-600 border-red-200'} border`}
+              >
+                {form.aforo_disponible ? 'Plazas Libres' : 'Sin Plazas'}
+              </button>
             </div>
 
             <div className="grid grid-cols-2 gap-4">
               <div className="flex items-center gap-4 bg-slate-50 p-5 rounded-2xl border border-slate-200">
-                <input 
-                  type="checkbox" 
-                  className="w-6 h-6 rounded-lg accent-slate-900" 
-                  checked={form.tiene_descuento} 
-                  onChange={e => setForm({...form, tiene_descuento: e.target.checked})} 
-                />
-                <p className="text-[10px] font-black uppercase text-slate-900 tracking-widest">¿Descuento Soci@s?</p>
+                <p className="text-[10px] font-black uppercase text-slate-900 tracking-widest">Branding de Ventajas</p>
               </div>
-              {form.tiene_descuento && (
-                <div className="space-y-1">
-                  <label className="text-[10px] font-black uppercase text-slate-400 ml-4">Precio Soci@s (€)</label>
-                  <input type="number" placeholder="Precio Soci@s" className="w-full p-5 bg-slate-50 rounded-2xl outline-none border border-slate-200 text-slate-900 font-bold" value={form.precio_descuento} onChange={e => setForm({...form, precio_descuento: e.target.value})} required />
-                </div>
-              )}
+              <div className="bg-slate-50 p-5 rounded-2xl border border-slate-200">
+                <p className="text-[9px] text-slate-400 italic leading-relaxed">
+                  {getVentajasText(form.categoria)}
+                </p>
+              </div>
             </div>
 
             <div className="space-y-1">
@@ -351,9 +414,18 @@ const AdminCursos = () => {
                   onClick={() => {
                     setEditando(null);
                     setForm({ 
-                      titulo: '', precio: '', tiene_descuento: false, precio_descuento: '', precioTipo: 'mes', categoria: 'musica', 
-                      fechaInicio: '2025-09-01', fechaFin: '2026-06-30', aforo_disponible: true, 
-                      horario: '', tipoClase: 'presencial', frecuencia: 'semanal', profesor: '', descripcion: '' 
+                      titulo: '', 
+                      categoria: 'musica', 
+                      subcategoria: '',
+                      modalidades: [{ tipo: 'presencial', frecuencia: 'semanal', precio: '' }],
+                      fechaInicio: '2025-09-01', 
+                      fechaFin: '2026-06-30', 
+                      aforo_disponible: true, 
+                      horario: '',
+                      profesorId: '',
+                      profesorNombre: '',
+                      descripcion: '',
+                      ventajas: ''
                     });
                   }}
                   className="bg-slate-200 text-slate-600 px-8 rounded-[2rem] font-black uppercase"
@@ -376,7 +448,13 @@ const AdminCursos = () => {
                     <p className="text-[10px] text-indigo-500 font-black mt-1 uppercase tracking-widest">{c.horario} | {c.profesorNombre || c.profesor}</p>
                     <p className="text-[8px] text-slate-300 font-mono mt-1">ID Prof: {c.profesorId || 'SIN ID'}</p>
                     <p className="text-[10px] text-slate-400 font-bold mt-2 uppercase tracking-widest">{c.fechaInicio} al {c.fechaFin}</p>
-                    <p className="text-[10px] text-slate-400 font-bold mt-1 uppercase tracking-widest">{c.precio}€/{c.precioTipo || 'mes'} | {c.tipoClase} | {c.frecuencia}</p>
+                    <div className="mt-2 space-y-1">
+                      {c.modalidades?.map((m: any, i: number) => (
+                        <p key={i} className="text-[9px] text-slate-500 font-bold uppercase tracking-widest">
+                          {m.tipo} | {m.frecuencia} | {m.precio}€
+                        </p>
+                      ))}
+                    </div>
                   </div>
                   <div className="text-right">
                     <p className={`text-xl font-black italic ${c.aforo_disponible ? 'text-emerald-500' : 'text-red-500'}`}>
@@ -425,18 +503,17 @@ const AdminCursos = () => {
                           setEditando(c.id);
                           setForm({
                             titulo: c.titulo,
-                            precio: c.precio.toString(),
-                            precioTipo: c.precioTipo || 'mes',
                             categoria: c.categoria,
+                            subcategoria: c.subcategoria || '',
+                            modalidades: c.modalidades || [{ tipo: 'presencial', frecuencia: 'semanal', precio: '' }],
                             fechaInicio: c.fechaInicio,
                             fechaFin: c.fechaFin,
                             aforo_disponible: c.aforo_disponible !== false,
                             horario: c.horario,
-                            tipoClase: c.tipoClase || 'presencial',
-                            frecuencia: c.frecuencia || 'semanal',
                             profesorId: c.profesorId || '',
                             profesorNombre: c.profesorNombre || c.profesor || '',
-                            descripcion: c.descripcion || ''
+                            descripcion: c.descripcion || '',
+                            ventajas: c.ventajas || ''
                           });
                           window.scrollTo({ top: 0, behavior: 'smooth' });
                         }}

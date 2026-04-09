@@ -77,7 +77,7 @@ const LoginSocio = () => {
       </div>
 
       <div className="bg-black border border-kalian-gold/20 p-12 rounded-[3.5rem] w-full max-w-md shadow-2xl text-kalian-cream relative z-10">
-        <Link to="/" className="text-kalian-gold/40 font-black text-[10px] uppercase tracking-[0.3em] hover:text-kalian-gold transition-colors">← Volver al Inicio</Link>
+        <Link to="/" className="text-kalian-gold/70 font-black text-[10px] uppercase tracking-[0.3em] hover:text-kalian-gold transition-colors">← Volver al Inicio</Link>
         <h2 className="text-6xl kalian-poster-text text-kalian-gold mt-6 mb-10 leading-none whitespace-pre-line tracking-tight">
           {"ÁREA\nSOCI@S"}
         </h2>
@@ -108,7 +108,7 @@ const LoginSocio = () => {
 
         <form onSubmit={manejarSubmit} className="space-y-6">
           <div className="space-y-2">
-            <p className="text-[9px] font-black text-kalian-gold/40 uppercase tracking-[0.4em] ml-4">Email</p>
+            <p className="text-[9px] font-black text-kalian-gold/70 uppercase tracking-[0.4em] ml-4">Email</p>
             <input 
               type="email" 
               placeholder="tu@email.com" 
@@ -120,7 +120,7 @@ const LoginSocio = () => {
           </div>
 
           <div className="space-y-2">
-            <p className="text-[9px] font-black text-kalian-gold/40 uppercase tracking-[0.4em] ml-4">Contraseña</p>
+            <p className="text-[9px] font-black text-kalian-gold/70 uppercase tracking-[0.4em] ml-4">Contraseña</p>
             <input 
               type="password" 
               placeholder="••••••••" 
@@ -143,13 +143,13 @@ const LoginSocio = () => {
           <button 
             onClick={resetPassword}
             disabled={cargando}
-            className="text-kalian-gold/40 font-black text-[9px] uppercase tracking-[0.3em] hover:text-kalian-gold transition-colors border-b border-transparent hover:border-kalian-gold/40 pb-1"
+            className="text-kalian-gold/70 font-black text-[9px] uppercase tracking-[0.3em] hover:text-kalian-gold transition-colors border-b border-transparent hover:border-kalian-gold/40 pb-1"
           >
             ¿Has olvidado tu contraseña?
           </button>
         </div>
 
-        <p className="mt-12 text-kalian-gold/30 font-black text-[9px] uppercase tracking-[0.3em] text-center leading-relaxed max-w-[280px] mx-auto">
+        <p className="mt-12 text-kalian-gold/60 font-black text-[9px] uppercase tracking-[0.3em] text-center leading-relaxed max-w-[280px] mx-auto">
           El alta de soci@s se realiza automáticamente al inscribirse en un curso o local.
         </p>
       </div>

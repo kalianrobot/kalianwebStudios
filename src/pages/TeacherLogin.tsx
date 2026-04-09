@@ -50,12 +50,12 @@ const TeacherLogin = () => {
         <h1 className="text-5xl kalian-poster-text text-kalian-gold text-center mb-8 uppercase italic leading-none">ACCESO <span className="text-kalian-cream">PROFESORES</span></h1>
         
         <div className="mb-8 text-center">
-          <Link to="/" className="text-kalian-gold/40 font-black text-[10px] uppercase tracking-[0.3em] hover:text-kalian-gold transition-colors">← Volver al Inicio</Link>
+          <Link to="/" className="text-kalian-gold/70 font-black text-[10px] uppercase tracking-[0.3em] hover:text-kalian-gold transition-colors">← Volver al Inicio</Link>
         </div>
 
         <form onSubmit={handleLogin} className="space-y-6">
           <div className="space-y-2">
-            <label className="text-[10px] font-black uppercase text-kalian-gold/40 ml-4 tracking-widest">Email de Profesor</label>
+            <label className="text-[10px] font-black uppercase text-kalian-gold/70 ml-4 tracking-widest">Email de Profesor</label>
             <input 
               type="email" 
               placeholder="profesor@kalian.es" 
@@ -67,7 +67,7 @@ const TeacherLogin = () => {
           </div>
 
           <div className="space-y-2">
-            <label className="text-[10px] font-black uppercase text-kalian-gold/40 ml-4 tracking-widest">Contraseña</label>
+            <label className="text-[10px] font-black uppercase text-kalian-gold/70 ml-4 tracking-widest">Contraseña</label>
             <input 
               type="password" 
               placeholder="••••••••" 
@@ -93,7 +93,7 @@ const TeacherLogin = () => {
           <button 
             onClick={handleReset}
             disabled={loading}
-            className="text-kalian-gold/40 font-black text-[9px] uppercase tracking-[0.3em] hover:text-kalian-gold transition-colors border-b border-transparent hover:border-kalian-gold/40 pb-1"
+            className="text-kalian-gold/70 font-black text-[9px] uppercase tracking-[0.3em] hover:text-kalian-gold transition-colors border-b border-transparent hover:border-kalian-gold/40 pb-1"
           >
             ¿Has olvidado tu contraseña?
           </button>

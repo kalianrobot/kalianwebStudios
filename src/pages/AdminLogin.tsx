@@ -56,7 +56,7 @@ const AdminLogin = () => {
 
         <form onSubmit={handleLogin} className="space-y-6">
           <div className="space-y-2">
-            <p className="text-[9px] font-black text-kalian-gold/40 uppercase tracking-[0.4em] ml-4">Contraseña de Staff</p>
+            <p className="text-[9px] font-black text-kalian-gold/70 uppercase tracking-[0.4em] ml-4">Contraseña de Staff</p>
             <input
               type="password"
               placeholder="••••••••"
@@ -78,7 +78,7 @@ const AdminLogin = () => {
 
         <button 
           onClick={() => navigate('/')}
-          className="w-full mt-10 text-[9px] font-black uppercase text-kalian-gold/30 hover:text-kalian-gold transition-all tracking-[0.3em]"
+          className="w-full mt-10 text-[9px] font-black uppercase text-kalian-gold/60 hover:text-kalian-gold transition-all tracking-[0.3em]"
         >
           ← VOLVER A LA WEB
         </button>

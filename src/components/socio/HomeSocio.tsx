@@ -28,6 +28,8 @@ export const HomeSocio = () => {
   const [mensajeSolicitud, setMensajeSolicitud] = useState('');
   const [showLegal, setShowLegal] = useState(false);
 
+  const [errorSeleccion, setErrorSeleccion] = useState<string | null>(null);
+
   const formatMeses = (inicio: string, fin: string) => {
     const meses = ["Enero", "Febrero", "Marzo", "Abril", "Mayo", "Junio", "Julio", "Agosto", "Septiembre", "Octubre", "Noviembre", "Diciembre"];
     try {
@@ -431,39 +433,78 @@ export const HomeSocio = () => {
                     <table className="w-full text-left text-[10px] uppercase tracking-widest font-black">
                       <thead>
                         <tr className="bg-kalian-gold/5 text-kalian-gold/70 border-b border-kalian-gold/10">
+                          <th className="p-4 w-10"></th>
                           <th className="p-4">Tipo</th>
                           <th className="p-4">Frecuencia</th>
                           <th className="p-4 text-right">Aportación</th>
                         </tr>
                       </thead>
                       <tbody className="divide-y divide-kalian-gold/5">
-                        {cursoDetalle.modalidades?.map((m: any, i: number) => (
-                          <tr key={i} className="text-kalian-cream/90">
-                            <td className="p-4">{m.tipo}</td>
-                            <td className="p-4">{m.frecuencia}</td>
-                            <td className="p-4 text-right font-black text-kalian-gold">{m.precio}€</td>
-                          </tr>
-                        ))}
+                        {cursoDetalle.modalidades?.map((m: any, i: number) => {
+                          const isSelected = modalidadSeleccionada[cursoDetalle.id]?.tipo === m.tipo && 
+                                           modalidadSeleccionada[cursoDetalle.id]?.frecuencia === m.frecuencia &&
+                                           modalidadSeleccionada[cursoDetalle.id]?.precio === m.precio;
+                          
+                          return (
+                            <tr 
+                              key={i} 
+                              className={`text-kalian-cream/90 cursor-pointer hover:bg-white/5 transition-colors ${isSelected ? 'bg-kalian-gold/5' : ''}`}
+                              onClick={() => {
+                                setModalidadSeleccionada({ ...modalidadSeleccionada, [cursoDetalle.id]: m });
+                                setErrorSeleccion(null);
+                              }}
+                            >
+                              <td className="p-4">
+                                <div className={`w-5 h-5 rounded-full border-2 flex items-center justify-center transition-all ${isSelected ? 'border-kalian-gold bg-kalian-gold' : 'border-white/20'}`}>
+                                  {isSelected && <div className="w-2 h-2 bg-black rounded-full"></div>}
+                                </div>
+                              </td>
+                              <td className="p-4">{m.tipo}</td>
+                              <td className="p-4">{m.frecuencia}</td>
+                              <td className="p-4 text-right font-black text-kalian-gold">{m.precio}€</td>
+                            </tr>
+                          );
+                        })}
                       </tbody>
                     </table>
                   </div>
                 </div>
               </div>
 
+              {errorSeleccion && (
+                <div className="bg-red-500/10 border border-red-500/20 p-4 rounded-2xl animate-in fade-in slide-in-from-top-2 duration-300">
+                  <p className="text-red-500 text-center font-black uppercase text-[10px] tracking-widest">
+                    ⚠️ {errorSeleccion}
+                  </p>
+                </div>
+              )}
+
               <div className="flex gap-4 pt-4">
                 <button 
                   onClick={() => {
-                    setSolicitudCurso({ curso: cursoDetalle, tipo: 'consulta' });
+                    const mod = modalidadSeleccionada[cursoDetalle.id];
+                    if (!mod) {
+                      setErrorSeleccion("Por favor, selecciona una modalidad de la tabla superior para poder informarte.");
+                      return;
+                    }
+                    setSolicitudCurso({ curso: cursoDetalle, tipo: 'consulta', modalidad: mod });
                     setCursoDetalle(null);
+                    setErrorSeleccion(null);
                   }}
-                  className="flex-1 bg-white/5 text-kalian-gold border border-kalian-gold/20 p-5 rounded-2xl kalian-poster-text text-lg tracking-widest hover:bg-kalian-gold/10 transition-all"
+                  className="flex-1 bg-kalian-gold/20 text-kalian-gold border border-kalian-gold/40 p-5 rounded-2xl kalian-poster-text text-lg tracking-widest hover:bg-kalian-gold hover:text-black transition-all shadow-lg shadow-kalian-gold/5"
                 >
                   Solicitar Info
                 </button>
                 <button 
                   onClick={() => {
-                    setSolicitudCurso({ curso: cursoDetalle, tipo: 'solicitud_inscripcion' });
+                    const mod = modalidadSeleccionada[cursoDetalle.id];
+                    if (!mod) {
+                      setErrorSeleccion("Por favor, selecciona una modalidad de la tabla superior para realizar la inscripción.");
+                      return;
+                    }
+                    setSolicitudCurso({ curso: cursoDetalle, tipo: 'solicitud_inscripcion', modalidad: mod });
                     setCursoDetalle(null);
+                    setErrorSeleccion(null);
                   }}
                   disabled={cursoDetalle.aforo_disponible === false}
                   className={`flex-1 p-5 rounded-2xl kalian-poster-text text-lg tracking-widest transition-all shadow-xl ${cursoDetalle.aforo_disponible === false ? 'bg-slate-800 text-slate-500 cursor-not-allowed' : 'bg-kalian-gold text-black hover:bg-white shadow-kalian-gold/20'}`}

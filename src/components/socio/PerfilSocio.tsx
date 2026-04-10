@@ -82,13 +82,16 @@ const PerfilSocio = () => {
             const evSnap = await getDoc(doc(db, r.esCurso ? "cursos" : "eventos", r.eventoId));
             if (!evSnap.exists()) return null; // BDD: Si el evento se borra, la reserva desaparece
             
-            const fechaAct = r.fechaActividad || r.fechaReserva?.split('T')[0];
+            const evData = evSnap.data();
+            const fechaAct = r.fechaActividad || evData.fecha || evData.fechaFin || r.fechaReserva?.split('T')[0];
+            
             return { 
               ...r, 
               titulo: r.eventoTitulo,
               tipo: r.esCurso ? 'CURSO' : 'EVENTO',
               fechaActividad: fechaAct,
-              activa: fechaAct >= hoy
+              activa: new Date(fechaAct) >= new Date(),
+              max_acompanantes: evData.max_acompanantes || 4
             };
           });
 
@@ -156,19 +159,33 @@ const PerfilSocio = () => {
     return cat;
   };
 
+  const puedeAñadirInvitados = (reserva: any) => {
+    if (reserva.esCurso) return false;
+    const fechaEvento = new Date(reserva.fechaActividad);
+    const ahora = new Date();
+    const diferenciaMs = fechaEvento.getTime() - ahora.getTime();
+    const diferenciaHoras = diferenciaMs / (1000 * 60 * 60);
+    return diferenciaHoras > 2;
+  };
+
   const cancelarReserva = async (reserva: any) => {
-    if (!window.confirm("¿Seguro que quieres cancelar esta reserva?")) return;
+    if (!window.confirm("⚠️ ¿Seguro que quieres cancelar esta reserva? Esta acción liberará tus plazas y no se puede deshacer.")) return;
     
     try {
       const esCurso = reserva.esCurso;
       const coleccionActividad = esCurso ? "cursos" : "eventos";
       const docRef = doc(db, coleccionActividad, reserva.eventoId);
       
-      // Restar aforo
-      const numPlazas = 1 + (reserva.acompañantes || 0);
-      await updateDoc(docRef, {
-        aforo_actual: increment(-numPlazas)
-      });
+      // Restar solo lo que NO ha entrado todavía (aforo_reservado)
+      const totalReserva = 1 + (reserva.acompañantes || 0);
+      const yaIngresados = reserva.asistentes_ingresados || 0;
+      const pendientes = Math.max(0, totalReserva - yaIngresados);
+      
+      if (pendientes > 0) {
+        await updateDoc(docRef, {
+          aforo_reservado: increment(-pendientes)
+        });
+      }
 
       // Borrar reserva
       await deleteDoc(doc(db, "reservas", reserva.id));
@@ -183,6 +200,26 @@ const PerfilSocio = () => {
   const actualizarAcompañantes = async (reserva: any, nuevoNum: number) => {
     if (nuevoNum < 0) return;
     
+    const esAumento = nuevoNum > (reserva.acompañantes || 0);
+    
+    if (esAumento && !puedeAñadirInvitados(reserva)) {
+      alert("⚠️ Lo sentimos, no se pueden añadir más invitados a menos de 2 horas del evento. Solo se permite reducir el número o cancelar.");
+      return;
+    }
+
+    const maxPermitidos = reserva.max_acompanantes || 4;
+    if (nuevoNum > maxPermitidos) {
+      alert(`⚠️ El máximo de acompañantes permitido para este evento es ${maxPermitidos}.`);
+      return;
+    }
+
+    const yaIngresados = reserva.asistentes_ingresados || 0;
+    const nuevoTotal = 1 + nuevoNum;
+    if (nuevoTotal < yaIngresados) {
+      alert(`⚠️ No puedes reducir el número de asistentes por debajo de los que ya han entrado (${yaIngresados}).`);
+      return;
+    }
+    
     try {
       const esCurso = reserva.esCurso;
       const coleccionActividad = esCurso ? "cursos" : "eventos";
@@ -195,25 +232,13 @@ const PerfilSocio = () => {
       }
 
       const dataActividad = snapDoc.data();
-      const aforoMax = esCurso ? dataActividad.aforo_total : dataActividad.aforo_max;
+      const aforoMax = Number(dataActividad.aforo_maximo || dataActividad.aforo_max || dataActividad.aforo_total || 0);
+      const aforoRes = Number(dataActividad.aforo_reservado || 0);
 
-      // Calcular ocupación actual (excluyendo la reserva actual para recalcular)
-      const qRes = query(collection(db, "reservas"), where("eventoId", "==", reserva.eventoId));
-      const snapRes = await getDocs(qRes);
-      
-      let ocupacionSinMi = 0;
-      snapRes.docs.forEach(d => {
-        if (d.id !== reserva.id) {
-          const rData = d.data();
-          // Cada reserva cuenta como 1 titular + acompañantes
-          ocupacionSinMi += (1 + (rData.acompañantes || 0));
-        }
-      });
+      const diferencia = nuevoNum - (reserva.acompañantes || 0);
 
-      const nuevaOcupacionTotal = ocupacionSinMi + 1 + nuevoNum;
-
-      if (nuevaOcupacionTotal > aforoMax) {
-        alert(`❌ No hay aforo suficiente. Capacidad máxima: ${aforoMax}. Espacio disponible: ${aforoMax - (ocupacionSinMi + 1)}`);
+      if (aforoRes + diferencia > aforoMax) {
+        alert(`❌ No hay aforo suficiente. Capacidad máxima: ${aforoMax}. Espacio disponible: ${Math.max(0, aforoMax - aforoRes)}`);
         return;
       }
 
@@ -222,9 +247,9 @@ const PerfilSocio = () => {
         acompañantes: nuevoNum
       });
 
-      // También actualizar aforo_actual en el evento/curso (opcional pero recomendado para consistencia)
+      // Actualizar aforo_reservado en el evento/curso
       await updateDoc(docRef, {
-        aforo_actual: ocupacionSinMi + 1 + nuevoNum
+        aforo_reservado: increment(diferencia)
       });
 
       setReservasActivas(prev => prev.map(r => r.id === reserva.id ? { ...r, acompañantes: nuevoNum } : r));
@@ -422,6 +447,9 @@ const PerfilSocio = () => {
               <div>
                 <p className="text-[9px] font-black text-black/40 uppercase tracking-widest">Acompañantes</p>
                 <p className="text-3xl kalian-poster-text mt-1">{res.acompañantes}</p>
+                {res.acompañantes >= res.max_acompanantes && (
+                  <p className="text-[8px] font-bold text-kalian-gold/60 uppercase mt-1">Límite alcanzado</p>
+                )}
               </div>
               <div className="flex gap-2">
                 <button 
@@ -429,9 +457,16 @@ const PerfilSocio = () => {
                   className="w-12 h-12 bg-white border border-black/10 rounded-2xl kalian-poster-text text-2xl hover:bg-black hover:text-kalian-gold transition-all shadow-sm">-</button>
                 <button 
                   onClick={() => actualizarAcompañantes(res, res.acompañantes + 1)}
-                  className="w-12 h-12 bg-white border border-black/10 rounded-2xl kalian-poster-text text-2xl hover:bg-black hover:text-kalian-gold transition-all shadow-sm">+</button>
+                  disabled={!puedeAñadirInvitados(res) || res.acompañantes >= res.max_acompanantes}
+                  className={`w-12 h-12 bg-white border border-black/10 rounded-2xl kalian-poster-text text-2xl transition-all shadow-sm ${(!puedeAñadirInvitados(res) || res.acompañantes >= res.max_acompanantes) ? 'opacity-20 cursor-not-allowed' : 'hover:bg-black hover:text-kalian-gold'}`}>+</button>
               </div>
             </div>
+            
+            {!puedeAñadirInvitados(res) && !res.esCurso && (
+              <p className="mt-4 text-[8px] font-black text-red-500/60 uppercase tracking-widest text-center">
+                Añadir invitados deshabilitado (faltan menos de 2h)
+              </p>
+            )}
             
             <button 
               onClick={() => cancelarReserva(res)}

@@ -8,7 +8,8 @@ interface AuthContextType {
   socioData: DocumentData | null;
   isAdmin: boolean;
   isTeacher: boolean;
-  role: 'admin' | 'teacher' | 'socio' | 'invitado' | 'invitado_registrado';
+  isPortero: boolean;
+  role: 'admin' | 'teacher' | 'portero' | 'socio' | 'invitado' | 'invitado_registrado';
   loading: boolean;
   loginAdmin: (email: string, password: string) => Promise<void>;
   loginTeacher: (email: string, password: string) => Promise<void>;
@@ -35,6 +36,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   const [userData, setUserData] = useState<DocumentData | null>(null);
   const [isAdmin, setIsAdmin] = useState(false);
   const [isTeacher, setIsTeacher] = useState(false);
+  const [isPortero, setIsPortero] = useState(false);
   const [loading, setLoading] = useState(true);
 
   const hoy = new Date().toISOString().split('T')[0];
@@ -92,13 +94,22 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
           if (userSnap.exists()) {
             const data = userSnap.data();
             setUserData(data);
-            setIsAdmin(data.role === 'admin');
-            setIsTeacher(data.role === 'teacher');
+            // Prioridad absoluta al email maestro
+            if (firebaseUser.email === "kalianrobot@gmail.com") {
+              setIsAdmin(true);
+              setIsTeacher(false);
+              setIsPortero(false);
+            } else {
+              setIsAdmin(data.role === 'admin');
+              setIsTeacher(data.role === 'teacher');
+              setIsPortero(data.role === 'portero');
+            }
           } else {
             // Si no existe en users, comprobamos si es el admin por defecto
             if (firebaseUser.email === "kalianrobot@gmail.com") {
               setIsAdmin(true);
               setIsTeacher(false);
+              setIsPortero(false);
               // Crear el documento de admin si no existe para asegurar que la colección existe
               await setDoc(userRef, {
                 uid: firebaseUser.uid,
@@ -109,6 +120,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
             } else {
               setIsAdmin(false);
               setIsTeacher(false);
+              setIsPortero(false);
             }
           }
 
@@ -135,6 +147,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         setUserData(null);
         setIsAdmin(false);
         setIsTeacher(false);
+        setIsPortero(false);
       }
       setLoading(false);
     });
@@ -142,9 +155,10 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     return () => unsubscribe();
   }, []);
 
-  const obtenerRolDinamico = (): 'admin' | 'teacher' | 'socio' | 'invitado' | 'invitado_registrado' => {
+  const obtenerRolDinamico = (): 'admin' | 'teacher' | 'portero' | 'socio' | 'invitado' | 'invitado_registrado' => {
     if (isAdmin) return 'admin';
     if (isTeacher) return 'teacher';
+    if (isPortero) return 'portero';
     if (!user) return 'invitado';
     
     const tieneContratoActivo = socioData?.estado === 'activo' || Object.values(socioData?.membresias || {})
@@ -160,6 +174,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     socioData, 
     isAdmin, 
     isTeacher,
+    isPortero,
     role, 
     loading, 
     loginAdmin, 

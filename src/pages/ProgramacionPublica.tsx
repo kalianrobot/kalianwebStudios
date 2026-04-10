@@ -32,6 +32,8 @@ const ProgramacionPublica = () => {
     danza: ['Bachata', 'Bachata coreográfico', 'Salsa']
   };
 
+  const [errorSeleccion, setErrorSeleccion] = useState<string | null>(null);
+
   const formatMeses = (inicio: string, fin: string) => {
     const meses = ["Enero", "Febrero", "Marzo", "Abril", "Mayo", "Junio", "Julio", "Agosto", "Septiembre", "Octubre", "Noviembre", "Diciembre"];
     try {
@@ -285,86 +287,51 @@ const ProgramacionPublica = () => {
                 </div>
               </div>
 
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+              <div className="space-y-6">
                 {cursos.filter(c => c.categoria === categoriaActiva && c.subcategoria === subcategoriaActiva).length > 0 ? (
-                  cursos.filter(c => c.categoria === categoriaActiva && c.subcategoria === subcategoriaActiva).map(c => (
-                    <div 
-                      key={c.id} 
-                      onClick={() => setCursoDetalle(c)}
-                      className="bg-black/40 border border-kalian-gold/10 rounded-[3rem] p-10 space-y-8 hover:border-kalian-gold/30 transition-all shadow-xl cursor-pointer group"
-                    >
-                      <div className="flex justify-between items-start">
-                        <div className="space-y-2">
-                          <span className="text-[9px] font-black uppercase text-kalian-gold/80 tracking-[0.3em]">{c.categoria} • {c.subcategoria}</span>
-                          <h3 className="text-4xl kalian-poster-text text-kalian-cream leading-none uppercase italic">{c.titulo}</h3>
-                        </div>
-                        <div className="text-right">
-                          <p className="text-3xl kalian-poster-text text-kalian-gold">
-                            {c.modalidades && c.modalidades.length > 0 
-                              ? `Desde ${Math.min(...c.modalidades.map((m: any) => m.precio))}€` 
-                              : `${c.precio || 0}€`}
-                          </p>
-                          <p className="text-[8px] font-black uppercase text-kalian-gold/80 tracking-widest">Aportación</p>
-                        </div>
-                      </div>
-                      
-                      <div className="space-y-4">
-                        <div className="bg-black/20 rounded-2xl overflow-hidden border border-kalian-gold/5">
-                          <table className="w-full text-left text-[10px] uppercase tracking-widest font-black">
-                            <thead>
-                              <tr className="bg-kalian-gold/10 text-kalian-gold/90 border-b border-kalian-gold/10">
-                                <th className="p-4">Tipo</th>
-                                <th className="p-4">Frecuencia</th>
-                                <th className="p-4 text-right">Aportación Mensual</th>
-                                <th className="p-4 w-10"></th>
-                              </tr>
-                            </thead>
-                            <tbody>
-                              {c.modalidades?.map((m: any, i: number) => (
-                                <tr 
-                                  key={i} 
-                                  onClick={() => setModalidadSeleccionada({ ...modalidadSeleccionada, [c.id]: m })}
-                                  className={`cursor-pointer hover:bg-kalian-gold/5 transition-colors border-b border-kalian-gold/5 ${modalidadSeleccionada[c.id] === m ? 'bg-kalian-gold/10 text-kalian-gold' : 'text-kalian-cream/90'}`}
-                                >
-                                  <td className="p-4">{m.tipo}</td>
-                                  <td className="p-4">{m.frecuencia}</td>
-                                  <td className="p-4 text-right font-black">{m.precio}€</td>
-                                  <td className="p-4">
-                                    <div className={`w-4 h-4 rounded-full border-2 flex items-center justify-center ${modalidadSeleccionada[c.id] === m ? 'border-kalian-gold' : 'border-kalian-gold/20'}`}>
-                                      {modalidadSeleccionada[c.id] === m && <div className="w-2 h-2 bg-kalian-gold rounded-full"></div>}
-                                    </div>
-                                  </td>
-                                </tr>
-                              ))}
-                            </tbody>
-                          </table>
-                        </div>
+                  cursos.filter(c => c.categoria === categoriaActiva && c.subcategoria === subcategoriaActiva).map(c => {
+                    const isFull = c.aforo_actual >= c.aforo_total;
 
-                        <div className="bg-kalian-gold/5 p-6 rounded-2xl border border-kalian-gold/10">
-                          <p className="text-[10px] text-kalian-gold/90 italic uppercase tracking-widest leading-relaxed">
-                            {c.ventajas || `Este curso incluye el alta como soci@ de ${academias.find(a => a.id === c.categoria)?.nombre || 'la academia'} y acceso a descuentos en actividades de la misma categoría.`}
-                          </p>
+                    return (
+                      <div 
+                        key={c.id} 
+                        className={`bg-black/40 border border-kalian-gold/10 rounded-3xl overflow-hidden transition-all duration-500 hover:border-kalian-gold/30 cursor-pointer`}
+                        onClick={() => setCursoDetalle(c)}
+                      >
+                        <div 
+                          className="p-8 md:p-10 flex flex-col md:flex-row justify-between items-center gap-8 group"
+                        >
+                          <div className="flex items-center gap-8 w-full md:w-auto">
+                            <div className={`w-20 h-20 rounded-2xl flex items-center justify-center text-4xl border border-kalian-gold/10 ${c.categoria === 'danza' ? 'bg-kalian-orange/10' : 'bg-kalian-gold/10'}`}>
+                              {c.categoria === 'danza' ? '💃' : '🎸'}
+                            </div>
+                            <div>
+                              <h3 className="text-3xl kalian-poster-text text-kalian-cream group-hover:text-kalian-gold transition-colors">{c.titulo}</h3>
+                              <p className="text-[9px] font-black text-kalian-gold/40 uppercase tracking-[0.3em] mt-3">Categoría: {c.categoria} • {c.subcategoria}</p>
+                            </div>
+                          </div>
+
+                          <div className="flex items-center gap-12 w-full md:w-auto justify-between md:justify-end">
+                            <div className="text-center">
+                              <p className={`text-3xl kalian-poster-text ${c.aforo_disponible === false ? 'text-red-500' : 'text-kalian-gold'}`}>
+                                {c.aforo_disponible === false ? 'AGOTADO' : 'HAY PLAZAS'}
+                              </p>
+                              <p className="text-[8px] font-black uppercase text-kalian-gold/30 tracking-widest">Disponibilidad</p>
+                            </div>
+                            <div className="text-right">
+                              <p className="text-3xl kalian-poster-text text-kalian-cream">
+                                {c.modalidades && c.modalidades.length > 0 
+                                  ? `Desde ${Math.min(...c.modalidades.map((m: any) => m.precio))}€` 
+                                  : `${c.precio || 0}€`}
+                              </p>
+                              <p className="text-[8px] font-black uppercase text-kalian-gold/80 tracking-widest">Aportación</p>
+                            </div>
+                            <span className={`text-2xl text-kalian-gold transition-transform duration-500`}>→</span>
+                          </div>
                         </div>
                       </div>
-
-                      <div className="flex flex-col sm:flex-row gap-4">
-                        <button 
-                          onClick={() => setSolicitudCurso({ curso: c, tipo: 'consulta', modalidad: modalidadSeleccionada[c.id] })}
-                          disabled={!modalidadSeleccionada[c.id]}
-                          className={`flex-1 border p-5 rounded-2xl kalian-poster-text text-lg tracking-widest transition-all ${!modalidadSeleccionada[c.id] ? 'bg-slate-800/20 text-slate-600 border-slate-800/50 cursor-not-allowed' : 'bg-white/5 text-kalian-gold border-kalian-gold/20 hover:bg-kalian-gold/10'}`}
-                        >
-                          Solicitar Información
-                        </button>
-                        <button 
-                          onClick={() => setSolicitudCurso({ curso: c, tipo: 'solicitud_inscripcion', modalidad: modalidadSeleccionada[c.id] })}
-                          disabled={!modalidadSeleccionada[c.id]}
-                          className={`flex-1 p-5 rounded-2xl kalian-poster-text text-lg tracking-widest transition-all shadow-xl ${!modalidadSeleccionada[c.id] ? 'bg-slate-800 text-slate-500 cursor-not-allowed' : 'bg-kalian-gold text-black hover:bg-white shadow-kalian-gold/10'}`}
-                        >
-                          Inscribirse
-                        </button>
-                      </div>
-                    </div>
-                  ))
+                    );
+                  })
                 ) : (
                   <div className="col-span-full bg-kalian-gold/5 border border-kalian-gold/10 border-dashed rounded-[3rem] p-20 text-center space-y-6">
                     <div className="text-6xl mb-4 opacity-40">⏳</div>
@@ -497,43 +464,83 @@ const ProgramacionPublica = () => {
                     <table className="w-full text-left text-[10px] uppercase tracking-widest font-black">
                       <thead>
                         <tr className="bg-kalian-gold/5 text-kalian-gold/70 border-b border-kalian-gold/10">
+                          <th className="p-4 w-10"></th>
                           <th className="p-4">Tipo</th>
                           <th className="p-4">Frecuencia</th>
                           <th className="p-4 text-right">Aportación</th>
                         </tr>
                       </thead>
                       <tbody className="divide-y divide-kalian-gold/5">
-                        {cursoDetalle.modalidades?.map((m: any, i: number) => (
-                          <tr key={i} className="text-kalian-cream/90">
-                            <td className="p-4">{m.tipo}</td>
-                            <td className="p-4">{m.frecuencia}</td>
-                            <td className="p-4 text-right font-black text-kalian-gold">{m.precio}€</td>
-                          </tr>
-                        ))}
+                        {cursoDetalle.modalidades?.map((m: any, i: number) => {
+                          const isSelected = modalidadSeleccionada[cursoDetalle.id]?.tipo === m.tipo && 
+                                           modalidadSeleccionada[cursoDetalle.id]?.frecuencia === m.frecuencia &&
+                                           modalidadSeleccionada[cursoDetalle.id]?.precio === m.precio;
+                          
+                          return (
+                            <tr 
+                              key={i} 
+                              className={`text-kalian-cream/90 cursor-pointer hover:bg-white/5 transition-colors ${isSelected ? 'bg-kalian-gold/5' : ''}`}
+                              onClick={() => {
+                                setModalidadSeleccionada({ ...modalidadSeleccionada, [cursoDetalle.id]: m });
+                                setErrorSeleccion(null);
+                              }}
+                            >
+                              <td className="p-4">
+                                <div className={`w-5 h-5 rounded-full border-2 flex items-center justify-center transition-all ${isSelected ? 'border-kalian-gold bg-kalian-gold' : 'border-white/20'}`}>
+                                  {isSelected && <div className="w-2 h-2 bg-black rounded-full"></div>}
+                                </div>
+                              </td>
+                              <td className="p-4">{m.tipo}</td>
+                              <td className="p-4">{m.frecuencia}</td>
+                              <td className="p-4 text-right font-black text-kalian-gold">{m.precio}€</td>
+                            </tr>
+                          );
+                        })}
                       </tbody>
                     </table>
                   </div>
                 </div>
               </div>
 
+              {errorSeleccion && (
+                <div className="bg-red-500/10 border border-red-500/20 p-4 rounded-2xl animate-in fade-in slide-in-from-top-2 duration-300">
+                  <p className="text-red-500 text-center font-black uppercase text-[10px] tracking-widest">
+                    ⚠️ {errorSeleccion}
+                  </p>
+                </div>
+              )}
+
               <div className="flex gap-4 pt-4">
                 <button 
                   onClick={() => {
-                    setSolicitudCurso({ curso: cursoDetalle, tipo: 'consulta' });
+                    const mod = modalidadSeleccionada[cursoDetalle.id];
+                    if (!mod) {
+                      setErrorSeleccion("Por favor, selecciona una modalidad de la tabla superior para poder informarte.");
+                      return;
+                    }
+                    setSolicitudCurso({ curso: cursoDetalle, tipo: 'consulta', modalidad: mod });
                     setCursoDetalle(null);
+                    setErrorSeleccion(null);
                   }}
-                  className="flex-1 bg-white/5 text-kalian-gold border border-kalian-gold/20 p-5 rounded-2xl kalian-poster-text text-lg tracking-widest hover:bg-kalian-gold/10 transition-all"
+                  className="flex-1 bg-kalian-gold/20 text-kalian-gold border border-kalian-gold/40 p-5 rounded-2xl kalian-poster-text text-lg tracking-widest hover:bg-kalian-gold hover:text-black transition-all shadow-lg shadow-kalian-gold/5"
                 >
                   Solicitar Info
                 </button>
                 <button 
                   onClick={() => {
-                    setSolicitudCurso({ curso: cursoDetalle, tipo: 'solicitud_inscripcion' });
+                    const mod = modalidadSeleccionada[cursoDetalle.id];
+                    if (!mod) {
+                      setErrorSeleccion("Por favor, selecciona una modalidad de la tabla superior para realizar la inscripción.");
+                      return;
+                    }
+                    setSolicitudCurso({ curso: cursoDetalle, tipo: 'solicitud_inscripcion', modalidad: mod });
                     setCursoDetalle(null);
+                    setErrorSeleccion(null);
                   }}
-                  className="flex-1 bg-kalian-gold text-black p-5 rounded-2xl kalian-poster-text text-lg tracking-widest hover:bg-white transition-all shadow-xl shadow-kalian-gold/20"
+                  disabled={cursoDetalle.aforo_disponible === false}
+                  className={`flex-1 p-5 rounded-2xl kalian-poster-text text-lg tracking-widest transition-all shadow-xl ${cursoDetalle.aforo_disponible === false ? 'bg-slate-800 text-slate-500 cursor-not-allowed' : 'bg-kalian-gold text-black hover:bg-white shadow-kalian-gold/20'}`}
                 >
-                  Inscribirse
+                  {cursoDetalle.aforo_disponible === false ? 'CURSO CERRADO' : 'Inscribirse'}
                 </button>
               </div>
             </div>

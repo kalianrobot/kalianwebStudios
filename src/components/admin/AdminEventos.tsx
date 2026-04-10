@@ -19,9 +19,10 @@ ENTRADA HASTA LAS 00:00. RESERVAS DISPONIBLES HASTA COMPLETAR AFORO.`;
     fecha: '', 
     precio_estandar: '', 
     categoria: 'musica', 
-    aforo_max: '50',
+    aforo_maximo: '50',
+    aforo_reservado: 0,
+    aforo_actual: 0,
     max_acompanantes: '4',
-    tiene_descuento: false,
     precio_descuento: '',
     clave_descuento: '',
     precio_clave: '',
@@ -63,8 +64,9 @@ ENTRADA HASTA LAS 00:00. RESERVAS DISPONIBLES HASTA COMPLETAR AFORO.`;
         precio_estandar: Number(form.precio_estandar),
         precio_descuento: form.tiene_descuento ? Number(form.precio_descuento) : Number(form.precio_estandar),
         precio_clave: form.clave_descuento ? Number(form.precio_clave) : Number(form.precio_estandar),
-        aforo_max: Number(form.aforo_max),
+        aforo_maximo: Number(form.aforo_maximo),
         max_acompanantes: Number(form.max_acompanantes),
+        aforo_reservado: editando ? (eventos.find(ev => ev.id === editando)?.aforo_reservado || 0) : 0,
         aforo_actual: editando ? (eventos.find(ev => ev.id === editando)?.aforo_actual || 0) : 0
       };
 
@@ -221,10 +223,10 @@ ENTRADA HASTA LAS 00:00. RESERVAS DISPONIBLES HASTA COMPLETAR AFORO.`;
             </div>
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+          <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
             <div className="space-y-2">
               <label className="text-[9px] font-black uppercase text-kalian-gold/80 ml-4 tracking-widest">Aforo Máximo</label>
-              <input type="number" placeholder="AFORO MÁX" className="w-full p-5 bg-kalian-gold/5 rounded-2xl outline-none border border-kalian-gold/10 focus:border-kalian-gold transition-all text-kalian-cream font-bold" value={form.aforo_max} onChange={e => setForm({...form, aforo_max: e.target.value})} required />
+              <input type="number" placeholder="AFORO MÁX" className="w-full p-5 bg-kalian-gold/5 rounded-2xl outline-none border border-kalian-gold/10 focus:border-kalian-gold transition-all text-kalian-cream font-bold" value={form.aforo_maximo} onChange={e => setForm({...form, aforo_maximo: e.target.value})} required />
             </div>
             <div className="space-y-2">
               <label className="text-[9px] font-black uppercase text-kalian-gold/80 ml-4 tracking-widest">Máx. Acompañantes</label>
@@ -237,6 +239,10 @@ ENTRADA HASTA LAS 00:00. RESERVAS DISPONIBLES HASTA COMPLETAR AFORO.`;
                 <option value="danza">Descuento Soci@s Club De Baile</option>
                 <option value="ninguno">Ninguno (sin descuento)</option>
               </select>
+            </div>
+            <div className="space-y-2">
+              <label className="text-[9px] font-black uppercase text-kalian-gold/80 ml-4 tracking-widest">Aforo Reservado (Manual)</label>
+              <input type="number" className="w-full p-5 bg-kalian-gold/5 rounded-2xl outline-none border border-kalian-gold/10 focus:border-kalian-gold transition-all text-kalian-cream font-bold" value={form.aforo_reservado} onChange={e => setForm({...form, aforo_reservado: Number(e.target.value)})} />
             </div>
           </div>
 
@@ -289,7 +295,7 @@ ENTRADA HASTA LAS 00:00. RESERVAS DISPONIBLES HASTA COMPLETAR AFORO.`;
                 <div>
                   <h3 className="text-3xl kalian-poster-text text-kalian-cream group-hover:text-kalian-gold transition-colors uppercase italic">{ev.titulo}</h3>
                   <p className="text-[10px] text-kalian-gold/80 font-black uppercase tracking-[0.3em] mt-2">
-                    {new Date(ev.fecha).toLocaleString('es-ES', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })} | {ev.categoria.toUpperCase()} | {ev.precio_estandar}€ {ev.tiene_descuento ? `(Soci@s: ${ev.precio_descuento}€)` : '(Sin dto)'} | AFORO: {ev.aforo_actual || 0}/{ev.aforo_max} | MÁX ACOMP: {ev.max_acompanantes || 4}
+                    {new Date(ev.fecha).toLocaleString('es-ES', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })} | {ev.categoria.toUpperCase()} | {ev.precio_estandar}€ {ev.tiene_descuento ? `(Soci@s: ${ev.precio_descuento}€)` : '(Sin dto)'} | RESERVADO: {ev.aforo_reservado || 0}/{ev.aforo_maximo} | CHECK-IN: {ev.aforo_actual || 0} | MÁX ACOMP: {ev.max_acompanantes || 4}
                   </p>
                 </div>
               </div>
@@ -302,7 +308,9 @@ ENTRADA HASTA LAS 00:00. RESERVAS DISPONIBLES HASTA COMPLETAR AFORO.`;
                       fecha: ev.fecha,
                       precio_estandar: ev.precio_estandar.toString(),
                       categoria: ev.categoria,
-                      aforo_max: ev.aforo_max.toString(),
+                      aforo_maximo: ev.aforo_maximo.toString(),
+                      aforo_reservado: ev.aforo_reservado || 0,
+                      aforo_actual: ev.aforo_actual || 0,
                       tiene_descuento: ev.tiene_descuento || false,
                       precio_descuento: ev.precio_descuento?.toString() || '',
                       clave_descuento: ev.clave_descuento || '',

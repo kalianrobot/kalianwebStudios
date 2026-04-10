@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { db, auth } from '../../firebase';
-import { collection, addDoc, query, where, getDocs, doc, getDoc, DocumentData } from 'firebase/firestore';
+import { collection, addDoc, query, where, getDocs, doc, getDoc, DocumentData, runTransaction, increment } from 'firebase/firestore';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
 
@@ -175,28 +175,20 @@ const ReservaForm = ({ item, alCerrar }: ReservaFormProps) => {
           return;
         }
 
-        // 1.1 VALIDACIÓN DE AFORO
-        const aforoMax = Number(item.aforo_max || item.aforo_total || 0);
-        const aforoDisponibleManual = item.aforo_disponible !== false; // Por defecto true si no existe el campo
+        // 1.1 VALIDACIÓN DE AFORO DINÁMICO
+        const aMax = Number(item.aforo_maximo || item.aforo_max || item.aforo_total || 0);
+        const aRes = Number(item.aforo_reservado || 0);
+        const nuevosSolicitados = 1 + Number(form.acompañantes);
 
-        if (!aforoDisponibleManual) {
-          setMensaje("❌ Lo sentimos, este curso no tiene plazas disponibles actualmente.");
+        if (!esCurso && (aRes + nuevosSolicitados > aMax)) {
+          setMensaje(`❌ Lo sentimos, no hay aforo suficiente. Quedan ${Math.max(0, aMax - aRes)} plazas.`);
           setCargando(false);
           return;
         }
 
-        let ocupacionActual = 0;
-        snapDuplicado.docs.forEach(d => {
-          const rData = d.data();
-          ocupacionActual += (1 + (rData.acompañantes || 0));
-        });
-
-        const nuevosSolicitados = 1 + Number(form.acompañantes);
-        
-        // BDD: Si es curso, el aforo total es orientativo, pero si el profesor lo cierra manualmente, se respeta.
-        // Si no es curso (es evento), validamos aforo numérico estrictamente.
-        if (!esCurso && (ocupacionActual + nuevosSolicitados > aforoMax)) {
-          setMensaje(`❌ Lo sentimos, no hay aforo suficiente. Quedan ${aforoMax - ocupacionActual} plazas.`);
+        const aforoDisponibleManual = item.aforo_disponible !== false;
+        if (!aforoDisponibleManual) {
+          setMensaje("❌ Lo sentimos, este curso no tiene plazas disponibles actualmente.");
           setCargando(false);
           return;
         }
@@ -225,7 +217,7 @@ const ReservaForm = ({ item, alCerrar }: ReservaFormProps) => {
         }
       }
 
-      // 4. GUARDAR RESERVA
+      // 4. GUARDAR RESERVA (TRANSACCIÓN ATÓMICA)
       const tID = Math.random().toString(36).substring(2, 8).toUpperCase();
       const qrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=KALIAN-RES-${tID}`;
 
@@ -239,14 +231,38 @@ const ReservaForm = ({ item, alCerrar }: ReservaFormProps) => {
         ticketID: tID,
         qrUrl: qrUrl,
         fechaReserva: new Date().toISOString(),
-        fechaActividad: item.fecha || item.fechaFin || '', // Guardamos la fecha del evento/curso
+        fechaActividad: item.fecha || item.fechaFin || '',
         slots: slots,
         totalPendiente: slots.reduce((acc, s) => acc + (s.estado === 'pendiente' ? s.precio : 0), 0),
         esCurso: esCurso,
-        acompañantes: Number(form.acompañantes)
+        acompañantes: Number(form.acompañantes),
+        asistentes_ingresados: 0
       };
 
-      await addDoc(collection(db, "reservas"), reservaData);
+      await runTransaction(db, async (transaction) => {
+        const eventRef = doc(db, esCurso ? "cursos" : "eventos", item.id);
+        const eventDoc = await transaction.get(eventRef);
+        
+        if (!eventDoc.exists()) throw new Error("El evento ya no existe.");
+        
+        if (!esCurso) {
+          const eData = eventDoc.data();
+          const currentMax = Number(eData.aforo_maximo || eData.aforo_max || 0);
+          const currentRes = Number(eData.aforo_reservado || 0);
+          const totalNuevos = 1 + Number(form.acompañantes);
+
+          if (currentRes + totalNuevos > currentMax) {
+            throw new Error(`AFORO_FULL|${Math.max(0, currentMax - currentRes)}`);
+          }
+
+          transaction.update(eventRef, {
+            aforo_reservado: increment(totalNuevos)
+          });
+        }
+
+        const newResRef = doc(collection(db, "reservas"));
+        transaction.set(newResRef, reservaData);
+      });
 
       if (esCurso) {
         setMensaje("✅ Solicitud enviada. Debes pasarte por el local para ultimar los detalles y finalizar tu alta al curso (que será tu alta de socio).");
@@ -258,8 +274,13 @@ const ReservaForm = ({ item, alCerrar }: ReservaFormProps) => {
       }
 
     } catch (err: any) {
-      console.error("Error en Firestore:", err);
-      setMensaje("Error al guardar: " + err.message);
+      console.error(err);
+      if (err.message?.includes("AFORO_FULL")) {
+        const plazas = err.message.split("|")[1] || "0";
+        setMensaje(`❌ Lo sentimos, el aforo se ha completado mientras realizabas la reserva. Plazas libres: ${plazas}`);
+      } else {
+        setMensaje("❌ Error al procesar la reserva: " + err.message);
+      }
     }
     setCargando(false);
   };

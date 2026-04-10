@@ -14,6 +14,8 @@ const AdminLogin = () => {
   useEffect(() => {
     if (role === 'admin') {
       navigate('/staff');
+    } else if (role === 'portero') {
+      navigate('/control-acceso');
     }
   }, [role, navigate]);
 
@@ -24,7 +26,7 @@ const AdminLogin = () => {
     try {
       // Usamos el email fijo de admin y el password introducido
       await loginAdmin(ADMIN_EMAIL, pass);
-      navigate('/staff');
+      // No navegamos manualmente, dejamos que el useEffect de role lo haga
     } catch (err: any) {
       setError('Clave de Staff incorrecta');
       setPass('');

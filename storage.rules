@@ -39,5 +39,12 @@ service firebase.storage {
                    
       allow delete: if isAuthenticated() && (isTeacherOf(cursoId) || isAdmin());
     }
+
+    // ACADEMIAS: Lectura pública. Escritura admin.
+    match /academias/{fileName} {
+      allow read: if true;
+      allow write: if isAdmin() && request.resource.size < 5 * 1024 * 1024; // 5MB limit
+      allow delete: if isAdmin();
+    }
   }
 }

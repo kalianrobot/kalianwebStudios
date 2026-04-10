@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { db } from '../../firebase';
-import { collection, getDocs, query, orderBy, DocumentData } from 'firebase/firestore';
+import { collection, getDocs, query, orderBy, DocumentData, where } from 'firebase/firestore';
 import { Link } from 'react-router-dom';
 import ReservaForm from '../public/ReservaForm';
 
@@ -8,13 +8,14 @@ const HomeSocio = () => {
   const [eventos, setEventos] = useState<DocumentData[]>([]);
   const [cursos, setCursos] = useState<DocumentData[]>([]);
   const [locales, setLocales] = useState<DocumentData[]>([]);
+  const [academias, setAcademias] = useState<DocumentData[]>([]);
   const [itemSeleccionado, setItemSeleccionado] = useState<any | null>(null);
   const [posterSeleccionado, setPosterSeleccionado] = useState<string | null>(null);
   const [expandido, setExpandido] = useState<string | null>(null);
-  const [categoriaActiva, setCategoriaActiva] = useState<'musica' | 'danza' | null>(null);
+  const [categoriaActiva, setCategoriaActiva] = useState<string | null>(null);
   const [subcategoriaActiva, setSubcategoriaActiva] = useState<string | null>(null);
 
-  const subcategorias = {
+  const subcategorias: { [key: string]: string[] } = {
     musica: ['Instrumento', 'Combo', 'Armonía moderna', 'Big Band', 'Master classes'],
     danza: ['Bachata', 'Bachata coreográfico', 'Salsa']
   };
@@ -41,10 +42,12 @@ const HomeSocio = () => {
       const qE = query(collection(db, "eventos"), orderBy("fecha", "asc"));
       const qC = query(collection(db, "cursos"), orderBy("fechaInicio", "asc"));
       const qL = collection(db, "locales");
-      const [snapE, snapC, snapL] = await Promise.all([getDocs(qE), getDocs(qC), getDocs(qL)]);
+      const qA = query(collection(db, "academias"), orderBy("orden", "asc"));
+      const [snapE, snapC, snapL, snapA] = await Promise.all([getDocs(qE), getDocs(qC), getDocs(qL), getDocs(qA)]);
       setEventos(snapE.docs.map(d => ({ id: d.id, ...d.data() })));
       setCursos(snapC.docs.map(d => ({ id: d.id, ...d.data() })));
       setLocales(snapL.docs.map(d => ({ id: d.id, ...d.data() })));
+      setAcademias(snapA.docs.map(d => ({ id: d.id, ...d.data() } as any)).filter(a => a.activo));
     };
     fetchData();
   }, []);
@@ -189,35 +192,32 @@ const HomeSocio = () => {
 
           {!categoriaActiva ? (
             <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-              <div 
-                onClick={() => setCategoriaActiva('musica')}
-                className="bg-black/40 border border-kalian-gold/10 rounded-[3rem] p-12 text-center space-y-6 cursor-pointer hover:border-kalian-gold/40 transition-all group relative overflow-hidden"
-              >
-                <div className="absolute inset-0 bg-kalian-gold/5 opacity-0 group-hover:opacity-100 transition-opacity duration-700"></div>
-                <div className="text-7xl mb-4 group-hover:scale-110 transition-transform duration-500">🎸</div>
-                <h3 className="text-5xl kalian-poster-text text-kalian-gold uppercase italic">Music is Cool</h3>
-                <p className="text-kalian-cream/60 text-[10px] font-black uppercase tracking-[0.4em] leading-relaxed">
-                  Instrumento • Combo • Armonía moderna • Big Band • Master classes
-                </p>
-                <div className="pt-4">
-                  <span className="text-kalian-gold/40 text-[9px] font-black uppercase tracking-[0.5em] group-hover:text-kalian-gold transition-colors">Seleccionar Categoría →</span>
-                </div>
-              </div>
+              {academias.map((aca, idx) => (
+                <div 
+                  key={aca.id}
+                  onClick={() => setCategoriaActiva(aca.id)}
+                  className="bg-black/40 border border-kalian-gold/10 rounded-[3rem] p-12 text-center space-y-6 cursor-pointer hover:border-kalian-gold/40 transition-all group relative overflow-hidden"
+                >
+                  <div className="absolute inset-0 bg-kalian-gold/5 opacity-0 group-hover:opacity-100 transition-opacity duration-700"></div>
+                  
+                  {/* Imagen de la academia */}
+                  <div className="w-32 h-32 mx-auto rounded-3xl overflow-hidden border border-kalian-gold/20 group-hover:scale-110 transition-transform duration-500 shadow-2xl">
+                    <img src={aca.imageUrl} alt={aca.nombre} className="w-full h-full object-cover" referrerPolicy="no-referrer" />
+                  </div>
 
-              <div 
-                onClick={() => setCategoriaActiva('danza')}
-                className="bg-black/40 border border-kalian-gold/10 rounded-[3rem] p-12 text-center space-y-6 cursor-pointer hover:border-kalian-gold/40 transition-all group relative overflow-hidden"
-              >
-                <div className="absolute inset-0 bg-kalian-gold/5 opacity-0 group-hover:opacity-100 transition-opacity duration-700"></div>
-                <div className="text-7xl mb-4 group-hover:scale-110 transition-transform duration-500">💃</div>
-                <h3 className="text-5xl kalian-poster-text text-kalian-cream uppercase italic">Club de Baile</h3>
-                <p className="text-kalian-gold/60 text-[10px] font-black uppercase tracking-[0.4em] leading-relaxed">
-                  Bachata • Bachata coreográfico • Salsa
-                </p>
-                <div className="pt-4">
-                  <span className="text-kalian-cream/40 text-[9px] font-black uppercase tracking-[0.5em] group-hover:text-kalian-cream transition-colors">Seleccionar Categoría →</span>
+                  <h3 className={`text-5xl kalian-poster-text uppercase italic ${idx % 2 === 0 ? 'text-kalian-gold' : 'text-kalian-cream'}`}>
+                    {aca.nombre}
+                  </h3>
+                  <p className={`${idx % 2 === 0 ? 'text-kalian-cream/60' : 'text-kalian-gold/60'} text-[10px] font-black uppercase tracking-[0.4em] leading-relaxed`}>
+                    {aca.lema}
+                  </p>
+                  <div className="pt-4">
+                    <span className={`${idx % 2 === 0 ? 'text-kalian-gold/40 group-hover:text-kalian-gold' : 'text-kalian-cream/40 group-hover:text-kalian-cream'} text-[9px] font-black uppercase tracking-[0.5em] transition-colors`}>
+                      Seleccionar Categoría →
+                    </span>
+                  </div>
                 </div>
-              </div>
+              ))}
             </div>
           ) : !subcategoriaActiva ? (
             <div className="space-y-12 animate-in fade-in slide-in-from-bottom-4 duration-700">
@@ -229,14 +229,14 @@ const HomeSocio = () => {
                   ← VOLVER A CATEGORÍAS
                 </button>
                 <h3 className="text-3xl kalian-poster-text text-kalian-gold uppercase italic">
-                  {categoriaActiva === 'musica' ? 'Music is Cool' : 'Club de Baile'}
+                  {academias.find(a => a.id === categoriaActiva)?.nombre}
                 </h3>
               </div>
 
               <div className="text-center space-y-8">
                 <p className="text-kalian-gold/40 text-[10px] font-black uppercase tracking-[0.5em]">Selecciona una especialidad</p>
                 <div className="flex flex-wrap justify-center gap-4">
-                  {subcategorias[categoriaActiva].map(sub => (
+                  {(subcategorias[categoriaActiva] || []).map(sub => (
                     <button
                       key={sub}
                       onClick={() => setSubcategoriaActiva(sub)}
@@ -259,8 +259,8 @@ const HomeSocio = () => {
                 </button>
                 <div className="text-right">
                   <h3 className="text-2xl kalian-poster-text text-kalian-gold uppercase italic leading-none">
-                    {categoriaActiva === 'musica' ? 'Music is Cool' : 'Club de Baile'}
-                  </h3>
+                  {academias.find(a => a.id === categoriaActiva)?.nombre}
+                </h3>
                   <p className="text-[10px] font-black text-kalian-cream/40 uppercase tracking-widest mt-1">{subcategoriaActiva}</p>
                 </div>
               </div>
@@ -325,7 +325,7 @@ const HomeSocio = () => {
                                 </div>
                                 <div className="bg-kalian-gold/5 p-8 rounded-3xl border border-kalian-gold/10">
                                   <p className="text-sm text-kalian-gold/70 italic leading-relaxed">
-                                    {c.ventajas || `Este curso incluye el alta como soci@ de ${c.categoria === 'musica' ? 'Music is Cool' : 'del Club de Baile'} y acceso a descuentos en actividades de la misma categoría.`}
+                                    {c.ventajas || `Este curso incluye el alta como soci@ de ${academias.find(a => a.id === c.categoria)?.nombre || 'la academia'} y acceso a descuentos en actividades de la misma categoría.`}
                                   </p>
                                 </div>
                               </div>

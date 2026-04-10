@@ -122,5 +122,11 @@ service cloud.firestore {
       allow read: if isAuthenticated();
       allow write: if isAdmin() || isTeacher();
     }
+
+    // ACADEMIAS: Lectura pública. Escritura admin.
+    match /academias/{academiaId} {
+      allow read: if true;
+      allow write: if isAdmin();
+    }
   }
 }

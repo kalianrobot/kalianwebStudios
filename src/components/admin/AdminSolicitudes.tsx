@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { db } from '../../firebase';
-import { collection, getDocs, doc, setDoc, getDoc, query, where, orderBy, DocumentData, deleteDoc, updateDoc, arrayUnion } from 'firebase/firestore';
+import { collection, onSnapshot, doc, setDoc, getDoc, query, where, DocumentData, deleteDoc, updateDoc, arrayUnion } from 'firebase/firestore';
 import { Link } from 'react-router-dom';
 import { createSocioAuth } from '../../lib/adminAuth';
 import { sendWelcomeEmail, sendMembershipUpdateEmail } from '../../lib/brevoService';
@@ -11,12 +11,13 @@ const AdminSolicitudes = () => {
   const [error, setError] = useState<string | null>(null);
   const [msg, setMsg] = useState('');
 
-  const fetchSolicitudes = async () => {
+  useEffect(() => {
     setLoading(true);
     setError(null);
-    try {
-      const q = query(collection(db, "solicitudes_cursos"), where("estado", "==", "pendiente"));
-      const snap = await getDocs(q);
+    
+    const q = query(collection(db, "solicitudes_cursos"), where("estado", "==", "pendiente"));
+    
+    const unsubscribe = onSnapshot(q, (snap) => {
       const data = snap.docs.map(d => ({ id: d.id, ...d.data() }));
       // Orden manual por fecha descendente
       data.sort((a: any, b: any) => {
@@ -25,14 +26,21 @@ const AdminSolicitudes = () => {
         return dateB - dateA;
       });
       setSolicitudes(data);
-    } catch (err) {
-      console.error("Error fetching solicitudes:", err);
-      setError("Error al cargar las solicitudes. Por favor, intenta de nuevo.");
-    }
-    setLoading(false);
-  };
+      setLoading(false);
+    }, (err) => {
+      console.error("Error fetching solicitudes real-time:", err);
+      setError("Error al cargar las solicitudes en tiempo real.");
+      setLoading(false);
+    });
 
-  useEffect(() => { fetchSolicitudes(); }, []);
+    return () => unsubscribe();
+  }, []);
+
+  const fetchSolicitudes = () => {
+    // onSnapshot ya se encarga, pero mantenemos la función para el botón de refresco manual si se desea
+    setLoading(true);
+    setTimeout(() => setLoading(false), 500);
+  };
 
   const aprobarSolicitud = async (sol: any) => {
     if (sol.tipo === 'consulta') {

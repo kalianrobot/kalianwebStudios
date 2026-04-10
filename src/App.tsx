@@ -17,6 +17,7 @@ import AdminSocios from './components/admin/AdminSocios';
 import AdminCheckIn from './components/admin/AdminCheckIn';
 import AdminLocales from './components/admin/AdminLocales';
 import AdminProfesores from './components/admin/AdminProfesores';
+import AdminAcademias from './components/admin/AdminAcademias';
 import AdminLogin from './pages/AdminLogin';
 
 // Componentes Teacher
@@ -64,6 +65,7 @@ function AppContent() {
         <Route path="/staff/socios" element={role === 'admin' ? <AdminSocios /> : <Navigate to="/staff/login" />} />
         <Route path="/staff/profesores" element={role === 'admin' ? <AdminProfesores /> : <Navigate to="/staff/login" />} />
         <Route path="/staff/locales" element={role === 'admin' ? <AdminLocales /> : <Navigate to="/staff/login" />} />
+        <Route path="/staff/academias" element={role === 'admin' ? <AdminAcademias /> : <Navigate to="/staff/login" />} />
         <Route path="/staff/solicitudes" element={role === 'admin' ? <AdminSolicitudes /> : <Navigate to="/staff/login" />} />
 
         {/* RUTAS PROFESORES (TEACHER) */}

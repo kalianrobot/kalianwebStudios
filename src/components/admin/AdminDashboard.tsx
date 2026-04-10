@@ -1,18 +1,20 @@
 import React, { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { db } from '../../firebase';
-import { collection, getDocs, query, where } from 'firebase/firestore';
+import { collection, onSnapshot, query, where } from 'firebase/firestore';
 
 const AdminDashboard = () => {
   const [pendientes, setPendientes] = useState(0);
 
   useEffect(() => {
-    const fetchPendientes = async () => {
-      const q = query(collection(db, "solicitudes_cursos"), where("estado", "==", "pendiente"));
-      const snap = await getDocs(q);
+    const q = query(collection(db, "solicitudes_cursos"), where("estado", "==", "pendiente"));
+    const unsubscribe = onSnapshot(q, (snap) => {
       setPendientes(snap.size);
-    };
-    fetchPendientes();
+    }, (err) => {
+      console.error("Error en real-time badge:", err);
+    });
+
+    return () => unsubscribe();
   }, []);
 
   const menus = [
@@ -22,6 +24,7 @@ const AdminDashboard = () => {
     { t: 'Soci@s', icon: '👥', color: 'border-blue-500', path: '/staff/socios' },
     { t: 'Profesores', icon: '👨‍🏫', color: 'border-indigo-500', path: '/staff/profesores' },
     { t: 'Locales', icon: '🏠', color: 'border-amber-500', path: '/staff/locales' },
+    { t: 'Academias', icon: '🎨', color: 'border-pink-500', path: '/staff/academias' },
     { t: 'Solicitudes', icon: '📩', color: 'border-emerald-500', path: '/staff/solicitudes', badge: pendientes }
   ];
 

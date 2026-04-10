@@ -147,7 +147,7 @@ ENTRADA HASTA LAS 00:00. RESERVAS DISPONIBLES HASTA COMPLETAR AFORO.`;
               <input type="datetime-local" className="w-full p-5 bg-kalian-gold/5 rounded-2xl outline-none border border-kalian-gold/10 focus:border-kalian-gold transition-all text-kalian-cream font-bold" value={form.fecha} onChange={e => setForm({...form, fecha: e.target.value})} required />
             </div>
             <div className="space-y-2">
-              <label className="text-[9px] font-black uppercase text-kalian-gold/40 ml-4 tracking-widest">Precio Estándar (€)</label>
+              <label className="text-[9px] font-black uppercase text-kalian-gold/80 ml-4 tracking-widest">Precio Estándar (€)</label>
               <input type="number" placeholder="PRECIO (€)" className="w-full p-5 bg-kalian-gold/5 rounded-2xl outline-none border border-kalian-gold/10 focus:border-kalian-gold transition-all text-kalian-gold font-black text-xl" value={form.precio_estandar} onChange={e => setForm({...form, precio_estandar: e.target.value})} required />
             </div>
           </div>
@@ -165,7 +165,7 @@ ENTRADA HASTA LAS 00:00. RESERVAS DISPONIBLES HASTA COMPLETAR AFORO.`;
             </div>
             {form.tiene_descuento && (
               <div className="space-y-2">
-                <label className="text-[9px] font-black uppercase text-kalian-gold/40 ml-4 tracking-widest">Precio Soci@s (€)</label>
+                <label className="text-[9px] font-black uppercase text-kalian-gold/80 ml-4 tracking-widest">Precio Soci@s (€)</label>
                 <input type="number" placeholder="PRECIO SOCI@S (€)" className="w-full p-5 bg-kalian-gold/5 rounded-2xl outline-none border border-kalian-gold/10 focus:border-kalian-gold transition-all text-kalian-gold font-black text-xl" value={form.precio_descuento} onChange={e => setForm({...form, precio_descuento: e.target.value})} required />
               </div>
             )}
@@ -179,7 +179,7 @@ ENTRADA HASTA LAS 00:00. RESERVAS DISPONIBLES HASTA COMPLETAR AFORO.`;
             </div>
             {form.clave_descuento && (
               <div className="space-y-2">
-                <label className="text-[9px] font-black uppercase text-kalian-gold/40 ml-4 tracking-widest">Precio con Clave (€)</label>
+                <label className="text-[9px] font-black uppercase text-kalian-gold/80 ml-4 tracking-widest">Precio con Clave (€)</label>
                 <input type="number" placeholder="PRECIO CLAVE (€)" className="w-full p-5 bg-black/40 rounded-2xl outline-none border border-kalian-gold/10 focus:border-kalian-gold transition-all text-kalian-gold font-black text-xl" value={form.precio_clave} onChange={e => setForm({...form, precio_clave: e.target.value})} required />
               </div>
             )}
@@ -199,7 +199,7 @@ ENTRADA HASTA LAS 00:00. RESERVAS DISPONIBLES HASTA COMPLETAR AFORO.`;
 
           <div className="space-y-4">
             <div className="space-y-2">
-              <label className="text-[9px] font-black uppercase text-kalian-gold/40 ml-4 tracking-widest">IMPORTANTE (Reglas)</label>
+              <label className="text-[9px] font-black uppercase text-kalian-gold/80 ml-4 tracking-widest">IMPORTANTE (Reglas)</label>
               <textarea 
                 placeholder="Normas del evento..." 
                 className="w-full p-5 bg-kalian-gold/5 rounded-2xl outline-none border border-kalian-gold/10 focus:border-kalian-gold transition-all text-kalian-cream font-bold min-h-[150px]" 
@@ -210,7 +210,7 @@ ENTRADA HASTA LAS 00:00. RESERVAS DISPONIBLES HASTA COMPLETAR AFORO.`;
             </div>
 
             <div className="space-y-2">
-              <label className="text-[9px] font-black uppercase text-kalian-gold/40 ml-4 tracking-widest">Descripción del evento</label>
+              <label className="text-[9px] font-black uppercase text-kalian-gold/80 ml-4 tracking-widest">Descripción del evento</label>
               <textarea 
                 placeholder="Información libre sobre el evento..." 
                 className="w-full p-5 bg-kalian-gold/5 rounded-2xl outline-none border border-kalian-gold/10 focus:border-kalian-gold transition-all text-kalian-cream font-bold min-h-[150px]" 
@@ -223,15 +223,15 @@ ENTRADA HASTA LAS 00:00. RESERVAS DISPONIBLES HASTA COMPLETAR AFORO.`;
 
           <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
             <div className="space-y-2">
-              <label className="text-[9px] font-black uppercase text-kalian-gold/40 ml-4 tracking-widest">Aforo Máximo</label>
+              <label className="text-[9px] font-black uppercase text-kalian-gold/80 ml-4 tracking-widest">Aforo Máximo</label>
               <input type="number" placeholder="AFORO MÁX" className="w-full p-5 bg-kalian-gold/5 rounded-2xl outline-none border border-kalian-gold/10 focus:border-kalian-gold transition-all text-kalian-cream font-bold" value={form.aforo_max} onChange={e => setForm({...form, aforo_max: e.target.value})} required />
             </div>
             <div className="space-y-2">
-              <label className="text-[9px] font-black uppercase text-kalian-gold/40 ml-4 tracking-widest">Máx. Acompañantes</label>
+              <label className="text-[9px] font-black uppercase text-kalian-gold/80 ml-4 tracking-widest">Máx. Acompañantes</label>
               <input type="number" placeholder="MÁX ACOMP." className="w-full p-5 bg-kalian-gold/5 rounded-2xl outline-none border border-kalian-gold/10 focus:border-kalian-gold transition-all text-kalian-cream font-bold" value={form.max_acompanantes} onChange={e => setForm({...form, max_acompanantes: e.target.value})} required />
             </div>
             <div className="space-y-2">
-              <label className="text-[9px] font-black uppercase text-kalian-gold/40 ml-4 tracking-widest">Descuento Soci@s</label>
+              <label className="text-[9px] font-black uppercase text-kalian-gold/80 ml-4 tracking-widest">Descuento Soci@s</label>
               <select className="w-full p-5 bg-kalian-gold/5 rounded-2xl font-black uppercase border border-kalian-gold/10 focus:border-kalian-gold transition-all text-kalian-gold" value={form.categoria} onChange={e => setForm({...form, categoria: e.target.value})}>
                 <option value="musica">Descuento Soci@s Music Is Cool</option>
                 <option value="danza">Descuento Soci@s Club De Baile</option>
@@ -277,7 +277,7 @@ ENTRADA HASTA LAS 00:00. RESERVAS DISPONIBLES HASTA COMPLETAR AFORO.`;
         </form>
 
         <div className="space-y-4">
-          <h2 className="text-2xl kalian-poster-text text-kalian-gold/40 uppercase mb-6 ml-4 tracking-widest">Eventos Programados</h2>
+          <h2 className="text-2xl kalian-poster-text text-kalian-gold/80 uppercase mb-6 ml-4 tracking-widest">Eventos Programados</h2>
           {eventos.map(ev => (
             <div key={ev.id} className="bg-black/40 p-8 rounded-[2rem] flex flex-col md:flex-row justify-between items-center gap-6 shadow-sm border border-kalian-gold/10 group hover:border-kalian-gold/40 transition-all overflow-hidden">
               <div className="flex flex-col md:flex-row items-center gap-6 text-center md:text-left">
@@ -288,7 +288,7 @@ ENTRADA HASTA LAS 00:00. RESERVAS DISPONIBLES HASTA COMPLETAR AFORO.`;
                 )}
                 <div>
                   <h3 className="text-3xl kalian-poster-text text-kalian-cream group-hover:text-kalian-gold transition-colors uppercase italic">{ev.titulo}</h3>
-                  <p className="text-[10px] text-kalian-gold/40 font-black uppercase tracking-[0.3em] mt-2">
+                  <p className="text-[10px] text-kalian-gold/80 font-black uppercase tracking-[0.3em] mt-2">
                     {new Date(ev.fecha).toLocaleString('es-ES', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })} | {ev.categoria.toUpperCase()} | {ev.precio_estandar}€ {ev.tiene_descuento ? `(Soci@s: ${ev.precio_descuento}€)` : '(Sin dto)'} | AFORO: {ev.aforo_actual || 0}/{ev.aforo_max} | MÁX ACOMP: {ev.max_acompanantes || 4}
                   </p>
                 </div>

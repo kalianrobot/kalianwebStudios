@@ -195,12 +195,12 @@ const AdminProfesores = () => {
             <h2 className="text-xl font-black uppercase italic mb-4">{editando ? 'Editar Profesor' : 'Nuevo Profesor'}</h2>
             
             <div className="space-y-1">
-              <label className="text-[9px] font-black uppercase text-slate-400 ml-4">Nombre Completo</label>
+              <label className="text-[9px] font-black uppercase text-slate-600 ml-4">Nombre Completo</label>
               <input type="text" placeholder="Nombre del profesor" className="w-full p-5 bg-slate-50 rounded-2xl outline-none border border-slate-200 text-slate-900" value={form.nombre} onChange={e => setForm({...form, nombre: e.target.value})} required />
             </div>
 
             <div className="space-y-1">
-              <label className="text-[9px] font-black uppercase text-slate-400 ml-4">Email (Login)</label>
+              <label className="text-[9px] font-black uppercase text-slate-600 ml-4">Email (Login)</label>
               <input 
                 type="email" 
                 placeholder="email@kalian.es" 
@@ -213,7 +213,7 @@ const AdminProfesores = () => {
             </div>
 
             <div className="space-y-1">
-              <label className="text-[9px] font-black uppercase text-slate-400 ml-4">Especialidad</label>
+              <label className="text-[9px] font-black uppercase text-slate-600 ml-4">Especialidad</label>
               <input type="text" placeholder="ej: Guitarra, Baile Moderno..." className="w-full p-5 bg-slate-50 rounded-2xl outline-none border border-slate-200 text-slate-900" value={form.especialidad} onChange={e => setForm({...form, especialidad: e.target.value})} />
             </div>
 
@@ -239,13 +239,13 @@ const AdminProfesores = () => {
 
           {/* LISTADO */}
           <div className="space-y-4">
-            <h2 className="text-xl font-black uppercase italic mb-4 ml-4 text-slate-400">Staff Docente</h2>
+            <h2 className="text-xl font-black uppercase italic mb-4 ml-4 text-slate-600">Staff Docente</h2>
             {profesores.map(p => (
               <div key={p.id} className="bg-white p-6 rounded-[2.5rem] shadow-lg border border-slate-100 flex justify-between items-center group">
                 <div>
                   <h3 className="font-black text-lg uppercase italic leading-none">{p.nombre}</h3>
                   <p className="text-[10px] text-indigo-500 font-black mt-1 uppercase tracking-widest">{p.especialidad || 'Sin especialidad'}</p>
-                  <p className="text-[9px] text-slate-400 font-bold mt-1">{p.email}</p>
+                  <p className="text-[9px] text-slate-600 font-bold mt-1">{p.email}</p>
                   {p.uid && p.uid.length < 15 && (
                     <div className="mt-2">
                       <p className="text-[8px] text-red-500 font-bold uppercase mb-1">⚠️ UID Incorrecto (DNI detectado)</p>

@@ -5,6 +5,7 @@ import { Link } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import ReservaForm from '../components/public/ReservaForm';
 import NewsletterForm from '../components/public/NewsletterForm';
+import LegalModal from '../components/public/LegalModal';
 
 const ProgramacionPublica = () => {
   const { socioData } = useAuth();
@@ -12,6 +13,7 @@ const ProgramacionPublica = () => {
   const [cursos, setCursos] = useState<DocumentData[]>([]);
   const [locales, setLocales] = useState<DocumentData[]>([]);
   const [academias, setAcademias] = useState<DocumentData[]>([]);
+  const [cursoDetalle, setCursoDetalle] = useState<any | null>(null);
   const [itemSeleccionado, setItemSeleccionado] = useState<any | null>(null);
   const [posterSeleccionado, setPosterSeleccionado] = useState<string | null>(null);
   const [expandido, setExpandido] = useState<string | null>(null);
@@ -20,6 +22,7 @@ const ProgramacionPublica = () => {
   const [modalidadSeleccionada, setModalidadSeleccionada] = useState<{ [cursoId: string]: any }>({});
   const [enviandoSolicitud, setEnviandoSolicitud] = useState(false);
   const [mensajeSolicitud, setMensajeSolicitud] = useState('');
+  const [showLegal, setShowLegal] = useState(false);
 
   const [categoriaActiva, setCategoriaActiva] = useState<string | null>(null);
   const [subcategoriaActiva, setSubcategoriaActiva] = useState<string | null>(null);
@@ -285,10 +288,14 @@ const ProgramacionPublica = () => {
               <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
                 {cursos.filter(c => c.categoria === categoriaActiva && c.subcategoria === subcategoriaActiva).length > 0 ? (
                   cursos.filter(c => c.categoria === categoriaActiva && c.subcategoria === subcategoriaActiva).map(c => (
-                    <div key={c.id} className="bg-black/40 border border-kalian-gold/10 rounded-[3rem] p-10 space-y-8 hover:border-kalian-gold/30 transition-all shadow-xl">
+                    <div 
+                      key={c.id} 
+                      onClick={() => setCursoDetalle(c)}
+                      className="bg-black/40 border border-kalian-gold/10 rounded-[3rem] p-10 space-y-8 hover:border-kalian-gold/30 transition-all shadow-xl cursor-pointer group"
+                    >
                       <div className="flex justify-between items-start">
                         <div className="space-y-2">
-                          <span className="text-[9px] font-black uppercase text-kalian-gold/40 tracking-[0.3em]">{c.categoria} • {c.subcategoria}</span>
+                          <span className="text-[9px] font-black uppercase text-kalian-gold/80 tracking-[0.3em]">{c.categoria} • {c.subcategoria}</span>
                           <h3 className="text-4xl kalian-poster-text text-kalian-cream leading-none uppercase italic">{c.titulo}</h3>
                         </div>
                         <div className="text-right">
@@ -297,7 +304,7 @@ const ProgramacionPublica = () => {
                               ? `Desde ${Math.min(...c.modalidades.map((m: any) => m.precio))}€` 
                               : `${c.precio || 0}€`}
                           </p>
-                          <p className="text-[8px] font-black uppercase text-kalian-gold/30 tracking-widest">Aportación</p>
+                          <p className="text-[8px] font-black uppercase text-kalian-gold/80 tracking-widest">Aportación</p>
                         </div>
                       </div>
                       
@@ -305,10 +312,10 @@ const ProgramacionPublica = () => {
                         <div className="bg-black/20 rounded-2xl overflow-hidden border border-kalian-gold/5">
                           <table className="w-full text-left text-[10px] uppercase tracking-widest font-black">
                             <thead>
-                              <tr className="bg-kalian-gold/10 text-kalian-gold/60 border-b border-kalian-gold/10">
+                              <tr className="bg-kalian-gold/10 text-kalian-gold/90 border-b border-kalian-gold/10">
                                 <th className="p-4">Tipo</th>
                                 <th className="p-4">Frecuencia</th>
-                                <th className="p-4 text-right">Precio</th>
+                                <th className="p-4 text-right">Aportación Mensual</th>
                                 <th className="p-4 w-10"></th>
                               </tr>
                             </thead>
@@ -317,7 +324,7 @@ const ProgramacionPublica = () => {
                                 <tr 
                                   key={i} 
                                   onClick={() => setModalidadSeleccionada({ ...modalidadSeleccionada, [c.id]: m })}
-                                  className={`cursor-pointer hover:bg-kalian-gold/5 transition-colors border-b border-kalian-gold/5 ${modalidadSeleccionada[c.id] === m ? 'bg-kalian-gold/10 text-kalian-gold' : 'text-kalian-cream/60'}`}
+                                  className={`cursor-pointer hover:bg-kalian-gold/5 transition-colors border-b border-kalian-gold/5 ${modalidadSeleccionada[c.id] === m ? 'bg-kalian-gold/10 text-kalian-gold' : 'text-kalian-cream/90'}`}
                                 >
                                   <td className="p-4">{m.tipo}</td>
                                   <td className="p-4">{m.frecuencia}</td>
@@ -334,7 +341,7 @@ const ProgramacionPublica = () => {
                         </div>
 
                         <div className="bg-kalian-gold/5 p-6 rounded-2xl border border-kalian-gold/10">
-                          <p className="text-[10px] text-kalian-gold/70 italic uppercase tracking-widest leading-relaxed">
+                          <p className="text-[10px] text-kalian-gold/90 italic uppercase tracking-widest leading-relaxed">
                             {c.ventajas || `Este curso incluye el alta como soci@ de ${academias.find(a => a.id === c.categoria)?.nombre || 'la academia'} y acceso a descuentos en actividades de la misma categoría.`}
                           </p>
                         </div>
@@ -449,16 +456,90 @@ const ProgramacionPublica = () => {
           </div>
         </section>
 
-        {/* CONTACTO */}
-        <section className="pb-20">
-          <div className="flex items-center gap-6 mb-12">
-            <h2 className="text-4xl kalian-poster-text text-kalian-gold">CONTACTO</h2>
-            <div className="h-[1px] flex-1 bg-kalian-gold/20"></div>
-          </div>
-          <NewsletterForm />
-        </section>
-
       </div>
+
+      {/* MODAL DETALLE CURSO */}
+      {cursoDetalle && (
+        <div className="fixed inset-0 bg-kalian-dark/95 backdrop-blur-md flex items-center justify-center p-4 z-[1100] animate-in fade-in duration-500 overflow-y-auto">
+          <div className="w-full max-w-2xl bg-black border border-kalian-gold/20 rounded-[3rem] shadow-2xl p-8 md:p-12 relative my-auto">
+            <button onClick={() => setCursoDetalle(null)} className="absolute top-8 right-8 text-kalian-gold/90 font-black text-2xl hover:text-kalian-gold transition-colors">✕</button>
+            
+            <div className="space-y-8">
+              <div className="space-y-2">
+                <span className="text-[10px] font-black uppercase text-kalian-gold/80 tracking-[0.4em]">{cursoDetalle.categoria} • {cursoDetalle.subcategoria}</span>
+                <h2 className="text-5xl kalian-poster-text text-kalian-gold leading-none uppercase italic">{cursoDetalle.titulo}</h2>
+                <p className="text-xs font-black text-kalian-cream/60 uppercase tracking-widest">{cursoDetalle.horario} | {cursoDetalle.profesorNombre || 'Pendiente de asignar'}</p>
+              </div>
+
+              <div className="space-y-6">
+                {/* BLOQUE IMPORTANTE */}
+                <div className="bg-kalian-gold/10 p-6 rounded-2xl border border-kalian-gold/20">
+                  <p className="text-[10px] font-black text-kalian-gold uppercase tracking-widest mb-2">★ IMPORTANTE</p>
+                  <p className="text-xs text-kalian-cream/90 italic leading-relaxed">
+                    {cursoDetalle.ventajas || `Este curso incluye el alta como soci@ de la asociación Kalian y acceso a descuentos en actividades de la misma categoría.`}
+                  </p>
+                </div>
+
+                {/* DESCRIPCIÓN DEL CURSO */}
+                {cursoDetalle.descripcion && (
+                  <div className="space-y-2">
+                    <p className="text-[10px] font-black text-kalian-gold/60 uppercase tracking-widest">Descripción del curso</p>
+                    <p className="text-sm text-kalian-cream/80 leading-relaxed">
+                      {cursoDetalle.descripcion}
+                    </p>
+                  </div>
+                )}
+
+                {/* MODALIDADES DE PRECIO */}
+                <div className="space-y-4">
+                  <p className="text-[10px] font-black text-kalian-gold/60 uppercase tracking-widest">Modalidades de Aportación</p>
+                  <div className="bg-black/40 rounded-2xl overflow-hidden border border-kalian-gold/10">
+                    <table className="w-full text-left text-[10px] uppercase tracking-widest font-black">
+                      <thead>
+                        <tr className="bg-kalian-gold/5 text-kalian-gold/70 border-b border-kalian-gold/10">
+                          <th className="p-4">Tipo</th>
+                          <th className="p-4">Frecuencia</th>
+                          <th className="p-4 text-right">Aportación</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-kalian-gold/5">
+                        {cursoDetalle.modalidades?.map((m: any, i: number) => (
+                          <tr key={i} className="text-kalian-cream/90">
+                            <td className="p-4">{m.tipo}</td>
+                            <td className="p-4">{m.frecuencia}</td>
+                            <td className="p-4 text-right font-black text-kalian-gold">{m.precio}€</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              </div>
+
+              <div className="flex gap-4 pt-4">
+                <button 
+                  onClick={() => {
+                    setSolicitudCurso({ curso: cursoDetalle, tipo: 'consulta' });
+                    setCursoDetalle(null);
+                  }}
+                  className="flex-1 bg-white/5 text-kalian-gold border border-kalian-gold/20 p-5 rounded-2xl kalian-poster-text text-lg tracking-widest hover:bg-kalian-gold/10 transition-all"
+                >
+                  Solicitar Info
+                </button>
+                <button 
+                  onClick={() => {
+                    setSolicitudCurso({ curso: cursoDetalle, tipo: 'solicitud_inscripcion' });
+                    setCursoDetalle(null);
+                  }}
+                  className="flex-1 bg-kalian-gold text-black p-5 rounded-2xl kalian-poster-text text-lg tracking-widest hover:bg-white transition-all shadow-xl shadow-kalian-gold/20"
+                >
+                  Inscribirse
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* MODAL RESERVA EVENTO */}
       {itemSeleccionado && (
@@ -474,14 +555,14 @@ const ProgramacionPublica = () => {
         <div className="fixed inset-0 bg-kalian-dark/95 backdrop-blur-md flex items-center justify-center p-6 z-[1000] animate-in fade-in duration-500">
           <div className="w-full max-w-xl bg-black border border-kalian-gold/20 rounded-[3rem] shadow-2xl p-10 relative overflow-hidden">
             <div className="absolute top-0 left-0 w-full h-1 bg-kalian-gold"></div>
-            <button onClick={() => setSolicitudCurso(null)} className="absolute top-8 right-8 text-kalian-gold/40 font-black text-2xl hover:text-kalian-gold transition-colors">✕</button>
+            <button onClick={() => setSolicitudCurso(null)} className="absolute top-8 right-8 text-kalian-gold/90 font-black text-2xl hover:text-kalian-gold transition-colors">✕</button>
             
             <h2 className="text-4xl kalian-poster-text text-kalian-gold leading-none mb-2 tracking-tight uppercase italic">{solicitudCurso.curso.titulo}</h2>
             <div className="flex justify-between items-center mb-10">
-              <p className="text-[10px] font-black text-kalian-gold/40 uppercase tracking-[0.3em]">
+              <p className="text-[10px] font-black text-kalian-gold/90 uppercase tracking-[0.3em]">
                 {solicitudCurso.tipo === 'consulta' ? 'Solicitud de Información' : 'Formulario de Inscripción'}
               </p>
-              <p className="text-[10px] font-black text-kalian-cream uppercase tracking-widest bg-kalian-gold/10 px-3 py-1 rounded-full">
+              <p className="text-[10px] font-black text-kalian-cream uppercase tracking-widest bg-kalian-gold/10 px-3 py-1 rounded-full border border-kalian-gold/20">
                 {solicitudCurso.modalidad?.tipo} | {solicitudCurso.modalidad?.frecuencia} | {solicitudCurso.modalidad?.precio}€
               </p>
             </div>
@@ -494,31 +575,31 @@ const ProgramacionPublica = () => {
               <form onSubmit={enviarSolicitud} className="space-y-6">
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div className="space-y-2">
-                    <label className="text-[9px] font-black text-kalian-gold/40 uppercase tracking-[0.3em] ml-4">Nombre Completo</label>
-                    <input type="text" className="w-full p-4 bg-kalian-gold/5 rounded-xl border border-kalian-gold/10 text-kalian-cream outline-none focus:border-kalian-gold" value={formSolicitud.nombre} onChange={e => setFormSolicitud({...formSolicitud, nombre: e.target.value})} required />
+                    <label className="text-[9px] font-black text-kalian-gold/90 uppercase tracking-[0.3em] ml-4">Nombre Completo</label>
+                    <input type="text" placeholder="TU NOMBRE" className="w-full p-4 bg-kalian-gold/10 rounded-xl border border-kalian-gold/20 text-kalian-cream outline-none focus:border-kalian-gold placeholder:text-kalian-cream/50" value={formSolicitud.nombre} onChange={e => setFormSolicitud({...formSolicitud, nombre: e.target.value})} required />
                   </div>
                   {solicitudCurso.tipo === 'solicitud_inscripcion' && (
                     <div className="space-y-2">
-                      <label className="text-[9px] font-black text-kalian-gold/40 uppercase tracking-[0.3em] ml-4">DNI</label>
-                      <input type="text" className="w-full p-4 bg-kalian-gold/5 rounded-xl border border-kalian-gold/10 text-kalian-cream outline-none focus:border-kalian-gold" value={formSolicitud.dni} onChange={e => setFormSolicitud({...formSolicitud, dni: e.target.value.toUpperCase()})} required />
+                      <label className="text-[9px] font-black text-kalian-gold/90 uppercase tracking-[0.3em] ml-4">DNI</label>
+                      <input type="text" placeholder="DNI" className="w-full p-4 bg-kalian-gold/10 rounded-xl border border-kalian-gold/20 text-kalian-cream outline-none focus:border-kalian-gold placeholder:text-kalian-cream/50" value={formSolicitud.dni} onChange={e => setFormSolicitud({...formSolicitud, dni: e.target.value.toUpperCase()})} required />
                     </div>
                   )}
                 </div>
 
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div className="space-y-2">
-                    <label className="text-[9px] font-black text-kalian-gold/40 uppercase tracking-[0.3em] ml-4">Email</label>
-                    <input type="email" className="w-full p-4 bg-kalian-gold/5 rounded-xl border border-kalian-gold/10 text-kalian-cream outline-none focus:border-kalian-gold" value={formSolicitud.email} onChange={e => setFormSolicitud({...formSolicitud, email: e.target.value})} required />
+                    <label className="text-[9px] font-black text-kalian-gold/90 uppercase tracking-[0.3em] ml-4">Email</label>
+                    <input type="email" placeholder="tu@email.com" className="w-full p-4 bg-kalian-gold/10 rounded-xl border border-kalian-gold/20 text-kalian-cream outline-none focus:border-kalian-gold placeholder:text-kalian-cream/50" value={formSolicitud.email} onChange={e => setFormSolicitud({...formSolicitud, email: e.target.value})} required />
                   </div>
                   <div className="space-y-2">
-                    <label className="text-[9px] font-black text-kalian-gold/40 uppercase tracking-[0.3em] ml-4">Teléfono</label>
-                    <input type="tel" className="w-full p-4 bg-kalian-gold/5 rounded-xl border border-kalian-gold/10 text-kalian-cream outline-none focus:border-kalian-gold" value={formSolicitud.telefono} onChange={e => setFormSolicitud({...formSolicitud, telefono: e.target.value})} required />
+                    <label className="text-[9px] font-black text-kalian-gold/90 uppercase tracking-[0.3em] ml-4">Teléfono</label>
+                    <input type="tel" placeholder="600 000 000" className="w-full p-4 bg-kalian-gold/10 rounded-xl border border-kalian-gold/20 text-kalian-cream outline-none focus:border-kalian-gold placeholder:text-kalian-cream/50" value={formSolicitud.telefono} onChange={e => setFormSolicitud({...formSolicitud, telefono: e.target.value})} required />
                   </div>
                 </div>
 
                 <div className="space-y-2">
-                  <label className="text-[9px] font-black text-kalian-gold/40 uppercase tracking-[0.3em] ml-4">Mensaje (Opcional)</label>
-                  <textarea className="w-full p-4 bg-kalian-gold/5 rounded-xl border border-kalian-gold/10 text-kalian-cream outline-none focus:border-kalian-gold h-24" value={formSolicitud.mensaje} onChange={e => setFormSolicitud({...formSolicitud, mensaje: e.target.value})} />
+                  <label className="text-[9px] font-black text-kalian-gold/90 uppercase tracking-[0.3em] ml-4">Mensaje (Opcional)</label>
+                  <textarea placeholder="¿TIENES ALGUNA DUDA?" className="w-full p-4 bg-kalian-gold/10 rounded-xl border border-kalian-gold/20 text-kalian-cream outline-none focus:border-kalian-gold h-24 placeholder:text-kalian-cream/50" value={formSolicitud.mensaje} onChange={e => setFormSolicitud({...formSolicitud, mensaje: e.target.value})} />
                 </div>
 
                 {solicitudCurso.tipo === 'solicitud_inscripcion' && (
@@ -532,7 +613,7 @@ const ProgramacionPublica = () => {
                       required
                     />
                     <label htmlFor="terminos" className="text-[10px] text-kalian-cream/60 leading-relaxed uppercase tracking-widest font-black cursor-pointer">
-                      Acepto los términos de alta como soci@ de la asociación Kalian y autorizo el tratamiento de mis datos para la gestión del curso.
+                      Acepto los <button type="button" onClick={() => setShowLegal(true)} className="text-kalian-gold underline hover:text-white transition-colors">términos de alta</button> como soci@ de la asociación Kalian y autorizo el tratamiento de mis datos para la gestión del curso.
                     </label>
                   </div>
                 )}
@@ -561,6 +642,8 @@ const ProgramacionPublica = () => {
           </div>
         </div>
       )}
+
+      <LegalModal isOpen={showLegal} onClose={() => setShowLegal(false)} />
     </div>
   );
 };

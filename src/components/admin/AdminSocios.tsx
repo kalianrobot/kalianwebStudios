@@ -203,7 +203,7 @@ const AdminSocios = () => {
             <h2 className="text-3xl kalian-poster-text text-kalian-gold mb-6">ALTA DE SOCI@S</h2>
             <div className="grid md:grid-cols-3 gap-6">
               <div className="space-y-2">
-                <p className="text-[9px] font-black text-kalian-gold/40 uppercase tracking-[0.3em] ml-4">DNI / NIE</p>
+                <p className="text-[9px] font-black text-kalian-gold/80 uppercase tracking-[0.3em] ml-4">DNI / NIE</p>
                 <input 
                   type="text" placeholder="12345678X" 
                   className="w-full p-5 bg-kalian-gold/5 rounded-2xl outline-none border border-kalian-gold/10 focus:border-kalian-gold text-kalian-gold font-bold uppercase"
@@ -213,7 +213,7 @@ const AdminSocios = () => {
                 />
               </div>
               <div className="space-y-2">
-                <p className="text-[9px] font-black text-kalian-gold/40 uppercase tracking-[0.3em] ml-4">Nombre Completo</p>
+                <p className="text-[9px] font-black text-kalian-gold/80 uppercase tracking-[0.3em] ml-4">Nombre Completo</p>
                 <input 
                   type="text" placeholder="Nombre..." 
                   className="w-full p-5 bg-kalian-gold/5 rounded-2xl outline-none border border-kalian-gold/10 focus:border-kalian-gold text-kalian-gold font-bold"
@@ -223,7 +223,7 @@ const AdminSocios = () => {
                 />
               </div>
               <div className="space-y-2">
-                <p className="text-[9px] font-black text-kalian-gold/40 uppercase tracking-[0.3em] ml-4">Email de Contacto</p>
+                <p className="text-[9px] font-black text-kalian-gold/80 uppercase tracking-[0.3em] ml-4">Email de Contacto</p>
                 <input 
                   type="email" placeholder="tu@email.com" 
                   className="w-full p-5 bg-kalian-gold/5 rounded-2xl outline-none border border-kalian-gold/10 focus:border-kalian-gold text-kalian-gold font-bold"
@@ -262,8 +262,8 @@ const AdminSocios = () => {
                     <div>
                       <p className="text-3xl kalian-poster-text text-kalian-cream group-hover:text-kalian-gold transition-colors leading-none mb-2">{s.nombre || 'Sin nombre'}</p>
                       <div className="flex gap-4 items-center">
-                        <p className="text-[10px] text-kalian-gold/40 font-mono font-black tracking-[0.2em] uppercase">{s.dni || s.id}</p>
-                        <p className="text-[10px] text-kalian-gold/20 italic font-bold">{s.email}</p>
+                        <p className="text-[10px] text-kalian-gold/80 font-mono font-black tracking-[0.2em] uppercase">{s.dni || s.id}</p>
+                        <p className="text-[10px] text-kalian-gold/60 italic font-bold">{s.email}</p>
                       </div>
                       {s.cursos && s.cursos.filter((cId: string) => cursosExistentes.has(cId)).length > 0 && (
                         <div className="mt-4 flex gap-2 flex-wrap">
@@ -277,7 +277,7 @@ const AdminSocios = () => {
                     <div className="flex gap-4 flex-wrap justify-end w-full md:w-auto">
                       {/* Estado de Pago Mensual */}
                       <div className="flex flex-col items-center bg-black/20 p-3 rounded-2xl border border-kalian-gold/5 min-w-[120px]">
-                        <p className="text-[7px] font-black text-kalian-gold/40 uppercase tracking-widest mb-2">Aportación {meses[mesActual-1]}</p>
+                        <p className="text-[7px] font-black text-kalian-gold/80 uppercase tracking-widest mb-2">Aportación {meses[mesActual-1]}</p>
                         {pagosMensuales[s.dni]?.pagado ? (
                           <span className="text-emerald-500 text-xs font-black">✅ PAGADO</span>
                         ) : (
@@ -288,7 +288,7 @@ const AdminSocios = () => {
                       {activas.map(cat => (
                         <div key={cat} className="flex flex-col items-end">
                           <span className="px-4 py-1.5 bg-kalian-gold text-black text-[10px] font-black uppercase rounded-xl shadow-xl shadow-kalian-gold/10 tracking-widest">{cat}</span>
-                          <span className="text-[8px] font-black text-kalian-gold/40 mt-2 uppercase tracking-widest">Hasta {exp[cat]}</span>
+                          <span className="text-[8px] font-black text-kalian-gold/80 mt-2 uppercase tracking-widest">Hasta {exp[cat]}</span>
                         </div>
                       ))}
                       {activas.length === 0 && <span className="px-6 py-2 bg-black/40 text-kalian-gold/20 font-black text-[10px] uppercase rounded-xl border border-kalian-gold/10 tracking-widest italic">Inactivo</span>}

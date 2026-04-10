@@ -166,22 +166,22 @@ const AdminAcademias = () => {
               <h2 className="text-2xl kalian-poster-text text-kalian-gold uppercase italic">{editando ? 'Editar Academia' : 'Nueva Academia'}</h2>
               
               <div className="space-y-2">
-                <label className="text-[9px] font-black uppercase text-kalian-gold/40 ml-4 tracking-widest">Nombre</label>
-                <input type="text" placeholder="EJ: MUSIC IS COOL" className="w-full p-4 bg-kalian-gold/5 rounded-xl outline-none border border-kalian-gold/10 focus:border-kalian-gold transition-all text-kalian-cream font-bold" value={form.nombre} onChange={e => setForm({...form, nombre: e.target.value})} required />
+                <label className="text-[9px] font-black uppercase text-kalian-gold/90 ml-4 tracking-widest">Nombre</label>
+                <input type="text" placeholder="EJ: MUSIC IS COOL" className="w-full p-4 bg-kalian-gold/10 rounded-xl outline-none border border-kalian-gold/20 focus:border-kalian-gold transition-all text-kalian-cream font-bold placeholder:text-kalian-cream/50" value={form.nombre} onChange={e => setForm({...form, nombre: e.target.value})} required />
               </div>
 
               <div className="space-y-2">
-                <label className="text-[9px] font-black uppercase text-kalian-gold/40 ml-4 tracking-widest">Lema / Descripción corta</label>
-                <input type="text" placeholder="EJ: INSTRUMENTO • COMBO..." className="w-full p-4 bg-kalian-gold/5 rounded-xl outline-none border border-kalian-gold/10 focus:border-kalian-gold transition-all text-kalian-cream font-bold" value={form.lema} onChange={e => setForm({...form, lema: e.target.value})} required />
+                <label className="text-[9px] font-black uppercase text-kalian-gold/90 ml-4 tracking-widest">Lema / Descripción corta</label>
+                <input type="text" placeholder="EJ: INSTRUMENTO • COMBO..." className="w-full p-4 bg-kalian-gold/10 rounded-xl outline-none border border-kalian-gold/20 focus:border-kalian-gold transition-all text-kalian-cream font-bold placeholder:text-kalian-cream/50" value={form.lema} onChange={e => setForm({...form, lema: e.target.value})} required />
               </div>
 
               <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-2">
-                  <label className="text-[9px] font-black uppercase text-kalian-gold/40 ml-4 tracking-widest">Orden</label>
-                  <input type="number" className="w-full p-4 bg-kalian-gold/5 rounded-xl outline-none border border-kalian-gold/10 focus:border-kalian-gold transition-all text-kalian-cream font-bold" value={form.orden} onChange={e => setForm({...form, orden: Number(e.target.value)})} required />
+                  <label className="text-[9px] font-black uppercase text-kalian-gold/90 ml-4 tracking-widest">Orden</label>
+                  <input type="number" className="w-full p-4 bg-kalian-gold/10 rounded-xl outline-none border border-kalian-gold/20 focus:border-kalian-gold transition-all text-kalian-cream font-bold" value={form.orden} onChange={e => setForm({...form, orden: Number(e.target.value)})} required />
                 </div>
                 <div className="space-y-2">
-                  <label className="text-[9px] font-black uppercase text-kalian-gold/40 ml-4 tracking-widest">Estado</label>
+                  <label className="text-[9px] font-black uppercase text-kalian-gold/90 ml-4 tracking-widest">Estado</label>
                   <button 
                     type="button"
                     onClick={() => setForm({...form, activo: !form.activo})}
@@ -193,12 +193,12 @@ const AdminAcademias = () => {
               </div>
 
               <div className="space-y-2">
-                <label className="text-[9px] font-black uppercase text-kalian-gold/40 ml-4 tracking-widest">Imagen (Fondo)</label>
+                <label className="text-[9px] font-black uppercase text-kalian-gold/90 ml-4 tracking-widest">Imagen (Fondo)</label>
                 <input 
                   type="file" 
                   accept="image/*"
                   onChange={(e) => setArchivo(e.target.files?.[0] || null)}
-                  className="w-full p-4 bg-kalian-gold/5 rounded-xl border border-kalian-gold/10 text-[10px] font-bold"
+                  className="w-full p-4 bg-kalian-gold/10 rounded-xl border border-kalian-gold/20 text-[10px] font-bold text-kalian-cream"
                 />
                 {form.imageUrl && !archivo && (
                   <div className="mt-2 w-full h-20 rounded-xl overflow-hidden border border-kalian-gold/20">

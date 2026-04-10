@@ -186,7 +186,7 @@ const AdminSolicitudes = () => {
       <div className="max-w-6xl mx-auto">
         <header className="mb-12 flex flex-col md:flex-row justify-between items-start md:items-end gap-6">
           <div>
-            <Link to="/staff" className="text-kalian-gold/40 font-black text-[10px] uppercase tracking-[0.3em] hover:text-kalian-gold transition-colors">← Volver al Panel</Link>
+            <Link to="/staff" className="text-kalian-gold/80 font-black text-[10px] uppercase tracking-[0.3em] hover:text-kalian-gold transition-colors">← Volver al Panel</Link>
             <h1 className="text-6xl kalian-poster-text text-kalian-gold mt-4 tracking-tight">SOLICITUDES <span className="text-kalian-cream">CURSOS</span></h1>
           </div>
           <button onClick={fetchSolicitudes} className="p-3 bg-kalian-gold/10 text-kalian-gold rounded-2xl border border-kalian-gold/20 hover:bg-kalian-gold/20 transition-all">🔄</button>

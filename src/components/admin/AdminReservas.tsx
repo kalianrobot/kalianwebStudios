@@ -28,9 +28,9 @@ const AdminReservas = () => {
             <tbody className="divide-y">
               {reservas.map(r => (
                 <tr key={r.id} className="text-sm">
-                  <td className="p-4"><b>{r.nombre}</b><br/><span className="text-[10px] opacity-50">{r.dni}</span></td>
-                  <td className="p-4"><span className="px-2 py-1 bg-slate-100 rounded text-[9px] font-black uppercase">{r.tipo}</span></td>
-                  <td className="p-4 font-bold">{r.totalPagado}€</td>
+                  <td className="p-4 text-slate-900"><b>{r.nombre}</b><br/><span className="text-[10px] text-slate-500">{r.dni}</span></td>
+                  <td className="p-4"><span className="px-2 py-1 bg-slate-100 rounded text-[9px] font-black uppercase text-slate-700">{r.tipo}</span></td>
+                  <td className="p-4 font-bold text-slate-900">{r.totalPagado}€</td>
                 </tr>
               ))}
             </tbody>

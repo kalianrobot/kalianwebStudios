@@ -141,11 +141,11 @@ const AdminLocales = () => {
                   
                   <div className="flex gap-4 mb-6">
                     <div className="flex-1 bg-slate-50 p-3 rounded-2xl text-center">
-                      <p className="text-[8px] font-black uppercase text-slate-400">Soci@s</p>
+                      <p className="text-[8px] font-black uppercase text-slate-600">Soci@s</p>
                       <p className="font-black text-lg">{l.inquilinos?.length || 0}</p>
                     </div>
                     <div className={`flex-1 p-3 rounded-2xl text-center ${l.alquilado ? 'bg-red-50' : 'bg-emerald-50'}`}>
-                      <p className="text-[8px] font-black uppercase text-slate-400">Estado</p>
+                      <p className="text-[8px] font-black uppercase text-slate-600">Estado</p>
                       <p className={`font-black text-lg ${l.alquilado ? 'text-red-600' : 'text-emerald-600'}`}>{l.alquilado ? 'ALQUILADO' : 'LIBRE'}</p>
                     </div>
                   </div>
@@ -153,8 +153,8 @@ const AdminLocales = () => {
                   {l.alquilado && (
                     <div className="mb-6 space-y-2">
                       <p className="text-[10px] font-black uppercase text-indigo-600 tracking-tighter">Grupo: <span className="text-slate-900">{l.nombreGrupo}</span></p>
-                      <p className="text-[10px] font-black uppercase text-slate-400 tracking-tighter">Actividad: <span className="text-slate-900">{l.actividadArtistica}</span></p>
-                      <p className="text-[10px] font-black uppercase text-slate-400 tracking-tighter">Expira: <span className="text-slate-900">{l.fechaExpiracion === '2099-12-31' ? 'INDEFINIDA' : l.fechaExpiracion}</span></p>
+                      <p className="text-[10px] font-black uppercase text-slate-600 tracking-tighter">Actividad: <span className="text-slate-900">{l.actividadArtistica}</span></p>
+                      <p className="text-[10px] font-black uppercase text-slate-600 tracking-tighter">Expira: <span className="text-slate-900">{l.fechaExpiracion === '2099-12-31' ? 'INDEFINIDA' : l.fechaExpiracion}</span></p>
                     </div>
                   )}
                 </div>

@@ -112,11 +112,11 @@ const NewsletterForm = () => {
 
       <form onSubmit={handleSubmit} className="space-y-5">
         <div className="space-y-1">
-          <label className="text-[10px] font-black uppercase text-slate-500 ml-4 tracking-widest">Nombre Completo</label>
+          <label className="text-[10px] font-black uppercase text-slate-200 ml-4 tracking-widest">Nombre Completo</label>
           <input 
             type="text" 
             placeholder="Tu nombre..."
-            className="w-full p-5 bg-white/5 border border-white/10 rounded-2xl outline-none focus:ring-2 ring-indigo-500 text-white font-bold transition-all"
+            className="w-full p-5 bg-white/10 border border-white/20 rounded-2xl outline-none focus:ring-2 ring-indigo-500 text-white font-bold transition-all placeholder:text-white/40"
             value={form.nombre}
             onChange={e => setForm({...form, nombre: e.target.value})}
             required
@@ -124,11 +124,11 @@ const NewsletterForm = () => {
         </div>
 
         <div className="space-y-1">
-          <label className="text-[10px] font-black uppercase text-slate-500 ml-4 tracking-widest">Email</label>
+          <label className="text-[10px] font-black uppercase text-slate-200 ml-4 tracking-widest">Email</label>
           <input 
             type="email" 
             placeholder="tu@email.com"
-            className="w-full p-5 bg-white/5 border border-white/10 rounded-2xl outline-none focus:ring-2 ring-indigo-500 text-white font-bold transition-all"
+            className="w-full p-5 bg-white/10 border border-white/20 rounded-2xl outline-none focus:ring-2 ring-indigo-500 text-white font-bold transition-all placeholder:text-white/40"
             value={form.email}
             onChange={e => setForm({...form, email: e.target.value})}
             required
@@ -136,9 +136,9 @@ const NewsletterForm = () => {
         </div>
 
         <div className="space-y-1">
-          <label className="text-[10px] font-black uppercase text-slate-500 ml-4 tracking-widest">Me interesa...</label>
+          <label className="text-[10px] font-black uppercase text-slate-200 ml-4 tracking-widest">Me interesa...</label>
           <select 
-            className="w-full p-5 bg-white/5 border border-white/10 rounded-2xl outline-none focus:ring-2 ring-indigo-500 text-white font-black uppercase tracking-widest transition-all appearance-none"
+            className="w-full p-5 bg-white/10 border border-white/20 rounded-2xl outline-none focus:ring-2 ring-indigo-500 text-white font-black uppercase tracking-widest transition-all appearance-none"
             value={form.interes}
             onChange={e => setForm({...form, interes: e.target.value})}
           >

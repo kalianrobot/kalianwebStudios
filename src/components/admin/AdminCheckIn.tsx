@@ -1,7 +1,9 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { db } from '../../firebase';
 import { collection, query, where, getDocs, doc, updateDoc, DocumentData, getDoc, setDoc, increment, orderBy, addDoc } from 'firebase/firestore';
 import { Link } from 'react-router-dom';
+import { Html5Qrcode } from 'html5-qrcode';
+import { Camera, X } from 'lucide-react';
 
 const AdminCheckIn = () => {
   const [eventos, setEventos] = useState<DocumentData[]>([]);
@@ -12,6 +14,66 @@ const AdminCheckIn = () => {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [msg, setMsg] = useState('');
+  const [mostrarScanner, setMostrarScanner] = useState(false);
+  const scannerRef = useRef<Html5Qrcode | null>(null);
+
+  useEffect(() => {
+    if (mostrarScanner) {
+      const html5QrCode = new Html5Qrcode("reader");
+      scannerRef.current = html5QrCode;
+
+      const config = { 
+        fps: 10, 
+        qrbox: { width: 250, height: 250 },
+        aspectRatio: 1.0
+      };
+
+      html5QrCode.start(
+        { facingMode: "environment" }, 
+        config,
+        (decodedText) => {
+          setBusqueda(decodedText);
+          setMostrarScanner(false);
+          setTimeout(() => {
+            const form = document.getElementById('search-form') as HTMLFormElement;
+            form?.requestSubmit();
+          }, 100);
+        },
+        (errorMessage) => {
+          // ignore errors
+        }
+      ).catch((err) => {
+        console.error("Error starting scanner", err);
+        // If environment fails, try any camera
+        html5QrCode.start(
+          { facingMode: "user" },
+          config,
+          (decodedText) => {
+            setBusqueda(decodedText);
+            setMostrarScanner(false);
+            setTimeout(() => {
+              const form = document.getElementById('search-form') as HTMLFormElement;
+              form?.requestSubmit();
+            }, 100);
+          },
+          () => {}
+        ).catch(e => console.error("Final scanner error", e));
+      });
+
+      return () => {
+        if (scannerRef.current) {
+          const scanner = scannerRef.current;
+          if (scanner.isScanning) {
+            scanner.stop().then(() => {
+              scanner.clear();
+            }).catch(err => console.error("Error stopping scanner", err));
+          } else {
+            scanner.clear();
+          }
+        }
+      };
+    }
+  }, [mostrarScanner]);
 
   useEffect(() => {
     const fetchEventos = async () => {
@@ -288,7 +350,7 @@ const AdminCheckIn = () => {
 
         {/* SELECTOR DE EVENTO */}
         <div className="mb-6">
-          <p className="text-[10px] font-black text-slate-500 uppercase tracking-widest mb-2 ml-4">Evento Actual</p>
+          <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2 ml-4">Evento Actual</p>
           <select 
             className="w-full p-4 bg-white/5 border border-white/10 rounded-2xl text-indigo-400 font-bold outline-none"
             value={eventoId}
@@ -300,22 +362,69 @@ const AdminCheckIn = () => {
           </select>
         </div>
 
-        {/* BUSCADOR / ESCÁNER */}
-        <form onSubmit={handleBusqueda} className="mb-6 flex gap-2">
-          <input 
-            type="text" 
-            placeholder="TICKET, UID (QR) O DNI" 
-            className="flex-1 p-6 bg-white/5 border border-white/10 rounded-3xl text-center text-2xl font-black uppercase outline-none focus:border-indigo-500 transition-all"
-            value={busqueda}
-            onChange={e => setBusqueda(e.target.value)}
-            autoFocus
-          />
-          <button className="bg-indigo-600 p-6 rounded-3xl font-black uppercase text-xs hover:bg-indigo-500 transition-all">OK</button>
-        </form>
+        {/* BOTÓN ESCÁNER PROMINENTE */}
+        {!mostrarScanner ? (
+          <button 
+            onClick={() => setMostrarScanner(true)}
+            className="w-full mb-6 p-8 bg-indigo-600 rounded-[2.5rem] flex flex-col items-center justify-center gap-3 hover:bg-indigo-500 transition-all shadow-xl shadow-indigo-500/20 group"
+          >
+            <div className="bg-white/20 p-4 rounded-2xl group-hover:scale-110 transition-transform">
+              <Camera size={32} className="text-white" />
+            </div>
+            <div className="text-center">
+              <p className="text-xl font-black uppercase italic tracking-tighter">Activar Escáner QR</p>
+              <p className="text-[10px] font-bold uppercase text-indigo-200 tracking-widest opacity-60">Usa la cámara para validar carnets</p>
+            </div>
+          </button>
+        ) : (
+          <div className="mb-10 animate-in fade-in slide-in-from-top-4 duration-500">
+            <div className="flex justify-between items-center mb-4 px-4">
+              <p className="text-[10px] font-black uppercase text-indigo-400 tracking-widest">Escáner en vivo</p>
+              <button 
+                onClick={() => setMostrarScanner(false)}
+                className="flex items-center gap-2 bg-red-500/20 text-red-400 px-4 py-2 rounded-full text-[10px] font-black uppercase tracking-widest hover:bg-red-500/30 transition-all"
+              >
+                <X size={14} /> Cerrar Cámara
+              </button>
+            </div>
+            <div id="reader" className="overflow-hidden rounded-[3rem] border-2 border-indigo-500/30 bg-black/40 shadow-2xl min-h-[300px]"></div>
+            <p className="text-center text-[10px] font-black uppercase text-slate-500 mt-6 tracking-widest animate-pulse">Enfoca el código QR del socio</p>
+          </div>
+        )}
+
+        {/* BUSCADOR MANUAL */}
+        <div className="mb-10">
+          <div className="flex items-center gap-4 mb-4 px-4">
+            <div className="h-px flex-1 bg-white/10"></div>
+            <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">O búsqueda manual</p>
+            <div className="h-px flex-1 bg-white/10"></div>
+          </div>
+          <form id="search-form" onSubmit={handleBusqueda} className="flex gap-2">
+            <div className="relative flex-1">
+              <input 
+                type="text" 
+                placeholder="TICKET, QR O DNI" 
+                className="w-full p-6 bg-white/5 border border-white/10 rounded-3xl text-center text-2xl font-black uppercase outline-none focus:border-indigo-500 transition-all"
+                value={busqueda}
+                onChange={e => setBusqueda(e.target.value)}
+              />
+              {busqueda && (
+                <button 
+                  type="button"
+                  onClick={() => setBusqueda('')}
+                  className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-500 hover:text-white transition-colors"
+                >
+                  <X size={24} />
+                </button>
+              )}
+            </div>
+            <button className="bg-indigo-600 px-8 rounded-3xl font-black uppercase text-xs hover:bg-indigo-500 transition-all">OK</button>
+          </form>
+        </div>
 
         <button 
           onClick={registrarWalkIn}
-          className="w-full mb-10 p-4 bg-white/5 border border-white/10 rounded-2xl text-slate-400 font-bold text-xs uppercase tracking-widest hover:bg-white/10 transition-all"
+          className="w-full mb-10 p-4 bg-white/5 border border-white/10 rounded-2xl text-slate-300 font-bold text-xs uppercase tracking-widest hover:bg-white/10 transition-all"
         >
           + Registrar Walk-in (Manual)
         </button>
@@ -383,16 +492,16 @@ const AdminCheckIn = () => {
               <div className="relative z-10">
                 <div className="flex justify-between items-start mb-4">
                   <span className="text-[9px] font-black uppercase bg-indigo-500 text-white px-4 py-1.5 rounded-full tracking-widest">{reserva.categoria}</span>
-                  <p className="text-[10px] font-mono text-slate-600">REF: {reserva.ticketID}</p>
+                  <p className="text-[10px] font-mono text-slate-400">REF: {reserva.ticketID}</p>
                 </div>
                 <h2 className="text-4xl font-black italic uppercase leading-none mb-6 tracking-tighter">{reserva.eventoTitulo}</h2>
                 <div className="flex justify-between items-end pt-6 border-t border-white/5">
                   <div>
-                    <p className="text-[10px] font-black text-slate-500 uppercase tracking-widest mb-1">Total Pendiente</p>
+                    <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">Total Pendiente</p>
                     <p className="text-5xl font-black italic text-indigo-400">{reserva.totalPendiente}€</p>
                   </div>
                   <div className="text-right">
-                    <p className="text-[10px] font-black text-slate-500 uppercase tracking-widest mb-1">Acompañantes</p>
+                    <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">Acompañantes</p>
                     <p className="text-2xl font-black text-white">{reserva.acompañantes || 0}</p>
                   </div>
                 </div>
@@ -402,8 +511,8 @@ const AdminCheckIn = () => {
             {/* BARAJA DE SLOTS */}
             <div className="space-y-4">
               <div className="flex justify-between items-center px-6">
-                <h3 className="text-xs font-black text-slate-500 uppercase tracking-[0.3em]">Slots de Acceso</h3>
-                <span className="text-[10px] font-bold text-slate-600 uppercase italic">Validar uno a uno</span>
+                <h3 className="text-xs font-black text-slate-400 uppercase tracking-[0.3em]">Slots de Acceso</h3>
+                <span className="text-[10px] font-bold text-slate-400 uppercase italic">Validar uno a uno</span>
               </div>
               {reserva.slots.map((s: any, idx: number) => (
                 <div 

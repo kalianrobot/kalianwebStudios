@@ -27,18 +27,14 @@ const LoginSocio = () => {
     setCargando(true);
 
     try {
-      const u = await signInWithEmailAndPassword(auth, form.email, form.password);
+      await signInWithEmailAndPassword(auth, form.email, form.password);
 
-      if (u.user.emailVerified) {
-        const destino = sessionStorage.getItem('url_retorno');
-        if (destino) {
-          sessionStorage.removeItem('url_retorno');
-          navigate(destino);
-        } else {
-          navigate('/home');
-        }
+      const destino = sessionStorage.getItem('url_retorno');
+      if (destino) {
+        sessionStorage.removeItem('url_retorno');
+        navigate(destino);
       } else {
-        setError("⚠️ Por favor, verifica tu email antes de entrar. Revisa tu bandeja de entrada.");
+        navigate('/home');
       }
     } catch (err: any) { 
       console.error(err);

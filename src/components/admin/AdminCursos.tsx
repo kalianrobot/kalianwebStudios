@@ -61,7 +61,7 @@ const AdminCursos = () => {
       const prof = profesores.find(p => p.id === form.profesorId);
       const cursoData = { 
         ...form, 
-        profesorNombre: prof ? prof.nombre : form.profesorNombre,
+        profesorNombre: prof ? prof.nombre : '',
         modalidades: form.modalidades.map(m => ({ ...m, precio: Number(m.precio) })),
         ventajas: getVentajasText(form.categoria),
         aforo_actual: editando ? (cursos.find(c => c.id === editando)?.aforo_actual || 0) : 0,
@@ -283,14 +283,13 @@ const AdminCursos = () => {
             </div>
 
             <div className="space-y-1">
-              <label className="text-[9px] font-black uppercase text-slate-400 ml-4">Profesor/a</label>
+              <label className="text-[9px] font-black uppercase text-slate-600 ml-4">Profesor/a</label>
               <select 
                 className="w-full p-5 bg-slate-50 rounded-2xl font-black uppercase border border-slate-200 text-slate-900" 
                 value={form.profesorId} 
                 onChange={e => setForm({...form, profesorId: e.target.value})} 
-                required
               >
-                <option value="">Seleccionar Profesor</option>
+                <option value="">Seleccionar Profesor (Opcional)</option>
                 {profesores.map(p => (
                   <option key={p.id} value={p.id}>{p.nombre}</option>
                 ))}
@@ -298,13 +297,13 @@ const AdminCursos = () => {
             </div>
 
             <div className="space-y-1">
-              <label className="text-[9px] font-black uppercase text-slate-400 ml-4">Horario</label>
+              <label className="text-[9px] font-black uppercase text-slate-600 ml-4">Horario</label>
               <input type="text" placeholder="ej: Lunes y Martes 14:00-15:00" className="w-full p-5 bg-slate-50 rounded-2xl outline-none border border-slate-200 text-slate-900" value={form.horario} onChange={e => setForm({...form, horario: e.target.value})} required />
             </div>
 
             <div className="space-y-4">
               <div className="flex justify-between items-center ml-4">
-                <label className="text-[9px] font-black uppercase text-slate-400">Configurador de Modalidades</label>
+                <label className="text-[9px] font-black uppercase text-slate-600">Configurador de Modalidades</label>
                 <button 
                   type="button"
                   onClick={() => setForm({...form, modalidades: [...form.modalidades, { tipo: 'presencial', frecuencia: 'semanal', precio: '' }]})}
@@ -313,6 +312,11 @@ const AdminCursos = () => {
               </div>
               
               <div className="space-y-3">
+                <div className="grid grid-cols-3 gap-2 px-4">
+                  <span className="text-[8px] font-black uppercase text-slate-400">Modalidad</span>
+                  <span className="text-[8px] font-black uppercase text-slate-400">Frecuencia</span>
+                  <span className="text-[8px] font-black uppercase text-slate-400">Aportación (€)</span>
+                </div>
                 {form.modalidades.map((mod, idx) => (
                   <div key={idx} className="grid grid-cols-3 gap-2 bg-slate-50 p-4 rounded-2xl border border-slate-200 relative group">
                     <select 
@@ -343,7 +347,7 @@ const AdminCursos = () => {
                     <div className="relative">
                       <input 
                         type="number" 
-                        placeholder="€"
+                        placeholder="APORTACIÓN €"
                         className="w-full p-3 bg-white rounded-xl text-[10px] font-black border border-slate-100"
                         value={mod.precio}
                         onChange={e => {
@@ -400,7 +404,7 @@ const AdminCursos = () => {
             </div>
 
             <div className="space-y-1">
-              <label className="text-[9px] font-black uppercase text-slate-400 ml-4">Descripción del Curso</label>
+              <label className="text-[9px] font-black uppercase text-slate-600 ml-4">Descripción del Curso</label>
               <textarea placeholder="Información descriptiva del curso..." className="w-full p-5 bg-slate-50 rounded-2xl outline-none border border-slate-200 text-slate-900 min-h-[100px]" value={form.descripcion} onChange={e => setForm({...form, descripcion: e.target.value})} />
             </div>
 
@@ -436,7 +440,7 @@ const AdminCursos = () => {
 
           {/* LISTADO Y GESTIÓN */}
           <div className="space-y-4">
-            <h2 className="text-xl font-black uppercase italic mb-4 ml-4 text-slate-400">Cursos Activos</h2>
+            <h2 className="text-xl font-black uppercase italic mb-4 ml-4 text-slate-600">Cursos Activos</h2>
             {cursos.map(c => (
               <div key={c.id} className="bg-white p-8 rounded-[2.5rem] shadow-lg border border-slate-100 group">
                 <div className="flex justify-between items-start mb-4">
@@ -445,12 +449,12 @@ const AdminCursos = () => {
                       {c.categoria === 'musica' ? 'Music is cool' : c.categoria === 'danza' ? 'Club de baile' : 'Locales'}
                     </span>
                     <h3 className="font-black text-2xl uppercase italic leading-none">{c.titulo}</h3>
-                    <p className="text-[10px] text-indigo-500 font-black mt-1 uppercase tracking-widest">{c.horario} | {c.profesorNombre || c.profesor}</p>
-                    <p className="text-[8px] text-slate-300 font-mono mt-1">ID Prof: {c.profesorId || 'SIN ID'}</p>
-                    <p className="text-[10px] text-slate-400 font-bold mt-2 uppercase tracking-widest">{c.fechaInicio} al {c.fechaFin}</p>
+                    <p className="text-[10px] text-indigo-500 font-black mt-1 uppercase tracking-widest">{c.horario} | {c.profesorNombre || c.profesor || 'Pendiente de asignar'}</p>
+                    <p className="text-[8px] text-slate-500 font-mono mt-1">ID Prof: {c.profesorId || 'SIN ID'}</p>
+                    <p className="text-[10px] text-slate-600 font-bold mt-2 uppercase tracking-widest">{c.fechaInicio} al {c.fechaFin}</p>
                     <div className="mt-2 space-y-1">
                       {c.modalidades?.map((m: any, i: number) => (
-                        <p key={i} className="text-[9px] text-slate-500 font-bold uppercase tracking-widest">
+                        <p key={i} className="text-[9px] text-slate-700 font-bold uppercase tracking-widest">
                           {m.tipo} | {m.frecuencia} | {m.precio}€
                         </p>
                       ))}
@@ -460,13 +464,13 @@ const AdminCursos = () => {
                     <p className={`text-xl font-black italic ${c.aforo_disponible ? 'text-emerald-500' : 'text-red-500'}`}>
                       {c.aforo_disponible ? 'DISPONIBLE' : 'COMPLETO'}
                     </p>
-                    <p className="text-[8px] font-black uppercase text-slate-300">{c.alumnos?.length || 0} Alumnos</p>
+                    <p className="text-[8px] font-black uppercase text-slate-500">{c.alumnos?.length || 0} Alumnos</p>
                   </div>
                 </div>
 
                 {cursoSeleccionado === c.id ? (
                   <div className="mt-6 bg-slate-50 p-6 rounded-3xl space-y-4 animate-in slide-in-from-top-2">
-                    <h4 className="text-[10px] font-black uppercase text-slate-400">Alta Manual de Alumno</h4>
+                    <h4 className="text-[10px] font-black uppercase text-slate-600">Alta Manual de Alumno</h4>
                     <div className="grid grid-cols-2 gap-3">
                       <input 
                         type="text" placeholder="DNI" 

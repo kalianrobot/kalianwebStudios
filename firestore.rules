@@ -36,8 +36,18 @@ service cloud.firestore {
 
     // SOCIOS: Solo lectura propia, admin o profesor (para ver alumnos). Escritura solo admin.
     match /socios/{socioId} {
-      allow read: if isAuthenticated() && (isOwner(resource.data.uid) || isAdmin() || isTeacher());
-      allow write: if isAdmin();
+      allow read: if isAuthenticated() && (
+        isOwner(resource.data.uid) || 
+        resource.data.email == request.auth.token.email ||
+        isAdmin() || 
+        isTeacher()
+      );
+      allow update: if isAdmin() || (
+        isAuthenticated() && 
+        resource.data.email == request.auth.token.email &&
+        request.resource.data.diff(resource.data).affectedKeys().hasOnly(['uid'])
+      );
+      allow create, delete: if isAdmin();
     }
 
     // RESERVAS: Lectura propia, por DNI de socio o admin.

@@ -4,7 +4,7 @@ import { AuthProvider, useAuth } from './context/AuthContext';
 // Componentes Públicos
 import LandingPage from './pages/LandingPage';
 import NewsletterPage from './pages/NewsletterPage';
-import { HomeSocio } from './components/socio/HomeSocio';
+import HomeSocio from './components/socio/HomeSocio';
 import Navbar from './components/public/Navbar';
 import LoginSocio from './components/auth/LoginSocio';
 import PerfilSocio from './components/socio/PerfilSocio';

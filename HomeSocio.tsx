@@ -593,4 +593,6 @@ export const HomeSocio = () => {
   );
 };
 
+export default HomeSocio;
+
 

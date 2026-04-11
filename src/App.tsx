@@ -1,5 +1,6 @@
 import { BrowserRouter as Router, Routes, Route, Navigate, useLocation } from 'react-router-dom';
 import { AuthProvider, useAuth } from './context/AuthContext';
+import { LanguageProvider } from './context/LanguageContext';
 
 // Componentes Públicos
 import LandingPage from './pages/LandingPage';
@@ -18,6 +19,9 @@ import AdminLocales from './components/admin/AdminLocales';
 import AdminProfesores from './components/admin/AdminProfesores';
 import AdminAcademias from './components/admin/AdminAcademias';
 import AdminStaff from './components/admin/AdminStaff';
+import AdminContabilidad from './components/admin/AdminContabilidad';
+import AdminExposiciones from './components/admin/AdminExposiciones';
+import AdminConfig from './components/admin/AdminConfig';
 import AdminLogin from './pages/AdminLogin';
 
 // Componentes Teacher
@@ -25,6 +29,7 @@ import TeacherDashboard from './components/teacher/TeacherDashboard';
 import TeacherLogin from './pages/TeacherLogin';
 
 import ProgramacionPublica from './pages/ProgramacionPublica';
+import GaleriaPublica from './pages/GaleriaPublica';
 import AdminSolicitudes from './components/admin/AdminSolicitudes';
 import ControlAcceso from './components/admin/ControlAcceso';
 import PuertaAccess from './components/admin/PuertaAccess';
@@ -47,6 +52,7 @@ function AppContent() {
         {/* RUTAS PÚBLICAS */}
         <Route path="/login" element={<LoginSocio />} />
         <Route path="/programacion" element={<ProgramacionPublica />} />
+        <Route path="/galeria" element={<GaleriaPublica />} />
         <Route path="/newsletter-kalian-privado" element={<NewsletterPage />} />
 
         {/* RUTAS STAFF (ADMIN) */}
@@ -76,6 +82,9 @@ function AppContent() {
         <Route path="/staff/academias" element={role === 'admin' ? <AdminAcademias /> : <Navigate to="/staff/login" />} />
         <Route path="/staff/staff" element={role === 'admin' ? <AdminStaff /> : <Navigate to="/staff/login" />} />
         <Route path="/staff/solicitudes" element={role === 'admin' ? <AdminSolicitudes /> : <Navigate to="/staff/login" />} />
+        <Route path="/staff/contabilidad" element={role === 'admin' ? <AdminContabilidad /> : <Navigate to="/staff/login" />} />
+        <Route path="/staff/galeria" element={role === 'admin' ? <AdminExposiciones /> : <Navigate to="/staff/login" />} />
+        <Route path="/staff/config" element={role === 'admin' ? <AdminConfig /> : <Navigate to="/staff/login" />} />
 
         {/* RUTA CONTROL ACCESO (PORTERO) */}
         <Route path="/control-acceso" element={
@@ -110,9 +119,11 @@ function AppContent() {
 export default function App() {
   return (
     <AuthProvider>
-      <Router>
-        <AppContent />
-      </Router>
+      <LanguageProvider>
+        <Router>
+          <AppContent />
+        </Router>
+      </LanguageProvider>
     </AuthProvider>
   );
 }

@@ -1,4 +1,5 @@
 import React from 'react';
+import { motion, AnimatePresence } from 'motion/react';
 
 interface LegalModalProps {
   isOpen: boolean;
@@ -6,11 +7,21 @@ interface LegalModalProps {
 }
 
 const LegalModal: React.FC<LegalModalProps> = ({ isOpen, onClose }) => {
-  if (!isOpen) return null;
-
   return (
-    <div className="fixed inset-0 bg-kalian-dark/95 backdrop-blur-md flex items-center justify-center p-4 z-[2000] animate-in fade-in duration-500 overflow-y-auto">
-      <div className="w-full max-w-3xl bg-black border border-kalian-gold/20 rounded-[3rem] shadow-2xl p-8 md:p-12 relative my-auto max-h-[90vh] flex flex-col">
+    <AnimatePresence>
+      {isOpen && (
+        <motion.div 
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          exit={{ opacity: 0 }}
+          className="fixed inset-0 bg-kalian-dark/95 backdrop-blur-md flex items-center justify-center p-4 z-[2000] overflow-y-auto"
+        >
+          <motion.div 
+            initial={{ scale: 0.9, opacity: 0, y: 20 }}
+            animate={{ scale: 1, opacity: 1, y: 0 }}
+            exit={{ scale: 0.9, opacity: 0, y: 20 }}
+            className="w-full max-w-3xl bg-black border border-kalian-gold/20 rounded-[3rem] shadow-2xl p-8 md:p-12 relative my-auto max-h-[90vh] flex flex-col"
+          >
         <button 
           onClick={onClose} 
           className="absolute top-8 right-8 text-kalian-gold/90 font-black text-2xl hover:text-kalian-gold transition-colors z-10"
@@ -105,9 +116,11 @@ const LegalModal: React.FC<LegalModalProps> = ({ isOpen, onClose }) => {
             ENTENDIDO
           </button>
         </div>
-      </div>
-    </div>
-  );
+        </motion.div>
+      </motion.div>
+    )}
+  </AnimatePresence>
+);
 };
 
 export default LegalModal;

@@ -11,6 +11,10 @@
     "lint": "tsc --noEmit"
   },
   "dependencies": {
+    "@fullcalendar/daygrid": "^6.1.20",
+    "@fullcalendar/interaction": "^6.1.20",
+    "@fullcalendar/react": "^6.1.20",
+    "@fullcalendar/timegrid": "^6.1.20",
     "@google/genai": "^1.29.0",
     "@tailwindcss/vite": "^4.1.14",
     "@vitejs/plugin-react": "^5.0.4",
@@ -25,6 +29,7 @@
     "react-dom": "^19.0.0",
     "react-qr-code": "^2.0.18",
     "react-router-dom": "^7.13.2",
+    "recharts": "^3.8.1",
     "vite": "^6.2.0"
   },
   "devDependencies": {

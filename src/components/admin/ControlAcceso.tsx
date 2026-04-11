@@ -4,10 +4,11 @@ import { collection, query, where, getDocs, doc, updateDoc, increment, onSnapsho
 import { useAuth } from '../../context/AuthContext';
 import { useNavigate } from 'react-router-dom';
 import { Html5Qrcode } from 'html5-qrcode';
-import { Camera, X, Users, Ticket, UserPlus, LogOut } from 'lucide-react';
+import { Camera, X, Users, Ticket, UserPlus, LogOut, CreditCard, Banknote, Landmark, Calculator } from 'lucide-react';
+import { registrarIngreso, MetodoPago } from '../../lib/finanzas';
 
 const ControlAcceso = ({ isPuertaMode = false }: { isPuertaMode?: boolean }) => {
-  const { role, isAdmin, isPortero } = useAuth();
+  const { role, isAdmin, isPortero, user } = useAuth();
   const navigate = useNavigate();
   
   const [eventos, setEventos] = useState<any[]>([]);
@@ -15,9 +16,12 @@ const ControlAcceso = ({ isPuertaMode = false }: { isPuertaMode?: boolean }) => 
   const [busqueda, setBusqueda] = useState('');
   const [reservaEncontrada, setReservaEncontrada] = useState<any>(null);
   const [personasEntran, setPersonasEntran] = useState(1);
+  const [metodoPago, setMetodoPago] = useState<MetodoPago>('Efectivo');
   const [msg, setMsg] = useState('');
   const [cargando, setCargando] = useState(false);
   const [mostrarScanner, setMostrarScanner] = useState(false);
+  const [mostrarResumen, setMostrarResumen] = useState(false);
+  const [resumenHoy, setResumenHoy] = useState({ total: 0, count: 0 });
   const scannerRef = useRef<Html5Qrcode | null>(null);
 
   // Seguridad: Solo admin o portero, o modo puerta validado
@@ -201,6 +205,18 @@ const ControlAcceso = ({ isPuertaMode = false }: { isPuertaMode?: boolean }) => 
         ultimaActualizacion: serverTimestamp()
       }, { merge: true });
 
+      // Registrar en Finanzas
+      if (precio > 0) {
+        await registrarIngreso({
+          monto: precio,
+          concepto: `Entrada Evento: ${eventoSeleccionado.titulo} (Soci@)`,
+          categoria: 'Evento',
+          metodo: metodoPago,
+          socio_id: socioEncontrado.id,
+          staff_id: user?.uid
+        });
+      }
+
       // Incrementar aforo_actual
       await updateDoc(doc(db, "eventos", eventoSeleccionado.id), {
         aforo_actual: increment(1)
@@ -273,6 +289,8 @@ const ControlAcceso = ({ isPuertaMode = false }: { isPuertaMode?: boolean }) => 
 
     setCargando(true);
     try {
+      const precio = eventoSeleccionado.precio_estandar || 0;
+
       await updateDoc(doc(db, "eventos", eventoSeleccionado.id), {
         aforo_actual: increment(1)
       });
@@ -282,10 +300,23 @@ const ControlAcceso = ({ isPuertaMode = false }: { isPuertaMode?: boolean }) => 
         eventoId: eventoSeleccionado.id,
         tipo: 'walk-in',
         fecha: serverTimestamp(),
-        staff: isAdmin ? 'admin' : 'portero'
+        staff: isAdmin ? 'admin' : 'portero',
+        precio: precio
       });
 
-      setMsg("✅ Entrada manual registrada");
+      // Registrar en Finanzas
+      if (precio > 0) {
+        await registrarIngreso({
+          monto: precio,
+          concepto: `Entrada Puerta: ${eventoSeleccionado.titulo} (Walk-in)`,
+          categoria: 'Evento',
+          metodo: metodoPago,
+          socio_id: 'anonimo',
+          staff_id: user?.uid
+        });
+      }
+
+      setMsg(`✅ Entrada manual registrada. Cobrado: ${precio}€`);
     } catch (err) {
       console.error(err);
       setMsg("❌ Error al registrar entrada");
@@ -315,6 +346,40 @@ const ControlAcceso = ({ isPuertaMode = false }: { isPuertaMode?: boolean }) => 
     window.location.reload();
   };
 
+  const verResumenHoy = async () => {
+    setCargando(true);
+    try {
+      const hoy = new Date();
+      hoy.setHours(0,0,0,0);
+      
+      const q = query(
+        collection(db, "finanzas"),
+        where("staff_id", "==", user?.uid),
+        where("metodo", "==", "Efectivo")
+      );
+      
+      const snap = await getDocs(q);
+      let total = 0;
+      let count = 0;
+      
+      snap.docs.forEach(d => {
+        const data = d.data();
+        const fecha = data.fecha?.toDate();
+        if (fecha && fecha >= hoy) {
+          total += data.monto || 0;
+          count++;
+        }
+      });
+      
+      setResumenHoy({ total, count });
+      setMostrarResumen(true);
+    } catch (err) {
+      console.error(err);
+      alert("Error al cargar resumen");
+    }
+    setCargando(false);
+  };
+
   return (
     <div className="min-h-screen bg-kalian-dark p-4 md:p-8 text-kalian-cream font-sans">
       <header className="max-w-7xl mx-auto mb-8 flex justify-between items-center">
@@ -323,6 +388,12 @@ const ControlAcceso = ({ isPuertaMode = false }: { isPuertaMode?: boolean }) => 
           <p className="text-[10px] font-black uppercase tracking-[0.4em] text-kalian-gold/40 mt-1">Staff de Puerta • Kalian Hub</p>
         </div>
         <div className="flex gap-4">
+          <button 
+            onClick={verResumenHoy}
+            className="bg-kalian-gold/10 hover:bg-kalian-gold text-kalian-gold hover:text-black border border-kalian-gold/20 px-6 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all flex items-center gap-2"
+          >
+            <Calculator size={14} /> Resumen de Hoy
+          </button>
           {isPuertaMode && (
             <button 
               onClick={handleLogoutPuerta}
@@ -361,29 +432,43 @@ const ControlAcceso = ({ isPuertaMode = false }: { isPuertaMode?: boolean }) => 
           <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
             
             {/* COLUMNA IZQUIERDA: ESTADÍSTICAS */}
-            <div className="lg:col-span-4 grid grid-cols-1 sm:grid-cols-3 lg:grid-cols-1 gap-4 lg:gap-6">
-              <div className="bg-black/40 border border-kalian-gold/10 rounded-[2.5rem] p-6 lg:p-10 flex flex-col items-center text-center justify-center min-h-[160px] lg:min-h-[200px]">
-                <Users size={32} className="text-kalian-gold/40 mb-3 lg:mb-4" />
-                <p className="text-[10px] lg:text-[12px] font-black uppercase tracking-[0.3em] mb-1 lg:mb-2 opacity-60">Aforo Real</p>
-                <h2 className={`text-5xl lg:text-8xl kalian-poster-text leading-none ${getStatusColor()}`}>
+            <div className="lg:col-span-4 space-y-4">
+              <div className="bg-black/40 border border-kalian-gold/10 rounded-[2.5rem] p-6 flex flex-col items-center text-center justify-center min-h-[160px]">
+                <Users size={32} className="text-kalian-gold/40 mb-3" />
+                <p className="text-[10px] font-black uppercase tracking-[0.3em] mb-1 opacity-60">Aforo Real</p>
+                <h2 className={`text-5xl kalian-poster-text leading-none ${getStatusColor()}`}>
                   {eventoSeleccionado.aforo_actual || 0}
-                  <span className="text-xl lg:text-3xl opacity-40 ml-2">/ {eventoSeleccionado.aforo_maximo}</span>
+                  <span className="text-xl opacity-40 ml-2">/ {eventoSeleccionado.aforo_maximo}</span>
                 </h2>
               </div>
 
-              <div className="bg-black/40 border border-kalian-gold/10 rounded-[2.5rem] p-6 lg:p-10 flex flex-col items-center text-center justify-center min-h-[160px] lg:min-h-[200px]">
-                <Ticket size={32} className="text-kalian-gold/40 mb-3 lg:mb-4" />
-                <p className="text-[10px] lg:text-[12px] font-black uppercase tracking-[0.3em] mb-1 lg:mb-2 text-kalian-gold/60">Comprometidas</p>
-                <h2 className="text-5xl lg:text-8xl kalian-poster-text leading-none text-kalian-cream">
+              <div className="bg-black/40 border border-kalian-gold/10 rounded-[2.5rem] p-6 flex flex-col items-center text-center justify-center min-h-[160px]">
+                <Ticket size={32} className="text-kalian-gold/40 mb-3" />
+                <p className="text-[10px] font-black uppercase tracking-[0.3em] mb-1 text-kalian-gold/60">Comprometidas</p>
+                <h2 className="text-5xl kalian-poster-text leading-none text-kalian-cream">
                   {eventoSeleccionado.aforo_reservado || 0}
                 </h2>
               </div>
 
-              <div className={`bg-black/40 border rounded-[2.5rem] p-6 lg:p-10 flex flex-col items-center text-center justify-center min-h-[160px] lg:min-h-[200px] transition-colors ${getLibresReales() > 0 ? 'border-emerald-500/20' : 'border-red-500/20'}`}>
-                <p className="text-[10px] lg:text-[12px] font-black uppercase tracking-[0.3em] mb-1 lg:mb-2 opacity-60">Libres Reales</p>
-                <h2 className={`text-5xl lg:text-8xl kalian-poster-text leading-none ${getLibresReales() > 0 ? 'text-emerald-500' : 'text-red-500'}`}>
-                  {getLibresReales()}
-                </h2>
+              {/* Selector de Método de Pago */}
+              <div className="bg-kalian-gold/5 border border-kalian-gold/20 rounded-[2.5rem] p-6">
+                <p className="text-[10px] font-black uppercase tracking-[0.3em] mb-4 text-kalian-gold text-center">Método de Cobro en Puerta</p>
+                <div className="grid grid-cols-2 gap-2">
+                  {[
+                    { id: 'Efectivo', icon: <Banknote size={16} />, disabled: false },
+                    { id: 'Tarjeta', icon: <CreditCard size={16} />, disabled: true }
+                  ].map(m => (
+                    <button
+                      key={m.id}
+                      disabled={m.disabled}
+                      onClick={() => setMetodoPago(m.id as MetodoPago)}
+                      className={`flex flex-col items-center gap-2 p-3 rounded-xl border transition-all ${m.disabled ? 'opacity-30 cursor-not-allowed border-white/5' : (metodoPago === m.id ? 'bg-kalian-gold text-black border-kalian-gold' : 'bg-black/40 text-kalian-gold/40 border-kalian-gold/10 hover:border-kalian-gold/30')}`}
+                    >
+                      {m.icon}
+                      <span className="text-[8px] font-black uppercase">{m.id} {m.disabled && '(Próximamente)'}</span>
+                    </button>
+                  ))}
+                </div>
               </div>
             </div>
 
@@ -572,6 +657,38 @@ const ControlAcceso = ({ isPuertaMode = false }: { isPuertaMode?: boolean }) => 
           </div>
         )}
       </main>
+
+      {/* MODAL RESUMEN HOY */}
+      {mostrarResumen && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/90 backdrop-blur-sm">
+          <div className="bg-kalian-dark border border-kalian-gold/30 rounded-[3rem] p-10 max-w-md w-full shadow-2xl animate-in zoom-in duration-300">
+            <div className="text-center mb-8">
+              <Calculator size={48} className="text-kalian-gold mx-auto mb-4" />
+              <h2 className="text-4xl kalian-poster-text text-kalian-gold uppercase">Resumen de Turno</h2>
+              <p className="text-[10px] font-black uppercase tracking-[0.3em] text-kalian-gold/40 mt-2">Solo cobros en efectivo hoy</p>
+            </div>
+            
+            <div className="space-y-6 mb-10">
+              <div className="bg-black/40 p-8 rounded-[2rem] border border-kalian-gold/10 text-center">
+                <p className="text-[10px] font-black uppercase tracking-widest text-kalian-gold/40 mb-2">Total en Cajón</p>
+                <h3 className="text-6xl kalian-poster-text text-kalian-cream leading-none">{resumenHoy.total.toFixed(2)}€</h3>
+              </div>
+              
+              <div className="flex justify-between items-center px-6">
+                <p className="text-[10px] font-black uppercase tracking-widest text-kalian-gold/40">Operaciones:</p>
+                <p className="text-xl kalian-poster-text text-kalian-gold">{resumenHoy.count}</p>
+              </div>
+            </div>
+
+            <button 
+              onClick={() => setMostrarResumen(false)}
+              className="w-full bg-kalian-gold text-black py-5 rounded-2xl kalian-poster-text text-xl hover:bg-white transition-all"
+            >
+              ENTENDIDO
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

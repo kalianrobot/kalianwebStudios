@@ -2,9 +2,10 @@ import React, { useState, useEffect } from 'react';
 import { db, storage } from '../../firebase';
 import { collection, setDoc, doc, getDocs, deleteDoc, query, orderBy, DocumentData, updateDoc } from 'firebase/firestore';
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
-import { Link } from 'react-router-dom';
+import { Link, useSearchParams } from 'react-router-dom';
 
 const AdminEventos = () => {
+  const [searchParams] = useSearchParams();
   const defaultReglas = `LA RESERVA ES FUNDAMENTAL PARA ASISTIR AL EVENTO.
 
 SI HACES LA RESERVA PERO AL FINAL NO VAS A VENIR, CAMBIA EL NÚMERO DE ASISTENTES PARA PERMITIR QUE OTRA PERSONA OCUPE TU ENTRADA.
@@ -23,6 +24,7 @@ ENTRADA HASTA LAS 00:00. RESERVAS DISPONIBLES HASTA COMPLETAR AFORO.`;
     aforo_reservado: 0,
     aforo_actual: 0,
     max_acompanantes: '4',
+    tiene_descuento: false,
     precio_descuento: '',
     clave_descuento: '',
     precio_clave: '',
@@ -30,7 +32,8 @@ ENTRADA HASTA LAS 00:00. RESERVAS DISPONIBLES HASTA COMPLETAR AFORO.`;
     apertura_general: '',
     imagenUrl: '',
     reglas: defaultReglas,
-    descripcion: ''
+    descripcion: '',
+    es_publico: true
   });
   const [archivo, setArchivo] = useState<File | null>(null);
   const [subiendo, setSubiendo] = useState(false);
@@ -45,6 +48,37 @@ ENTRADA HASTA LAS 00:00. RESERVAS DISPONIBLES HASTA COMPLETAR AFORO.`;
   };
 
   useEffect(() => { fetchEventos(); }, []);
+
+  useEffect(() => {
+    const editId = searchParams.get('edit');
+    if (editId && eventos.length > 0) {
+      const ev = eventos.find(e => e.id === editId);
+      if (ev) {
+        setEditando(ev.id);
+        setForm({
+          titulo: ev.titulo || '',
+          fecha: ev.fecha || '',
+          precio_estandar: ev.precio_estandar?.toString() || '',
+          categoria: ev.categoria || 'musica',
+          aforo_maximo: ev.aforo_maximo?.toString() || '50',
+          aforo_reservado: ev.aforo_reservado || 0,
+          aforo_actual: ev.aforo_actual || 0,
+          tiene_descuento: ev.tiene_descuento || false,
+          precio_descuento: ev.precio_descuento?.toString() || '',
+          clave_descuento: ev.clave_descuento || '',
+          precio_clave: ev.precio_clave?.toString() || '',
+          apertura_socios: ev.apertura_socios || '',
+          apertura_general: ev.apertura_general || '',
+          imagenUrl: ev.imagenUrl || '',
+          reglas: ev.reglas || defaultReglas,
+          descripcion: ev.descripcion || '',
+          max_acompanantes: ev.max_acompanantes?.toString() || '4',
+          es_publico: ev.es_publico !== false
+        });
+        window.scrollTo({ top: 0, behavior: 'smooth' });
+      }
+    }
+  }, [searchParams, eventos]);
 
   const guardar = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -85,7 +119,10 @@ ENTRADA HASTA LAS 00:00. RESERVAS DISPONIBLES HASTA COMPLETAR AFORO.`;
         fecha: '', 
         precio_estandar: '', 
         categoria: 'musica', 
-        aforo_max: '50', 
+        aforo_maximo: '50', 
+        aforo_reservado: 0,
+        aforo_actual: 0,
+        max_acompanantes: '4',
         tiene_descuento: false, 
         precio_descuento: '', 
         clave_descuento: '',
@@ -94,7 +131,8 @@ ENTRADA HASTA LAS 00:00. RESERVAS DISPONIBLES HASTA COMPLETAR AFORO.`;
         apertura_general: '',
         imagenUrl: '',
         reglas: defaultReglas,
-        descripcion: ''
+        descripcion: '',
+        es_publico: true
       });
       setArchivo(null);
       setEditando(null);
@@ -121,9 +159,21 @@ ENTRADA HASTA LAS 00:00. RESERVAS DISPONIBLES HASTA COMPLETAR AFORO.`;
         <form onSubmit={guardar} className="bg-black/40 p-10 rounded-[3rem] shadow-2xl space-y-6 mb-16 text-kalian-cream border border-kalian-gold/10">
           <h2 className="text-xl font-black uppercase italic mb-4 text-kalian-gold">{editando ? 'Editar Evento' : 'Nuevo Evento'}</h2>
           
-          <div className="space-y-2">
-            <label className="text-[9px] font-black uppercase text-kalian-gold/40 ml-4 tracking-widest">Título del Evento</label>
-            <input type="text" placeholder="EJ: CONCIERTO DE JAZZ" className="w-full p-5 bg-kalian-gold/5 rounded-2xl outline-none border border-kalian-gold/10 focus:border-kalian-gold transition-all text-kalian-gold font-black uppercase text-xl" value={form.titulo} onChange={e => setForm({...form, titulo: e.target.value})} required />
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            <div className="space-y-2">
+              <label className="text-[9px] font-black uppercase text-kalian-gold/40 ml-4 tracking-widest">Visibilidad del Evento</label>
+              <button 
+                type="button"
+                onClick={() => setForm({...form, es_publico: !form.es_publico})}
+                className={`w-full p-5 rounded-2xl font-black uppercase tracking-widest transition-all ${form.es_publico ? 'bg-emerald-500 text-black' : 'bg-red-500 text-white'}`}
+              >
+                {form.es_publico ? 'PÚBLICO (Visible en Web)' : 'PRIVADO (Solo Staff)'}
+              </button>
+            </div>
+            <div className="space-y-2">
+              <label className="text-[9px] font-black uppercase text-kalian-gold/40 ml-4 tracking-widest">Título del Evento</label>
+              <input type="text" placeholder="EJ: CONCIERTO DE JAZZ" className="w-full p-5 bg-kalian-gold/5 rounded-2xl outline-none border border-kalian-gold/10 focus:border-kalian-gold transition-all text-kalian-gold font-black uppercase text-xl" value={form.titulo} onChange={e => setForm({...form, titulo: e.target.value})} required />
+            </div>
           </div>
 
           <div className="space-y-2">
@@ -295,7 +345,7 @@ ENTRADA HASTA LAS 00:00. RESERVAS DISPONIBLES HASTA COMPLETAR AFORO.`;
                 <div>
                   <h3 className="text-3xl kalian-poster-text text-kalian-cream group-hover:text-kalian-gold transition-colors uppercase italic">{ev.titulo}</h3>
                   <p className="text-[10px] text-kalian-gold/80 font-black uppercase tracking-[0.3em] mt-2">
-                    {new Date(ev.fecha).toLocaleString('es-ES', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })} | {ev.categoria.toUpperCase()} | {ev.precio_estandar}€ {ev.tiene_descuento ? `(Soci@s: ${ev.precio_descuento}€)` : '(Sin dto)'} | RESERVADO: {ev.aforo_reservado || 0}/{ev.aforo_maximo} | CHECK-IN: {ev.aforo_actual || 0} | MÁX ACOMP: {ev.max_acompanantes || 4}
+                    {new Date(ev.fecha).toLocaleString('es-ES', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })} | {ev.categoria.toUpperCase()} | {ev.precio_estandar}€ {ev.tiene_descuento ? `(Soci@s: ${ev.precio_descuento}€)` : '(Sin dto)'} | RESERVADO: {ev.aforo_reservado || 0}/{ev.aforo_maximo} | CHECK-IN: {ev.aforo_actual || 0} | MÁX ACOMP: {ev.max_acompanantes || 4} | {ev.es_publico !== false ? '🟢 PÚBLICO' : '🔴 PRIVADO'}
                   </p>
                 </div>
               </div>
@@ -304,11 +354,11 @@ ENTRADA HASTA LAS 00:00. RESERVAS DISPONIBLES HASTA COMPLETAR AFORO.`;
                   onClick={() => {
                     setEditando(ev.id);
                     setForm({
-                      titulo: ev.titulo,
-                      fecha: ev.fecha,
-                      precio_estandar: ev.precio_estandar.toString(),
-                      categoria: ev.categoria,
-                      aforo_maximo: ev.aforo_maximo.toString(),
+                      titulo: ev.titulo || '',
+                      fecha: ev.fecha || '',
+                      precio_estandar: ev.precio_estandar?.toString() || '',
+                      categoria: ev.categoria || 'musica',
+                      aforo_maximo: ev.aforo_maximo?.toString() || '50',
                       aforo_reservado: ev.aforo_reservado || 0,
                       aforo_actual: ev.aforo_actual || 0,
                       tiene_descuento: ev.tiene_descuento || false,
@@ -320,7 +370,8 @@ ENTRADA HASTA LAS 00:00. RESERVAS DISPONIBLES HASTA COMPLETAR AFORO.`;
                       imagenUrl: ev.imagenUrl || '',
                       reglas: ev.reglas || defaultReglas,
                       descripcion: ev.descripcion || '',
-                      max_acompanantes: ev.max_acompanantes?.toString() || '4'
+                      max_acompanantes: ev.max_acompanantes?.toString() || '4',
+                      es_publico: ev.es_publico !== false
                     });
                     window.scrollTo({ top: 0, behavior: 'smooth' });
                   }}

@@ -4,6 +4,7 @@ import { collection, getDocs, updateDoc, doc, query, orderBy, DocumentData, wher
 import { ref, uploadBytes, getDownloadURL, deleteObject } from 'firebase/storage';
 import { useAuth } from '../../context/AuthContext';
 import { Link } from 'react-router-dom';
+import { registrarIngreso, MetodoPago } from '../../lib/finanzas';
 
 const TeacherDashboard = () => {
   const [cursos, setCursos] = useState<DocumentData[]>([]);
@@ -13,6 +14,7 @@ const TeacherDashboard = () => {
   const [pagosMensuales, setPagosMensuales] = useState<Record<string, any>>({});
   const [pagosInscripciones, setPagosInscripciones] = useState<Record<string, any>>({});
   const [archivo, setArchivo] = useState<File | null>(null);
+  const [metodoPago, setMetodoPago] = useState<MetodoPago>('Efectivo');
   const [subiendo, setSubiendo] = useState(false);
   const [storageUsage, setStorageUsage] = useState(0);
   const { user, socioData, logoutTeacher } = useAuth();
@@ -118,6 +120,8 @@ const TeacherDashboard = () => {
 
   const togglePago = async (socioId: string, tipo: 'mensual' | 'inscripcion', valorActual: boolean, cursoId?: string) => {
     try {
+      const nuevoEstado = !valorActual;
+      
       if (tipo === 'mensual') {
         const pagoId = `${anioActual}_${mesActual}_${socioId}`;
         const pagoRef = doc(db, "pagos_mensuales", pagoId);
@@ -125,7 +129,7 @@ const TeacherDashboard = () => {
         
         if (snap.exists()) {
           await updateDoc(pagoRef, {
-            pagado: !valorActual,
+            pagado: nuevoEstado,
             actualizadoPor: user?.uid,
             fechaActualizacion: new Date().toISOString()
           });
@@ -134,9 +138,20 @@ const TeacherDashboard = () => {
             socioId,
             mes: mesActual,
             anio: anioActual,
-            pagado: !valorActual,
+            pagado: nuevoEstado,
             actualizadoPor: user?.uid,
             fechaActualizacion: new Date().toISOString()
+          });
+        }
+
+        // Registrar en Finanzas si se marca como pagado
+        if (nuevoEstado) {
+          await registrarIngreso({
+            monto: 15, // Cuota estándar de socio
+            concepto: `Cuota Soci@ ${meses[mesActual-1]} ${anioActual}`,
+            categoria: 'Socio',
+            metodo: metodoPago,
+            socio_id: socioId
           });
         }
       } else if (tipo === 'inscripcion' && cursoId) {
@@ -146,15 +161,30 @@ const TeacherDashboard = () => {
 
         if (snap.exists()) {
           await updateDoc(pagoRef, {
-            pagado: !valorActual,
-            fechaPago: !valorActual ? new Date().toISOString() : null
+            pagado: nuevoEstado,
+            fechaPago: nuevoEstado ? new Date().toISOString() : null
           });
         } else {
           await setDoc(pagoRef, {
             socioId,
             cursoId,
-            pagado: !valorActual,
-            fechaPago: !valorActual ? new Date().toISOString() : null
+            pagado: nuevoEstado,
+            fechaPago: nuevoEstado ? new Date().toISOString() : null
+          });
+        }
+
+        // Registrar en Finanzas si se marca como pagado
+        if (nuevoEstado) {
+          // Buscamos el precio en el curso seleccionado
+          // Nota: Aquí simplificamos usando el precio de la primera modalidad o un valor por defecto
+          // ya que el registro de pago de inscripción no guarda la modalidad elegida explícitamente en su ID
+          const monto = cursoSeleccionado?.modalidades?.[0]?.precio || 0;
+          await registrarIngreso({
+            monto,
+            concepto: `Inscripción Curso: ${cursoSeleccionado?.titulo}`,
+            categoria: 'Curso',
+            metodo: metodoPago,
+            socio_id: socioId
           });
         }
       }
@@ -327,9 +357,23 @@ const TeacherDashboard = () => {
                       <h2 className="text-4xl kalian-poster-text text-kalian-gold uppercase italic leading-none">{cursoSeleccionado.titulo}</h2>
                       <p className="text-[10px] text-kalian-gold/40 font-black uppercase tracking-[0.4em] mt-3 ml-4">Control de Asistencia y Pagos</p>
                     </div>
-                    <div className="text-right">
-                      <p className="text-3xl kalian-poster-text text-kalian-cream leading-none">{cursoSeleccionado.alumnos?.length || 0}</p>
-                      <p className="text-[8px] font-black text-kalian-gold/20 uppercase tracking-widest">Alumnos</p>
+                    <div className="flex flex-col items-end gap-2">
+                      <div className="flex items-center gap-3 bg-black/20 px-4 py-2 rounded-xl border border-kalian-gold/10">
+                        <p className="text-[8px] font-black text-kalian-gold/40 uppercase tracking-widest">Método Cobro:</p>
+                        <select 
+                          value={metodoPago}
+                          onChange={(e) => setMetodoPago(e.target.value as MetodoPago)}
+                          className="bg-transparent text-[10px] text-kalian-gold font-bold outline-none cursor-pointer"
+                        >
+                          <option value="Efectivo">Efectivo</option>
+                          <option value="Tarjeta">Tarjeta</option>
+                          <option value="Transferencia">Transferencia</option>
+                        </select>
+                      </div>
+                      <div className="text-right">
+                        <p className="text-3xl kalian-poster-text text-kalian-cream leading-none">{cursoSeleccionado.alumnos?.length || 0}</p>
+                        <p className="text-[8px] font-black text-kalian-gold/20 uppercase tracking-widest">Alumnos</p>
+                      </div>
                     </div>
                   </div>
 

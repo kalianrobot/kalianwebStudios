@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { db } from '../../firebase';
 import { collection, onSnapshot, query, where } from 'firebase/firestore';
+import MasterCalendar from './MasterCalendar';
 
 const AdminDashboard = () => {
   const [pendientes, setPendientes] = useState(0);
@@ -26,7 +27,10 @@ const AdminDashboard = () => {
     { t: 'Locales', icon: '🏠', color: 'border-amber-500', path: '/staff/locales' },
     { t: 'Academias', icon: '🎨', color: 'border-pink-500', path: '/staff/academias' },
     { t: 'Equipo Staff', icon: '🛡️', color: 'border-red-500', path: '/staff/staff' },
-    { t: 'Solicitudes', icon: '📩', color: 'border-emerald-500', path: '/staff/solicitudes', badge: pendientes }
+    { t: 'Galería', icon: '🖼️', color: 'border-kalian-gold', path: '/staff/galeria' },
+    { t: 'Identidad', icon: '🎨', color: 'border-kalian-gold', path: '/staff/config' },
+    { t: 'Solicitudes', icon: '📩', color: 'border-emerald-500', path: '/staff/solicitudes', badge: pendientes },
+    { t: 'Contabilidad', icon: '💰', color: 'border-kalian-gold', path: '/staff/contabilidad' }
   ];
 
   return (
@@ -40,7 +44,7 @@ const AdminDashboard = () => {
         <span className="text-[10px] font-black tracking-[0.8em] text-kalian-gold/30 uppercase italic block mt-4">Módulo de Control v3.0</span>
       </h1>
 
-      <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-7 gap-6 w-full max-w-7xl relative z-10">
+      <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-7 gap-6 w-full max-w-7xl relative z-10 mb-12">
         {menus.map(m => (
           <Link 
             key={m.path} 
@@ -56,6 +60,10 @@ const AdminDashboard = () => {
             <h2 className="text-sm kalian-poster-text text-kalian-gold group-hover:text-kalian-cream transition-colors text-center">{m.t}</h2>
           </Link>
         ))}
+      </div>
+
+      <div className="w-full max-w-7xl relative z-10">
+        <MasterCalendar />
       </div>
     </div>
   );

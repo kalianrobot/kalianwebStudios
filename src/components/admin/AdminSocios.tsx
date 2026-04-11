@@ -4,7 +4,10 @@ import { collection, getDocs, doc, setDoc, getDoc, query, orderBy, DocumentData,
 import { Link } from 'react-router-dom';
 import { createSocioAuth } from '../../lib/adminAuth';
 import { sendWelcomeEmail, sendMembershipUpdateEmail } from '../../lib/brevoService';
-import { updateDoc } from 'firebase/firestore';
+import { updateDoc, increment } from 'firebase/firestore';
+import { registrarIngreso, MetodoPago } from '../../lib/finanzas';
+
+import { motion, AnimatePresence } from 'motion/react';
 
 const AdminSocios = () => {
   const [socios, setSocios] = useState<DocumentData[]>([]);
@@ -14,6 +17,7 @@ const AdminSocios = () => {
   const [showForm, setShowForm] = useState(false);
   const [form, setForm] = useState({ dni: '', nombre: '', email: '' });
   const [msg, setMsg] = useState('');
+  const [metodoPago, setMetodoPago] = useState<MetodoPago>('Efectivo');
   const [cleaning, setCleaning] = useState(false);
   const [editando, setEditando] = useState<any | null>(null);
   const [formEdit, setFormEdit] = useState<any>({});
@@ -168,6 +172,47 @@ const AdminSocios = () => {
     setLoading(false);
   };
 
+  const togglePago = async (socioId: string, valorActual: boolean) => {
+    try {
+      const nuevoEstado = !valorActual;
+      const pagoId = `${anioActual}_${mesActual}_${socioId}`;
+      const pagoRef = doc(db, "pagos_mensuales", pagoId);
+      const snap = await getDoc(pagoRef);
+      
+      if (snap.exists()) {
+        await updateDoc(pagoRef, {
+          pagado: nuevoEstado,
+          actualizadoPor: 'admin',
+          fechaActualizacion: new Date().toISOString()
+        });
+      } else {
+        await setDoc(pagoRef, {
+          socioId,
+          mes: mesActual,
+          anio: anioActual,
+          pagado: nuevoEstado,
+          actualizadoPor: 'admin',
+          fechaActualizacion: new Date().toISOString()
+        });
+      }
+
+      // Registrar en Finanzas si se marca como pagado
+      if (nuevoEstado) {
+        await registrarIngreso({
+          monto: 15,
+          concepto: `Cuota Soci@ ${meses[mesActual-1]} ${anioActual}`,
+          categoria: 'Socio',
+          metodo: metodoPago,
+          socio_id: socioId
+        });
+      }
+      fetchSocios();
+    } catch (err) {
+      console.error(err);
+      alert("Error al actualizar pago");
+    }
+  };
+
   const meses = ["Enero", "Febrero", "Marzo", "Abril", "Mayo", "Junio", "Julio", "Agosto", "Septiembre", "Octubre", "Noviembre", "Diciembre"];
 
   return (
@@ -179,6 +224,18 @@ const AdminSocios = () => {
             <h1 className="text-6xl kalian-poster-text text-kalian-gold mt-4 tracking-tight">SOCI@S <span className="text-kalian-cream">KALIAN</span></h1>
           </div>
           <div className="flex gap-4">
+            <div className="flex items-center gap-3 bg-black/20 px-4 py-2 rounded-xl border border-kalian-gold/10">
+              <p className="text-[8px] font-black text-kalian-gold/40 uppercase tracking-widest">Método Cobro:</p>
+              <select 
+                value={metodoPago}
+                onChange={(e) => setMetodoPago(e.target.value as MetodoPago)}
+                className="bg-transparent text-[10px] text-kalian-gold font-bold outline-none cursor-pointer"
+              >
+                <option value="Efectivo">Efectivo</option>
+                <option value="Tarjeta">Tarjeta</option>
+                <option value="Transferencia">Transferencia</option>
+              </select>
+            </div>
             <button 
               onClick={handleCleanup}
               disabled={cleaning}
@@ -276,14 +333,17 @@ const AdminSocios = () => {
                   </div>
                     <div className="flex gap-4 flex-wrap justify-end w-full md:w-auto">
                       {/* Estado de Pago Mensual */}
-                      <div className="flex flex-col items-center bg-black/20 p-3 rounded-2xl border border-kalian-gold/5 min-w-[120px]">
+                      <button 
+                        onClick={() => togglePago(s.dni, !!pagosMensuales[s.dni]?.pagado)}
+                        className="flex flex-col items-center bg-black/20 p-3 rounded-2xl border border-kalian-gold/5 min-w-[120px] hover:bg-kalian-gold/5 transition-all"
+                      >
                         <p className="text-[7px] font-black text-kalian-gold/80 uppercase tracking-widest mb-2">Aportación {meses[mesActual-1]}</p>
                         {pagosMensuales[s.dni]?.pagado ? (
                           <span className="text-emerald-500 text-xs font-black">✅ PAGADO</span>
                         ) : (
                           <span className="text-red-500 text-xs font-black animate-pulse">❌ PENDIENTE</span>
                         )}
-                      </div>
+                      </button>
 
                       {activas.map(cat => (
                         <div key={cat} className="flex flex-col items-end">
@@ -328,9 +388,20 @@ const AdminSocios = () => {
         )}
 
         {/* MODAL EDICIÓN */}
-        {editando && (
-          <div className="fixed inset-0 bg-black/90 backdrop-blur-sm flex items-center justify-center p-6 z-50">
-            <div className="bg-kalian-dark border border-kalian-gold/20 p-10 rounded-[3rem] w-full max-w-2xl shadow-2xl relative overflow-y-auto max-h-[90vh]">
+        <AnimatePresence>
+          {editando && (
+            <motion.div 
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              className="fixed inset-0 bg-black/90 backdrop-blur-sm flex items-center justify-center p-6 z-50"
+            >
+              <motion.div 
+                initial={{ scale: 0.9, opacity: 0, y: 20 }}
+                animate={{ scale: 1, opacity: 1, y: 0 }}
+                exit={{ scale: 0.9, opacity: 0, y: 20 }}
+                className="bg-kalian-dark border border-kalian-gold/20 p-10 rounded-[3rem] w-full max-w-2xl shadow-2xl relative overflow-y-auto max-h-[90vh]"
+              >
               <button onClick={() => setEditando(null)} className="absolute top-8 right-8 text-kalian-gold/40 hover:text-kalian-gold text-2xl">✕</button>
               <h2 className="text-4xl kalian-poster-text text-kalian-gold mb-8 italic uppercase tracking-tight">Editar Soci@s</h2>
               
@@ -383,9 +454,10 @@ const AdminSocios = () => {
                   {loading ? 'GUARDANDO...' : 'ACTUALIZAR Y ENVIAR EMAIL'}
                 </button>
               </form>
-            </div>
-          </div>
-        )}
+              </motion.div>
+            </motion.div>
+          )}
+        </AnimatePresence>
       </div>
     </div>
   );

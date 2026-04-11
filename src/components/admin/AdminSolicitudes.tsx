@@ -4,12 +4,14 @@ import { collection, onSnapshot, doc, setDoc, getDoc, query, where, DocumentData
 import { Link } from 'react-router-dom';
 import { createSocioAuth } from '../../lib/adminAuth';
 import { sendWelcomeEmail, sendMembershipUpdateEmail } from '../../lib/brevoService';
+import { registrarIngreso, MetodoPago } from '../../lib/finanzas';
 
 const AdminSolicitudes = () => {
   const [solicitudes, setSolicitudes] = useState<DocumentData[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [msg, setMsg] = useState('');
+  const [metodosPago, setMetodosPago] = useState<Record<string, MetodoPago>>({});
 
   useEffect(() => {
     setLoading(true);
@@ -157,6 +159,18 @@ const AdminSolicitudes = () => {
         fechaAprobacion: new Date().toISOString()
       });
 
+      // 5. Registrar en Finanzas
+      const monto = sol.modalidad?.precio || 0;
+      if (monto > 0) {
+        await registrarIngreso({
+          monto,
+          concepto: `Inscripción Curso: ${sol.cursoTitulo} (${sol.modalidad?.tipo || 'Estándar'})`,
+          categoria: 'Curso',
+          metodo: metodosPago[sol.id] || 'Transferencia',
+          socio_id: dniUpper
+        });
+      }
+
       setMsg("✅ Solicitud aprobada con éxito");
       setTimeout(() => setMsg(''), 3000);
       fetchSolicitudes();
@@ -219,6 +233,21 @@ const AdminSolicitudes = () => {
                     <div className="mt-4">
                       <span className="text-[10px] font-black uppercase bg-kalian-gold text-black px-4 py-1 rounded-xl tracking-widest">{sol.cursoTitulo}</span>
                       <p className="mt-3 text-xs text-kalian-cream/50 italic">"{sol.mensaje || 'Sin mensaje adicional'}"</p>
+                      {sol.tipo === 'solicitud_inscripcion' && (
+                        <div className="mt-4 flex items-center gap-3">
+                          <p className="text-[9px] font-black text-kalian-gold/40 uppercase tracking-widest">Método de pago:</p>
+                          <select 
+                            value={metodosPago[sol.id] || 'Transferencia'}
+                            onChange={(e) => setMetodosPago({...metodosPago, [sol.id]: e.target.value as MetodoPago})}
+                            className="bg-black/40 border border-kalian-gold/20 rounded-lg px-3 py-1 text-[10px] text-kalian-gold font-bold outline-none focus:border-kalian-gold transition-all"
+                          >
+                            <option value="Transferencia">Transferencia</option>
+                            <option value="Efectivo">Efectivo</option>
+                            <option value="Tarjeta">Tarjeta</option>
+                          </select>
+                          <span className="text-kalian-gold font-black text-xs ml-2">{sol.modalidad?.precio || 0}€</span>
+                        </div>
+                      )}
                     </div>
                   </div>
                 </div>

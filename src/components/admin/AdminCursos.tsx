@@ -1,12 +1,13 @@
 import React, { useState, useEffect } from 'react';
 import { db } from '../../firebase';
 import { collection, setDoc, doc, getDocs, deleteDoc, query, orderBy, DocumentData, updateDoc, getDoc, arrayUnion, increment, where, writeBatch, arrayRemove } from 'firebase/firestore';
-import { Link } from 'react-router-dom';
+import { Link, useSearchParams } from 'react-router-dom';
 
 import { createSocioAuth } from '../../lib/adminAuth';
 import { sendWelcomeEmail, sendMembershipUpdateEmail } from '../../lib/brevoService';
 
 const AdminCursos = () => {
+  const [searchParams] = useSearchParams();
   const [cursos, setCursos] = useState<DocumentData[]>([]);
   const [profesores, setProfesores] = useState<DocumentData[]>([]);
   const [msg, setMsg] = useState('');
@@ -54,6 +55,31 @@ const AdminCursos = () => {
   };
 
   useEffect(() => { fetchCursos(); }, []);
+
+  useEffect(() => {
+    const editId = searchParams.get('edit');
+    if (editId && cursos.length > 0) {
+      const c = cursos.find(item => item.id === editId);
+      if (c) {
+        setEditando(c.id);
+        setForm({
+          titulo: c.titulo || '',
+          categoria: c.categoria || 'musica',
+          subcategoria: c.subcategoria || '',
+          modalidades: c.modalidades || [{ tipo: 'presencial', frecuencia: 'semanal', precio: '' }],
+          fechaInicio: c.fechaInicio || '2025-09-01',
+          fechaFin: c.fechaFin || '2026-06-30',
+          aforo_disponible: c.aforo_disponible !== false,
+          horario: c.horario || '',
+          profesorId: c.profesorId || '',
+          profesorNombre: c.profesorNombre || c.profesor || '',
+          descripcion: c.descripcion || '',
+          ventajas: c.ventajas || ''
+        });
+        window.scrollTo({ top: 0, behavior: 'smooth' });
+      }
+    }
+  }, [searchParams, cursos]);
 
   const guardar = async (e: React.FormEvent) => {
     e.preventDefault();

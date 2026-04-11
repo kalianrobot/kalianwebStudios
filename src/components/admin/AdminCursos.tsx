@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { db } from '../../firebase';
-import { collection, setDoc, doc, getDocs, deleteDoc, query, orderBy, DocumentData, updateDoc, getDoc, arrayUnion, increment, where, writeBatch, arrayRemove } from 'firebase/firestore';
+import { collection, setDoc, doc, getDocs, deleteDoc, query, orderBy, DocumentData, updateDoc, getDoc, arrayUnion, increment, where, writeBatch, arrayRemove, collectionGroup } from 'firebase/firestore';
 import { Link, useSearchParams } from 'react-router-dom';
 
 import { createSocioAuth } from '../../lib/adminAuth';
@@ -23,8 +23,17 @@ const AdminCursos = () => {
     profesorId: '',
     profesorNombre: '',
     descripcion: '',
-    ventajas: ''
+    ventajas: '',
+    // Nuevos campos
+    diasSemana: [1], 
+    horaInicio: '18:00',
+    horaFin: '19:30',
+    sala: 'Sala Grande',
+    programacionAutomatica: false
   });
+
+  const [conflictosRealTime, setConflictosRealTime] = useState<string[]>([]);
+  const [isCheckingConflictos, setIsCheckingConflictos] = useState(false);
 
   const subcategorias = {
     musica: ['Instrumento', 'Combo', 'Armonía moderna', 'Big Band', 'Master classes'],
@@ -38,6 +47,10 @@ const AdminCursos = () => {
   };
   const [editando, setEditando] = useState<string | null>(null);
   const [cursoSeleccionado, setCursoSeleccionado] = useState<string | null>(null);
+  const [gestionandoSesiones, setGestionandoSesiones] = useState<string | null>(null);
+  const [sesiones, setSesiones] = useState<DocumentData[]>([]);
+  const [nuevaSesion, setNuevaSesion] = useState({ fecha: '', hora_inicio: '', hora_fin: '', sala: 'Sala Grande', esRecurrente: false });
+  const [conflictos, setConflictos] = useState<string[]>([]);
   const [solicitudes, setSolicitudes] = useState<DocumentData[]>([]);
   const [manualAlumno, setManualAlumno] = useState({ dni: '', nombre: '', email: '' });
 
@@ -49,12 +62,177 @@ const AdminCursos = () => {
     const snapSol = await getDocs(query(collection(db, "reservas"), where("esCurso", "==", true)));
     setSolicitudes(snapSol.docs.map(d => ({ id: d.id, ...d.data() })));
 
-    // Fetch profesores
+    // Fetch profesores from the dedicated collection
     const snapProf = await getDocs(query(collection(db, "profesores"), orderBy("nombre", "asc")));
     setProfesores(snapProf.docs.map(d => ({ id: d.id, ...d.data() })));
   };
 
   useEffect(() => { fetchCursos(); }, []);
+
+  const checkSalaDisponibilidad = async () => {
+    if (!form.diasSemana.length || !form.horaInicio || !form.horaFin || !form.fechaInicio || !form.fechaFin) return;
+    
+    setIsCheckingConflictos(true);
+    const conflicts: string[] = [];
+    
+    try {
+      const fechasAComprobar: string[] = [];
+      const end = new Date(form.fechaFin);
+
+      form.diasSemana.forEach(targetDay => {
+        let current = new Date(form.fechaInicio);
+        const targetDayJs = targetDay === 7 ? 0 : targetDay;
+
+        while (current.getDay() !== targetDayJs) {
+          current.setDate(current.getDate() + 1);
+        }
+
+        while (current <= end) {
+          fechasAComprobar.push(current.toISOString().split('T')[0]);
+          current.setDate(current.getDate() + 7);
+        }
+      });
+
+      if (fechasAComprobar.length === 0) {
+        setConflictosRealTime([]);
+        setIsCheckingConflictos(false);
+        return;
+      }
+
+      // 1. Comprobar contra Eventos
+      const snapE = await getDocs(query(collection(db, "eventos"), where("fecha", ">=", fechasAComprobar[0])));
+      const eventosExistentes = snapE.docs.map(d => d.data());
+      
+      // 2. Comprobar contra todas las Sesiones
+      const snapS = await getDocs(collectionGroup(db, "sesiones"));
+      const sesionesExistentes = snapS.docs.map(d => ({ ...d.data(), cursoId: d.ref.parent.parent?.id }));
+
+      for (const f of fechasAComprobar) {
+        const hasEvento = eventosExistentes.some(ev => ev.fecha.startsWith(f));
+        const hasSesion = sesionesExistentes.some((s: any) => 
+          s.fecha === f && 
+          s.sala === form.sala && 
+          s.cursoId !== editando &&
+          (
+            (form.horaInicio >= s.hora_inicio && form.horaInicio < s.hora_fin) ||
+            (form.horaFin > s.hora_inicio && form.horaFin <= s.hora_fin) ||
+            (s.hora_inicio >= form.horaInicio && s.hora_inicio < form.horaFin)
+          )
+        );
+
+        if (hasEvento || hasSesion) {
+          conflicts.push(f);
+        }
+      }
+      setConflictosRealTime(conflicts);
+    } catch (err) {
+      console.error(err);
+    }
+    setIsCheckingConflictos(false);
+  };
+
+  useEffect(() => {
+    if (form.programacionAutomatica) {
+      checkSalaDisponibilidad();
+    } else {
+      setConflictosRealTime([]);
+    }
+  }, [form.diasSemana, form.horaInicio, form.horaFin, form.sala, form.fechaInicio, form.fechaFin, form.programacionAutomatica, editando]);
+
+  const fetchSesiones = async (cursoId: string) => {
+    const snap = await getDocs(query(collection(db, "cursos", cursoId, "sesiones"), orderBy("fecha", "asc")));
+    setSesiones(snap.docs.map(d => ({ id: d.id, ...d.data() })));
+  };
+
+  const guardarSesion = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!gestionandoSesiones) return;
+    setConflictos([]);
+    
+    try {
+      const curso = cursos.find(c => c.id === gestionandoSesiones);
+      if (!curso) return;
+
+      const sesionesAGuardar: any[] = [];
+      const fechasAComprobar: string[] = [];
+
+      if (nuevaSesion.esRecurrente) {
+        let current = new Date(nuevaSesion.fecha);
+        const end = new Date(curso.fechaFin);
+        
+        while (current <= end) {
+          const dateStr = current.toISOString().split('T')[0];
+          fechasAComprobar.push(dateStr);
+          sesionesAGuardar.push({
+            ...nuevaSesion,
+            fecha: dateStr,
+            esRecurrente: true
+          });
+          current.setDate(current.getDate() + 7);
+        }
+      } else {
+        fechasAComprobar.push(nuevaSesion.fecha);
+        sesionesAGuardar.push(nuevaSesion);
+      }
+
+      // Validación de Conflictos
+      const conflicts: string[] = [];
+      
+      // 1. Comprobar contra Eventos
+      const snapE = await getDocs(query(collection(db, "eventos"), where("fecha", ">=", fechasAComprobar[0])));
+      const eventosExistentes = snapE.docs.map(d => d.data());
+      
+      // 2. Comprobar contra todas las Sesiones (collectionGroup)
+      const snapS = await getDocs(collectionGroup(db, "sesiones"));
+      const sesionesExistentes = snapS.docs.map(d => ({ ...d.data(), cursoId: d.ref.parent.parent?.id }));
+
+      for (const f of fechasAComprobar) {
+        const hasEvento = eventosExistentes.some(ev => ev.fecha.startsWith(f));
+        const hasSesion = sesionesExistentes.some((s: any) => 
+          s.fecha === f && 
+          s.sala === nuevaSesion.sala && 
+          (
+            (nuevaSesion.hora_inicio >= s.hora_inicio && nuevaSesion.hora_inicio < s.hora_fin) ||
+            (nuevaSesion.hora_fin > s.hora_inicio && nuevaSesion.hora_fin <= s.hora_fin)
+          )
+        );
+
+        if (hasEvento || hasSesion) {
+          conflicts.push(f);
+        }
+      }
+
+      if (conflicts.length > 0) {
+        setConflictos(conflicts);
+        return;
+      }
+
+      // Guardar en bloque
+      const batch = writeBatch(db);
+      sesionesAGuardar.forEach(s => {
+        const sesionId = `${s.fecha}_${s.hora_inicio.replace(':', '')}`;
+        const ref = doc(db, "cursos", gestionandoSesiones, "sesiones", sesionId);
+        batch.set(ref, s);
+      });
+
+      await batch.commit();
+      setMsg(`✅ ${sesionesAGuardar.length} sesiones añadidas`);
+      setNuevaSesion({ fecha: '', hora_inicio: '', hora_fin: '', sala: 'Sala Grande', esRecurrente: false });
+      fetchSesiones(gestionandoSesiones);
+      setTimeout(() => setMsg(''), 3000);
+    } catch (err) { 
+      console.error(err);
+      alert("Error al guardar sesiones"); 
+    }
+  };
+
+  const eliminarSesion = async (sesionId: string) => {
+    if (!gestionandoSesiones) return;
+    if (window.confirm("¿Eliminar esta sesión?")) {
+      await deleteDoc(doc(db, "cursos", gestionandoSesiones, "sesiones", sesionId));
+      fetchSesiones(gestionandoSesiones);
+    }
+  };
 
   useEffect(() => {
     const editId = searchParams.get('edit');
@@ -74,7 +252,12 @@ const AdminCursos = () => {
           profesorId: c.profesorId || '',
           profesorNombre: c.profesorNombre || c.profesor || '',
           descripcion: c.descripcion || '',
-          ventajas: c.ventajas || ''
+          ventajas: c.ventajas || '',
+          diasSemana: c.diasSemana || [1],
+          horaInicio: c.horaInicio || '18:00',
+          horaFin: c.horaFin || '19:30',
+          sala: c.sala || 'Sala Grande',
+          programacionAutomatica: c.programacionAutomatica || false
         });
         window.scrollTo({ top: 0, behavior: 'smooth' });
       }
@@ -83,6 +266,11 @@ const AdminCursos = () => {
 
   const guardar = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (form.programacionAutomatica && conflictosRealTime.length > 0) {
+      alert("⚠️ Hay conflictos de horario. Revisa el panel de validación.");
+      return;
+    }
+
     try {
       const prof = profesores.find(p => p.id === form.profesorId);
       const cursoData = { 
@@ -94,16 +282,48 @@ const AdminCursos = () => {
         alumnos: editando ? (cursos.find(c => c.id === editando)?.alumnos || []) : [],
       };
 
+      const batch = writeBatch(db);
+      let finalId = editando;
+
       if (editando) {
-        await updateDoc(doc(db, "cursos", editando), cursoData);
-        setMsg("✅ Curso actualizado");
+        batch.update(doc(db, "cursos", editando), cursoData);
       } else {
         const anioMes = form.fechaInicio.substring(0, 7); 
         const slug = form.titulo.trim().replace(/\s+/g, '-').toUpperCase();
-        const customId = `${anioMes}-${slug}`;
-        await setDoc(doc(db, "cursos", customId), cursoData);
-        setMsg("✅ Curso creado: " + customId);
+        finalId = `${anioMes}-${slug}`;
+        batch.set(doc(db, "cursos", finalId), cursoData);
       }
+
+      // Programación Automática de Sesiones
+      if (form.programacionAutomatica) {
+        const end = new Date(form.fechaFin);
+        
+        form.diasSemana.forEach(targetDay => {
+          let current = new Date(form.fechaInicio);
+          const targetDayJs = targetDay === 7 ? 0 : targetDay;
+
+          while (current.getDay() !== targetDayJs) {
+            current.setDate(current.getDate() + 1);
+          }
+
+          while (current <= end) {
+            const dateStr = current.toISOString().split('T')[0];
+            const sesionId = `${dateStr}_${form.horaInicio.replace(':', '')}`;
+            const sesionRef = doc(db, "cursos", finalId!, "sesiones", sesionId);
+            batch.set(sesionRef, {
+              fecha: dateStr,
+              hora_inicio: form.horaInicio,
+              hora_fin: form.horaFin,
+              sala: form.sala,
+              esRecurrente: true
+            });
+            current.setDate(current.getDate() + 7);
+          }
+        });
+      }
+
+      await batch.commit();
+      setMsg(editando ? "✅ Curso actualizado" : "✅ Curso creado");
       
       setTimeout(() => setMsg(''), 3000);
       setForm({ 
@@ -118,11 +338,19 @@ const AdminCursos = () => {
         profesorId: '',
         profesorNombre: '',
         descripcion: '',
-        ventajas: ''
+        ventajas: '',
+        diasSemana: [1],
+        horaInicio: '18:00',
+        horaFin: '19:30',
+        sala: 'Sala Grande',
+        programacionAutomatica: false
       });
       setEditando(null);
       fetchCursos();
-    } catch (err) { alert("Error al guardar"); }
+    } catch (err) { 
+      console.error(err);
+      alert("Error al guardar"); 
+    }
   };
 
   const añadirAlumno = async (cursoId: string, aforoActual: number, aforoTotal: number, fechaFin: string, categoria: string, alumnoData?: { dni: string, nombre: string, email: string, reservaId?: string }) => {
@@ -309,7 +537,7 @@ const AdminCursos = () => {
             </div>
 
             <div className="space-y-1">
-              <label className="text-[9px] font-black uppercase text-slate-600 ml-4">Profesor/a</label>
+              <label className="text-[9px] font-black uppercase text-slate-600 ml-4">Profesor/a (Staff)</label>
               <select 
                 className="w-full p-5 bg-slate-50 rounded-2xl font-black uppercase border border-slate-200 text-slate-900" 
                 value={form.profesorId} 
@@ -322,8 +550,120 @@ const AdminCursos = () => {
               </select>
             </div>
 
+            <div className="bg-slate-900 p-8 rounded-[2rem] space-y-6 border border-indigo-500/30">
+              <h3 className="text-indigo-400 text-[10px] font-black uppercase tracking-[0.2em]">Horario del Curso</h3>
+              
+              <div className="space-y-3">
+                <label className="text-[8px] font-black uppercase text-slate-500 ml-2">Días de la Semana</label>
+                <div className="flex flex-wrap gap-2">
+                  {[
+                    { id: 1, label: 'L' },
+                    { id: 2, label: 'M' },
+                    { id: 3, label: 'X' },
+                    { id: 4, label: 'J' },
+                    { id: 5, label: 'V' },
+                    { id: 6, label: 'S' },
+                    { id: 7, label: 'D' }
+                  ].map(day => (
+                    <button
+                      key={day.id}
+                      type="button"
+                      onClick={() => {
+                        const current = [...form.diasSemana];
+                        if (current.includes(day.id)) {
+                          setForm({ ...form, diasSemana: current.filter(d => d !== day.id) });
+                        } else {
+                          setForm({ ...form, diasSemana: [...current, day.id].sort() });
+                        }
+                      }}
+                      className={`w-10 h-10 rounded-xl text-[10px] font-black transition-all border ${
+                        form.diasSemana.includes(day.id) 
+                          ? 'bg-indigo-500 border-indigo-400 text-white shadow-lg shadow-indigo-500/20' 
+                          : 'bg-slate-800 border-slate-700 text-slate-500 hover:border-slate-600'
+                      }`}
+                    >
+                      {day.label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-1">
+                  <label className="text-[8px] font-black uppercase text-slate-500 ml-2">Inicio</label>
+                  <input 
+                    type="time" 
+                    className="w-full p-4 bg-slate-800 rounded-xl text-xs font-bold text-white border border-slate-700 outline-none focus:border-indigo-500"
+                    value={form.horaInicio}
+                    onChange={e => setForm({...form, horaInicio: e.target.value})}
+                  />
+                </div>
+                <div className="space-y-1">
+                  <label className="text-[8px] font-black uppercase text-slate-500 ml-2">Fin</label>
+                  <input 
+                    type="time" 
+                    className="w-full p-4 bg-slate-800 rounded-xl text-xs font-bold text-white border border-slate-700 outline-none focus:border-indigo-500"
+                    value={form.horaFin}
+                    onChange={e => setForm({...form, horaFin: e.target.value})}
+                  />
+                </div>
+              </div>
+
+              <div className="space-y-1">
+                <label className="text-[8px] font-black uppercase text-slate-500 ml-2">Sala</label>
+                <select 
+                  className="w-full p-4 bg-slate-800 rounded-xl text-xs font-bold text-white border border-slate-700 outline-none focus:border-indigo-500"
+                  value={form.sala}
+                  onChange={e => setForm({...form, sala: e.target.value})}
+                >
+                  <option value="Sala Grande">Sala Grande</option>
+                  <option value="Sala Pequeña">Sala Pequeña</option>
+                  <option value="Estudio">Estudio</option>
+                </select>
+              </div>
+
+              <div className="flex items-center justify-between bg-indigo-500/10 p-5 rounded-2xl border border-indigo-500/20">
+                <div className="flex items-center gap-3">
+                  <input 
+                    type="checkbox" 
+                    id="auto-prog"
+                    className="w-5 h-5 accent-indigo-500"
+                    checked={form.programacionAutomatica}
+                    onChange={e => setForm({...form, programacionAutomatica: e.target.checked})}
+                  />
+                  <label htmlFor="auto-prog" className="text-[10px] font-black uppercase text-indigo-400 cursor-pointer tracking-widest">
+                    Programación Automática
+                  </label>
+                </div>
+                {form.programacionAutomatica && (
+                  <span className="text-[9px] font-bold text-indigo-300 italic">
+                    ~{Math.ceil((new Date(form.fechaFin).getTime() - new Date(form.fechaInicio).getTime()) / (7 * 24 * 60 * 60 * 1000))} sesiones
+                  </span>
+                )}
+              </div>
+
+              {form.programacionAutomatica && (
+                <div className={`p-4 rounded-xl border transition-all ${conflictosRealTime.length > 0 ? 'bg-red-500/20 border-red-500/50' : 'bg-emerald-500/20 border-emerald-500/50'}`}>
+                  <div className="flex items-center gap-2 mb-2">
+                    <div className={`w-2 h-2 rounded-full ${conflictosRealTime.length > 0 ? 'bg-red-500 animate-pulse' : 'bg-emerald-500'}`}></div>
+                    <p className={`text-[9px] font-black uppercase tracking-widest ${conflictosRealTime.length > 0 ? 'text-red-400' : 'text-emerald-400'}`}>
+                      {isCheckingConflictos ? 'Verificando disponibilidad...' : conflictosRealTime.length > 0 ? 'Conflictos Detectados' : 'Horario Disponible'}
+                    </p>
+                  </div>
+                  {conflictosRealTime.length > 0 && (
+                    <div className="flex flex-wrap gap-1">
+                      {conflictosRealTime.slice(0, 5).map(f => (
+                        <span key={f} className="text-[7px] bg-red-500/30 text-red-200 px-1.5 py-0.5 rounded font-mono">{f}</span>
+                      ))}
+                      {conflictosRealTime.length > 5 && <span className="text-[7px] text-red-300">+{conflictosRealTime.length - 5} más</span>}
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+
             <div className="space-y-1">
-              <label className="text-[9px] font-black uppercase text-slate-600 ml-4">Horario</label>
+              <label className="text-[9px] font-black uppercase text-slate-600 ml-4">Horario (Texto para Web)</label>
               <input type="text" placeholder="ej: Lunes y Martes 14:00-15:00" className="w-full p-5 bg-slate-50 rounded-2xl outline-none border border-slate-200 text-slate-900" value={form.horario} onChange={e => setForm({...form, horario: e.target.value})} required />
             </div>
 
@@ -543,7 +883,12 @@ const AdminCursos = () => {
                             profesorId: c.profesorId || '',
                             profesorNombre: c.profesorNombre || c.profesor || '',
                             descripcion: c.descripcion || '',
-                            ventajas: c.ventajas || ''
+                            ventajas: c.ventajas || '',
+                            diasSemana: c.diasSemana || [1],
+                            horaInicio: c.horaInicio || '18:00',
+                            horaFin: c.horaFin || '19:30',
+                            sala: c.sala || 'Sala Grande',
+                            programacionAutomatica: c.programacionAutomatica || false
                           });
                           window.scrollTo({ top: 0, behavior: 'smooth' });
                         }}
@@ -553,6 +898,13 @@ const AdminCursos = () => {
                         onClick={() => setCursoSeleccionado(c.id)}
                         className="bg-slate-900 text-white px-8 py-3 rounded-xl font-black uppercase text-[10px] tracking-widest hover:bg-indigo-600 transition-all"
                       >+ Inscribir Alumno</button>
+                      <button 
+                        onClick={() => {
+                          setGestionandoSesiones(c.id);
+                          fetchSesiones(c.id);
+                        }}
+                        className="bg-amber-100 text-amber-600 px-6 py-3 rounded-xl font-black uppercase text-[10px] tracking-widest hover:bg-amber-200 transition-all"
+                      >📅 Sesiones</button>
                     </div>
                     <button 
                       onClick={async () => { 
@@ -593,6 +945,148 @@ const AdminCursos = () => {
             ))}
           </div>
         </div>
+
+        {/* MODAL GESTIÓN SESIONES */}
+        {gestionandoSesiones && (
+          <div className="fixed inset-0 bg-slate-900/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+            <div className="bg-white w-full max-w-2xl rounded-[3rem] shadow-2xl overflow-hidden flex flex-col max-h-[90vh]">
+              <div className="p-8 bg-slate-900 text-white flex justify-between items-center">
+                <div>
+                  <h3 className="text-2xl font-black italic uppercase">Gestionar Sesiones</h3>
+                  <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">
+                    {cursos.find(c => c.id === gestionandoSesiones)?.titulo}
+                  </p>
+                </div>
+                <button onClick={() => setGestionandoSesiones(null)} className="text-slate-400 hover:text-white text-2xl">×</button>
+              </div>
+              
+              <div className="p-8 overflow-y-auto space-y-8">
+                {/* Formulario Nueva Sesión */}
+                <form onSubmit={guardarSesion} className="bg-slate-50 p-6 rounded-3xl border border-slate-200 space-y-4">
+                  <h4 className="text-[10px] font-black uppercase text-slate-500 tracking-widest">Añadir Nueva Sesión</h4>
+                  <div className="grid grid-cols-2 gap-4">
+                    <div className="space-y-1">
+                      <label className="text-[8px] font-black uppercase text-slate-400 ml-2">Fecha</label>
+                      <input 
+                        type="date" 
+                        className="w-full p-3 bg-white rounded-xl text-xs border border-slate-200"
+                        value={nuevaSesion.fecha}
+                        onChange={e => setNuevaSesion({...nuevaSesion, fecha: e.target.value})}
+                        required
+                      />
+                    </div>
+                    <div className="space-y-1">
+                      <label className="text-[8px] font-black uppercase text-slate-400 ml-2">Sala</label>
+                      <select 
+                        className="w-full p-3 bg-white rounded-xl text-xs border border-slate-200 uppercase font-bold"
+                        value={nuevaSesion.sala}
+                        onChange={e => setNuevaSesion({...nuevaSesion, sala: e.target.value})}
+                      >
+                        <option value="Sala Grande">Sala Grande</option>
+                        <option value="Sala Pequeña">Sala Pequeña</option>
+                        <option value="Estudio">Estudio</option>
+                      </select>
+                    </div>
+                  </div>
+                  <div className="grid grid-cols-2 gap-4">
+                    <div className="space-y-1">
+                      <label className="text-[8px] font-black uppercase text-slate-400 ml-2">Hora Inicio</label>
+                      <input 
+                        type="time" 
+                        className="w-full p-3 bg-white rounded-xl text-xs border border-slate-200"
+                        value={nuevaSesion.hora_inicio}
+                        onChange={e => setNuevaSesion({...nuevaSesion, hora_inicio: e.target.value})}
+                        required
+                      />
+                    </div>
+                    <div className="space-y-1">
+                      <label className="text-[8px] font-black uppercase text-slate-400 ml-2">Hora Fin</label>
+                      <input 
+                        type="time" 
+                        className="w-full p-3 bg-white rounded-xl text-xs border border-slate-200"
+                        value={nuevaSesion.hora_fin}
+                        onChange={e => setNuevaSesion({...nuevaSesion, hora_fin: e.target.value})}
+                        required
+                      />
+                    </div>
+                  </div>
+
+                  <div className="flex items-center gap-3 bg-white p-4 rounded-2xl border border-slate-100">
+                    <input 
+                      type="checkbox" 
+                      id="recurrente"
+                      className="w-5 h-5 accent-indigo-600"
+                      checked={nuevaSesion.esRecurrente}
+                      onChange={e => setNuevaSesion({...nuevaSesion, esRecurrente: e.target.checked})}
+                    />
+                    <label htmlFor="recurrente" className="text-[10px] font-black uppercase text-slate-600 cursor-pointer">
+                      ¿Es una clase recurrente?
+                    </label>
+                  </div>
+
+                  {nuevaSesion.esRecurrente && (
+                    <div className="bg-indigo-50 p-4 rounded-2xl border border-indigo-100">
+                      <p className="text-[9px] font-bold text-indigo-600 uppercase tracking-widest">
+                        🔄 Repetir semanalmente hasta el {cursos.find(c => c.id === gestionandoSesiones)?.fechaFin}
+                      </p>
+                    </div>
+                  )}
+
+                  {conflictos.length > 0 && (
+                    <div className="bg-red-50 p-4 rounded-2xl border border-red-200">
+                      <p className="text-[9px] font-black text-red-600 uppercase mb-2">⚠️ Conflictos detectados en:</p>
+                      <div className="flex flex-wrap gap-2">
+                        {conflictos.map(f => (
+                          <span key={f} className="bg-red-100 text-red-700 px-2 py-1 rounded-lg text-[8px] font-mono">{f}</span>
+                        ))}
+                      </div>
+                      <p className="text-[8px] text-red-400 mt-2 italic">No se puede crear la serie si hay choques de horario o sala.</p>
+                    </div>
+                  )}
+
+                  <button className="w-full bg-indigo-600 text-white p-4 rounded-xl font-black uppercase text-[10px] tracking-widest shadow-lg shadow-indigo-200">
+                    {nuevaSesion.esRecurrente ? 'Generar Serie de Clases' : 'Añadir Sesión al Calendario'}
+                  </button>
+                </form>
+
+                {/* Listado de Sesiones */}
+                <div className="space-y-3">
+                  <h4 className="text-[10px] font-black uppercase text-slate-500 tracking-widest ml-2">Sesiones Programadas</h4>
+                  {sesiones.length === 0 ? (
+                    <p className="text-center py-8 text-slate-400 italic text-sm">No hay sesiones programadas aún.</p>
+                  ) : (
+                    <div className="space-y-2">
+                      {sesiones.map(s => (
+                        <div key={s.id} className="flex items-center justify-between bg-white p-4 rounded-2xl border border-slate-100 shadow-sm group">
+                          <div className="flex items-center gap-4">
+                            <div className="bg-indigo-50 text-indigo-600 p-3 rounded-xl font-black text-center min-w-[60px]">
+                              <p className="text-[8px] uppercase">Día</p>
+                              <p className="text-sm">{s.fecha.split('-')[2]}</p>
+                            </div>
+                            <div>
+                              <p className="text-xs font-black text-slate-900">
+                                {s.fecha} {s.esRecurrente && '🔁'}
+                              </p>
+                              <p className="text-[10px] font-bold text-indigo-500 uppercase tracking-widest">
+                                {s.hora_inicio} - {s.hora_fin} | {s.sala}
+                              </p>
+                            </div>
+                          </div>
+                          <button 
+                            onClick={() => eliminarSesion(s.id)}
+                            className="text-red-300 hover:text-red-500 opacity-0 group-hover:opacity-100 transition-all p-2"
+                          >
+                            Eliminar
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );

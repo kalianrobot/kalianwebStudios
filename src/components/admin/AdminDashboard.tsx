@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { db } from '../../firebase';
 import { collection, onSnapshot, query, where } from 'firebase/firestore';
-import MasterCalendar from './MasterCalendar';
+import MasterCalendar from '../shared/MasterCalendar';
 
 const AdminDashboard = () => {
   const [pendientes, setPendientes] = useState(0);

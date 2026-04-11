@@ -8,7 +8,9 @@ import { useLanguage } from '../context/LanguageContext';
 import ReservaForm from '../components/public/ReservaForm';
 import NewsletterForm from '../components/public/NewsletterForm';
 import LegalModal from '../components/public/LegalModal';
-import { KalianLogo } from '../components/public/KalianLogo';
+import KalianHeader from '../components/shared/KalianHeader';
+import EventCard from '../components/shared/EventCard';
+import SectionTitle from '../components/shared/SectionTitle';
 
 const ProgramacionPublica = () => {
   const { socioData } = useAuth();
@@ -140,106 +142,33 @@ const ProgramacionPublica = () => {
 
   return (
     <div className="min-h-screen bg-kalian-dark text-kalian-cream font-sans pb-20">
-      {/* HEADER PÚBLICO */}
-      <div className="p-10 md:p-20 text-center space-y-6 relative overflow-hidden">
-        <div className="absolute inset-0 opacity-5 pointer-events-none">
-          <div className="absolute top-0 left-0 w-full h-full bg-[radial-gradient(circle_at_center,_var(--color-kalian-gold)_0%,_transparent_70%)]"></div>
-        </div>
-        
-        <div className="flex justify-center mb-8 relative z-10">
-          {config?.logoUrl ? (
-            <img src={config.logoUrl} alt="Logo" className="h-32 md:h-48 object-contain" />
-          ) : (
-            <KalianLogo size="lg" />
-          )}
-        </div>
-
-        <h1 className="text-5xl md:text-8xl kalian-poster-text text-kalian-gold tracking-[-0.05em] uppercase italic relative z-10">
-          {t('home.title')}
-        </h1>
-        <p className="text-kalian-gold/60 text-xs md:text-sm font-black tracking-[0.6em] uppercase italic relative z-10">
-          {config?.slogan || "KALIAN HIRI KULTUR GUNEA"}
-        </p>
-      </div>
+      {/* SHARED HEADER */}
+      <KalianHeader showPanelButton={false} />
 
       <div className="max-w-6xl mx-auto px-6 space-y-32">
         
         {/* EVENTOS */}
         <section className="space-y-12">
-          <div className="flex items-center gap-6">
-            <h2 className="text-4xl kalian-poster-text text-kalian-gold uppercase">{t('home.events')}</h2>
-            <div className="h-[1px] flex-1 bg-kalian-gold/20"></div>
-          </div>
+          <SectionTitle title="PRÓXIMOS" subtitle="EVENTOS" color={config?.titleColor} />
           
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
             {eventos.map(ev => (
-              <motion.div 
-                key={ev.id} 
-                initial={{ opacity: 0, y: 20 }}
-                whileInView={{ opacity: 1, y: 0 }}
-                viewport={{ once: true }}
-                whileHover={{ y: -10, scale: 1.02 }}
-                className="bg-black/40 border border-kalian-gold/10 rounded-[2.5rem] overflow-hidden hover:border-kalian-gold/40 transition-all group cursor-pointer relative flex flex-col h-full shadow-2xl hover:shadow-kalian-gold/10"
-                onClick={() => setItemSeleccionado(ev)}
-              >
-                <div className="h-64 relative overflow-hidden bg-kalian-gold/5 border-b border-kalian-gold/10 flex-shrink-0">
-                  {ev.imagenUrl ? (
-                    <img src={ev.imagenUrl} alt={ev.titulo} className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-700" referrerPolicy="no-referrer" />
-                  ) : (
-                    <div className="w-full h-full flex items-center justify-center opacity-10">
-                      <span className="text-8xl kalian-poster-text text-kalian-gold">{ev.titulo.charAt(0)}</span>
-                    </div>
-                  )}
-                  <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-transparent to-transparent"></div>
-                  <div className="absolute bottom-4 left-6 right-6 flex justify-between items-end">
-                    {socioData && ev.categoria !== 'ninguno' && (
-                      <span className="bg-kalian-gold text-black text-[9px] font-black uppercase px-4 py-1.5 rounded-full tracking-widest shadow-lg">{t('home.discount')}</span>
-                    )}
-                    <span className="text-kalian-gold kalian-poster-text text-4xl drop-shadow-lg ml-auto">{ev.precio_estandar}€</span>
-                  </div>
-                </div>
-                
-                <div className="p-8 space-y-6 flex-grow flex flex-col justify-between relative z-10">
-                  <div className="space-y-4">
-                    <div className="space-y-2">
-                      <h3 className="text-3xl kalian-poster-text text-kalian-cream group-hover:text-kalian-gold transition-colors leading-none uppercase italic">{ev.titulo}</h3>
-                      <div className="w-12 h-1 bg-kalian-gold/30 group-hover:w-full transition-all duration-500"></div>
-                    </div>
-                    <p className="font-bold text-kalian-cream/80 uppercase text-lg md:text-xl tracking-widest">
-                      {new Date(ev.fecha).toLocaleString('es-ES', { day: 'numeric', month: 'long', hour: '2-digit', minute: '2-digit' })}
-                    </p>
-                  </div>
-                  
-                  <div className="flex flex-col gap-3 mt-4">
-                    {ev.imagenUrl && (
-                      <button 
-                        onClick={(e) => { e.stopPropagation(); setPosterSeleccionado(ev.imagenUrl); }}
-                        className="w-full bg-kalian-gold/10 text-kalian-gold border border-kalian-gold/20 p-4 rounded-2xl kalian-poster-text text-sm tracking-widest hover:bg-kalian-gold/20 transition-all"
-                      >Ver Cartel</button>
-                    )}
-                    {esReservaAbierta(ev) ? (
-                      <button className="w-full bg-kalian-gold text-black p-5 rounded-2xl kalian-poster-text text-lg tracking-widest hover:bg-white transition-all shadow-xl shadow-kalian-gold/10">
-                        {t('home.reserve')}
-                      </button>
-                    ) : (
-                      <div className="w-full bg-slate-800/50 text-slate-500 p-5 rounded-2xl kalian-poster-text text-lg tracking-widest text-center border border-white/5">
-                        {t('home.soon')}
-                        <p className="text-[10px] font-black uppercase tracking-widest mt-1">{getMensajeApertura(ev)}</p>
-                      </div>
-                    )}
-                  </div>
-                </div>
-              </motion.div>
+              <EventCard 
+                key={ev.id}
+                event={ev}
+                isSocio={!!socioData}
+                isReservaAbierta={esReservaAbierta(ev)}
+                mensajeApertura={getMensajeApertura(ev)}
+                onClick={(item) => setItemSeleccionado(item)}
+                onViewPoster={(url) => setPosterSeleccionado(url)}
+              />
             ))}
           </div>
         </section>
 
         {/* CURSOS Y TALLERES */}
         <section className="space-y-12">
-          <div className="flex items-center gap-6">
-            <h2 className="text-4xl kalian-poster-text text-kalian-gold uppercase">{t('home.courses')}</h2>
-            <div className="h-[1px] flex-1 bg-kalian-gold/20"></div>
-          </div>
+          <SectionTitle title="ACADEMIA" subtitle="KALIAN" color={config?.titleColor} />
 
           {!categoriaActiva ? (
             <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
@@ -390,10 +319,7 @@ const ProgramacionPublica = () => {
 
         {/* KALIAN GALLERY */}
         <section className="space-y-12">
-          <div className="flex items-center gap-6">
-            <h2 className="text-4xl kalian-poster-text text-kalian-gold">KALIAN <span className="text-kalian-cream">GALLERY</span></h2>
-            <div className="h-[1px] flex-1 bg-kalian-gold/20"></div>
-          </div>
+          <SectionTitle title="KALIAN" subtitle="GALLERY" color={config?.titleColor} />
           
           <motion.div 
             whileHover={{ scale: 1.01 }}
@@ -425,10 +351,7 @@ const ProgramacionPublica = () => {
 
         {/* KALIAN HUB */}
         <section className="space-y-12">
-          <div className="flex items-center gap-6">
-            <h2 className="text-4xl kalian-poster-text text-kalian-gold">KALIAN <span className="text-kalian-cream">HUB</span></h2>
-            <div className="h-[1px] flex-1 bg-kalian-gold/20"></div>
-          </div>
+          <SectionTitle title="KALIAN" subtitle="HUB" color={config?.titleColor} />
           
           <motion.div 
             whileHover={{ scale: 1.02, y: -5 }}

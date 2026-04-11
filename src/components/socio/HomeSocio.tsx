@@ -5,6 +5,9 @@ import { Link } from 'react-router-dom';
 import { motion, AnimatePresence } from 'motion/react';
 import ReservaForm from '../public/ReservaForm';
 import LegalModal from '../public/LegalModal';
+import KalianHeader from '../shared/KalianHeader';
+import EventCard from '../shared/EventCard';
+import SectionTitle from '../shared/SectionTitle';
 
 export const HomeSocio = () => {
   const [eventos, setEventos] = useState<DocumentData[]>([]);
@@ -69,6 +72,34 @@ export const HomeSocio = () => {
 
   const hayLocalesLibres = locales.some(l => l.estado === 'libre');
 
+  const esReservaAbierta = (ev: any) => {
+    const hoy = new Date();
+    const aperturaSocios = ev.apertura_socios ? new Date(ev.apertura_socios) : null;
+    const aperturaGral = ev.apertura_general ? new Date(ev.apertura_general) : null;
+    
+    if (!aperturaSocios && !aperturaGral) {
+      const fecha = new Date(ev.fecha);
+      const diffTime = fecha.getTime() - hoy.getTime();
+      const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+      return diffDays <= 7;
+    }
+
+    // Para socios, si hay fecha de apertura de socios, la respetamos. 
+    // Si no hay, pero hay general, los socios suelen tener acceso si la general está abierta o si es inminente.
+    // Pero lo más seguro es: si hay apertura_socios, usarla. Si no, usar apertura_general.
+    return (aperturaSocios && hoy >= aperturaSocios) || (aperturaGral && hoy >= aperturaGral) || (!aperturaSocios && !aperturaGral);
+  };
+
+  const getMensajeApertura = (ev: any) => {
+    const hoy = new Date();
+    const aperturaSocios = ev.apertura_socios ? new Date(ev.apertura_socios) : null;
+
+    if (aperturaSocios && hoy < aperturaSocios) {
+      return `Apertura Soci@s: ${aperturaSocios.toLocaleDateString()}`;
+    }
+    return "Próximamente";
+  };
+
   const enviarSolicitud = async (e: React.FormEvent) => {
     e.preventDefault();
     setEnviandoSolicitud(true);
@@ -104,110 +135,33 @@ export const HomeSocio = () => {
 
   return (
     <div className="min-h-screen bg-kalian-dark text-kalian-cream font-sans pb-20">
-      {/* HERO SOCIO */}
-      <div className="p-10 md:p-20 text-center space-y-6 relative overflow-hidden">
-        <div className="absolute inset-0 opacity-5 pointer-events-none">
-          <div className="absolute top-0 left-0 w-full h-full bg-[radial-gradient(circle_at_center,_var(--color-kalian-gold)_0%,_transparent_70%)]"></div>
-        </div>
-        <h1 className="text-5xl md:text-8xl kalian-poster-text text-kalian-gold tracking-[-0.05em]">
-          CATÁLOGO <span className="text-kalian-cream">EXCLUSIVO</span>
-        </h1>
-        <p className="text-kalian-gold/60 text-xs md:text-sm font-black tracking-[0.6em] uppercase italic">Eventos y Cursos para Soci@s Kalian</p>
-        
-        <div className="pt-8 flex justify-center">
-          <Link 
-            to="/perfil" 
-            className="bg-kalian-gold text-black px-10 py-4 rounded-2xl kalian-poster-text text-xl tracking-widest hover:bg-white transition-all shadow-2xl shadow-kalian-gold/20"
-          >
-            IR A MI PANEL →
-          </Link>
-        </div>
-      </div>
+      {/* SHARED HEADER */}
+      <KalianHeader showPanelButton={true} />
 
       <div className="max-w-6xl mx-auto px-6 space-y-32">
         
         {/* SECCIÓN EVENTOS */}
         <section className="space-y-12">
-          <div className="flex items-center gap-6">
-            <h2 className="text-4xl kalian-poster-text text-kalian-gold">PRÓXIMOS <span className="text-kalian-cream">EVENTOS</span></h2>
-            <div className="h-[1px] flex-1 bg-kalian-gold/20"></div>
-          </div>
+          <SectionTitle title="PRÓXIMOS" subtitle="EVENTOS" color={config?.titleColor} />
           
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
             {eventos.map(ev => (
-              <motion.div 
-                key={ev.id} 
-                initial={{ opacity: 0, y: 20 }}
-                whileInView={{ opacity: 1, y: 0 }}
-                viewport={{ once: true }}
-                whileHover={{ y: -10, scale: 1.02 }}
-                className="bg-black/40 border border-kalian-gold/10 rounded-[2.5rem] overflow-hidden hover:border-kalian-gold/40 transition-all group cursor-pointer relative flex flex-col h-full shadow-2xl hover:shadow-kalian-gold/10"
-                onClick={() => setItemSeleccionado(ev)}
-              >
-                {/* IMAGEN DEL EVENTO */}
-                <div className="h-64 relative overflow-hidden bg-kalian-gold/5 border-b border-kalian-gold/10 flex-shrink-0">
-                  {ev.imagenUrl ? (
-                    <img 
-                      src={ev.imagenUrl} 
-                      alt={ev.titulo} 
-                      className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-700"
-                      referrerPolicy="no-referrer"
-                    />
-                  ) : (
-                    <div className="w-full h-full flex items-center justify-center opacity-10">
-                      <span className="text-8xl kalian-poster-text text-kalian-gold">{ev.titulo.charAt(0)}</span>
-                    </div>
-                  )}
-                  <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-transparent to-transparent"></div>
-                  <div className="absolute bottom-4 left-6 right-6 flex justify-between items-end">
-                    {ev.categoria !== 'ninguno' && (
-                      <span className="bg-kalian-gold text-black text-[9px] font-black uppercase px-4 py-1.5 rounded-full tracking-widest shadow-lg">Descuento Soci@s</span>
-                    )}
-                    <span className="text-kalian-gold kalian-poster-text text-4xl drop-shadow-lg ml-auto">{ev.precio_estandar}€</span>
-                  </div>
-                </div>
-                
-                <div className="p-8 space-y-6 flex-grow flex flex-col justify-between relative z-10">
-                  <div className="space-y-4">
-                    <div className="space-y-2">
-                      <h3 className="text-3xl kalian-poster-text text-kalian-cream group-hover:text-kalian-gold transition-colors leading-none uppercase italic">{ev.titulo}</h3>
-                      <div className="w-12 h-1 bg-kalian-gold/30 group-hover:w-full transition-all duration-500"></div>
-                    </div>
-
-                    <div className="space-y-1">
-                      <p className="text-[9px] font-black text-kalian-gold/40 uppercase tracking-[0.3em]">Fecha y Hora</p>
-                      <p className="font-bold text-kalian-cream/80 uppercase text-sm tracking-widest">{new Date(ev.fecha).toLocaleString('es-ES', { day: 'numeric', month: 'long', hour: '2-digit', minute: '2-digit' })}</p>
-                    </div>
-                  </div>
-                  
-                  <div className="flex flex-col gap-3 mt-4">
-                    {ev.imagenUrl && (
-                      <button 
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          setPosterSeleccionado(ev.imagenUrl);
-                        }}
-                        className="w-full bg-kalian-gold/10 text-kalian-gold border border-kalian-gold/20 p-4 rounded-2xl kalian-poster-text text-sm tracking-widest hover:bg-kalian-gold/20 transition-all"
-                      >
-                        Ver Cartel
-                      </button>
-                    )}
-                    <button className="w-full bg-kalian-gold text-black p-5 rounded-2xl kalian-poster-text text-lg tracking-widest hover:bg-white transition-all shadow-xl shadow-kalian-gold/10">
-                      Reservar Plaza
-                    </button>
-                  </div>
-                </div>
-              </motion.div>
+              <EventCard 
+                key={ev.id}
+                event={ev}
+                isSocio={true}
+                isReservaAbierta={esReservaAbierta(ev)}
+                mensajeApertura={getMensajeApertura(ev)}
+                onClick={(item) => setItemSeleccionado(item)}
+                onViewPoster={(url) => setPosterSeleccionado(url)}
+              />
             ))}
           </div>
         </section>
 
         {/* SECCIÓN CURSOS */}
         <section className="space-y-12">
-          <div className="flex items-center gap-6">
-            <h2 className="text-4xl kalian-poster-text text-kalian-gold">ACADEMIA <span className="text-kalian-cream">KALIAN</span></h2>
-            <div className="h-[1px] flex-1 bg-kalian-gold/20"></div>
-          </div>
+          <SectionTitle title="ACADEMIA" subtitle="KALIAN" color={config?.titleColor} />
 
           {!categoriaActiva ? (
             <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
@@ -358,10 +312,7 @@ export const HomeSocio = () => {
 
         {/* KALIAN GALLERY */}
         <section className="space-y-12">
-          <div className="flex items-center gap-6">
-            <h2 className="text-4xl kalian-poster-text text-kalian-gold">KALIAN <span className="text-kalian-cream">GALLERY</span></h2>
-            <div className="h-[1px] flex-1 bg-kalian-gold/20"></div>
-          </div>
+          <SectionTitle title="KALIAN" subtitle="GALLERY" color={config?.titleColor} />
           
           <motion.div 
             whileHover={{ scale: 1.01 }}
@@ -393,10 +344,7 @@ export const HomeSocio = () => {
 
         {/* KALIAN HUB */}
         <section className="space-y-12">
-          <div className="flex items-center gap-6">
-            <h2 className="text-4xl kalian-poster-text text-kalian-gold">KALIAN <span className="text-kalian-cream">HUB</span></h2>
-            <div className="h-[1px] flex-1 bg-kalian-gold/20"></div>
-          </div>
+          <SectionTitle title="KALIAN" subtitle="HUB" color={config?.titleColor} />
           
           <motion.div 
             whileHover={{ scale: 1.02, y: -5 }}

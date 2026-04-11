@@ -12,6 +12,7 @@ const AdminConfig = () => {
     heroImageUrl: '',
     galleryImageUrl: '',
     hubImageUrl: '',
+    titleColor: '#c5a059',
   });
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -92,6 +93,23 @@ const AdminConfig = () => {
                 value={config.slogan}
                 onChange={e => setConfig({...config, slogan: e.target.value.toUpperCase()})}
               />
+            </div>
+            <div className="space-y-4">
+              <p className="text-[10px] font-black text-kalian-gold/40 uppercase tracking-[0.3em] ml-4">Color de Títulos</p>
+              <div className="flex items-center gap-4">
+                <input 
+                  type="color" 
+                  className="w-12 h-12 bg-transparent border-none cursor-pointer"
+                  value={config.titleColor || '#c5a059'}
+                  onChange={e => setConfig({...config, titleColor: e.target.value})}
+                />
+                <input 
+                  type="text" 
+                  className="flex-1 p-4 bg-kalian-gold/5 rounded-xl border border-kalian-gold/10 outline-none focus:border-kalian-gold font-mono text-xs"
+                  value={config.titleColor || '#c5a059'}
+                  onChange={e => setConfig({...config, titleColor: e.target.value})}
+                />
+              </div>
             </div>
           </div>
 

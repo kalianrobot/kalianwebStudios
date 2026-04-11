@@ -169,6 +169,18 @@
         "activo": { "type": "boolean" }
       },
       "required": ["nombre", "lema", "imageUrl", "orden", "activo"]
+    },
+    "sesiones_curso": {
+      "title": "Sesión de Curso",
+      "description": "Clase individual de un curso",
+      "type": "object",
+      "properties": {
+        "fecha": { "type": "string", "format": "date" },
+        "hora_inicio": { "type": "string" },
+        "hora_fin": { "type": "string" },
+        "sala": { "type": "string", "default": "Sala Grande" }
+      },
+      "required": ["fecha", "hora_inicio", "hora_fin", "sala"]
     }
   },
   "firestore": {
@@ -211,6 +223,10 @@
     "/academias/{academiaId}": {
       "schema": "academias",
       "description": "Colección de academias dinámicas"
+    },
+    "/cursos/{cursoId}/sesiones/{sesionId}": {
+      "schema": "sesiones_curso",
+      "description": "Sesiones de un curso (clases)"
     }
   }
 }

@@ -77,6 +77,16 @@ service cloud.firestore {
       allow read: if true;
       allow update: if isAdmin() || (isTeacher() && resource.data.profesorId == request.auth.uid);
       allow create, delete: if isAdmin();
+      
+      match /sesiones/{sesionId} {
+        allow read: if true;
+        allow write: if isAdmin() || (isTeacher() && get(/databases/$(database)/documents/cursos/$(cursoId)).data.profesorId == request.auth.uid);
+      }
+    }
+
+    // Permitir collectionGroup para sesiones (necesario para el Calendario Maestro)
+    match /{path=**}/sesiones/{sesionId} {
+      allow read: if true;
     }
 
     // PROFESORES: Lectura propia o admin. Escritura admin.

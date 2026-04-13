@@ -10,10 +10,13 @@ const AdminCursos = () => {
   const [searchParams] = useSearchParams();
   const [cursos, setCursos] = useState<DocumentData[]>([]);
   const [profesores, setProfesores] = useState<DocumentData[]>([]);
+  const [academias, setAcademias] = useState<DocumentData[]>([]);
   const [msg, setMsg] = useState('');
+  const [nuevaSubcat, setNuevaSubcat] = useState('');
+  const [mostrandoNuevaSubcat, setMostrandoNuevaSubcat] = useState(false);
   const [form, setForm] = useState({ 
     titulo: '', 
-    categoria: 'musica', 
+    categoria: '', 
     subcategoria: '',
     modalidades: [{ tipo: 'presencial', frecuencia: 'semanal', precio: '' }],
     fechaInicio: '2025-09-01', 
@@ -35,14 +38,9 @@ const AdminCursos = () => {
   const [conflictosRealTime, setConflictosRealTime] = useState<string[]>([]);
   const [isCheckingConflictos, setIsCheckingConflictos] = useState(false);
 
-  const subcategorias = {
-    musica: ['Instrumento', 'Combo', 'Armonía moderna', 'Big Band', 'Master classes'],
-    danza: ['Bachata', 'Bachata coreográfico', 'Salsa'],
-    local: []
-  };
-
   const getVentajasText = (cat: string) => {
-    const catName = cat === 'musica' ? 'Music is Cool' : cat === 'danza' ? 'Club de Baile' : 'Kalian Hub';
+    const aca = academias.find(a => a.id === cat);
+    const catName = aca ? aca.nombre.toUpperCase() : 'KALIAN CLUB';
     return `Este curso incluye el alta como soci@ de ${catName} y acceso a descuentos en actividades de la misma categoría.`;
   };
   const [editando, setEditando] = useState<string | null>(null);
@@ -57,6 +55,16 @@ const AdminCursos = () => {
   const fetchCursos = async () => {
     const snap = await getDocs(query(collection(db, "cursos"), orderBy("categoria", "asc")));
     setCursos(snap.docs.map(d => ({ id: d.id, ...d.data() })));
+
+    // Fetch academias for categories
+    const snapAca = await getDocs(query(collection(db, "academias"), orderBy("orden", "asc")));
+    const acas = snapAca.docs.map(d => ({ id: d.id, ...d.data() }));
+    setAcademias(acas);
+
+    // Set default category if not set
+    if (!form.categoria && acas.length > 0) {
+      setForm(prev => ({ ...prev, categoria: acas[0].id }));
+    }
 
     // Fetch solicitudes (reservas de cursos)
     const snapSol = await getDocs(query(collection(db, "reservas"), where("esCurso", "==", true)));
@@ -242,7 +250,7 @@ const AdminCursos = () => {
         setEditando(c.id);
         setForm({
           titulo: c.titulo || '',
-          categoria: c.categoria || 'musica',
+          categoria: c.categoria || (academias.length > 0 ? academias[0].id : ''),
           subcategoria: c.subcategoria || '',
           modalidades: c.modalidades || [{ tipo: 'presencial', frecuencia: 'semanal', precio: '' }],
           fechaInicio: c.fechaInicio || '2025-09-01',
@@ -263,6 +271,47 @@ const AdminCursos = () => {
       }
     }
   }, [searchParams, cursos]);
+
+  const crearSubcategoria = async () => {
+    const val = nuevaSubcat.trim();
+    if (!val || !form.categoria) return;
+    
+    try {
+      const academia = academias.find(a => a.id === form.categoria);
+      const existingSubs = academia?.subcategorias || [];
+      
+      // Evitar duplicados exactos o por mayúsculas/minúsculas si se desea, 
+      // pero arrayUnion ya se encarga en DB. Aquí solo protegemos el estado local.
+      if (existingSubs.some((s: string) => s.toLowerCase() === val.toLowerCase())) {
+        const existing = existingSubs.find((s: string) => s.toLowerCase() === val.toLowerCase());
+        setForm({ ...form, subcategoria: existing });
+        setNuevaSubcat('');
+        setMostrandoNuevaSubcat(false);
+        return;
+      }
+
+      const acaRef = doc(db, "academias", form.categoria);
+      await updateDoc(acaRef, {
+        subcategorias: arrayUnion(val)
+      });
+      
+      // Update local state
+      setAcademias(prev => prev.map(a => 
+        a.id === form.categoria 
+        ? { ...a, subcategorias: [...(a.subcategorias || []), val] }
+        : a
+      ));
+      
+      setForm({ ...form, subcategoria: val });
+      setNuevaSubcat('');
+      setMostrandoNuevaSubcat(false);
+      setMsg("✅ Subcategoría creada");
+      setTimeout(() => setMsg(''), 2000);
+    } catch (err) {
+      console.error(err);
+      alert("Error al crear subcategoría");
+    }
+  };
 
   const guardar = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -328,7 +377,7 @@ const AdminCursos = () => {
       setTimeout(() => setMsg(''), 3000);
       setForm({ 
         titulo: '', 
-        categoria: 'musica', 
+        categoria: academias.length > 0 ? academias[0].id : '', 
         subcategoria: '',
         modalidades: [{ tipo: 'presencial', frecuencia: 'semanal', precio: '' }],
         fechaInicio: '2025-09-01', 
@@ -449,7 +498,7 @@ const AdminCursos = () => {
     <div className="min-h-screen bg-slate-100 p-6 font-sans text-slate-900">
       <div className="max-w-6xl mx-auto">
         <Link to="/staff" className="text-indigo-600 font-bold text-xs uppercase tracking-widest">← Volver</Link>
-        <h1 className="text-4xl font-black italic uppercase mb-8 mt-2 tracking-tighter">Academia <span className="text-indigo-600">Kalian</span></h1>
+        <h1 className="text-4xl font-black italic uppercase mb-8 mt-2 tracking-tighter">KALIAN <span className="text-indigo-600">CLUB</span></h1>
 
         {msg && <div className="bg-emerald-500 text-white p-5 rounded-3xl mb-8 font-bold text-center shadow-xl animate-bounce">{msg}</div>}
 
@@ -513,26 +562,57 @@ const AdminCursos = () => {
                 <select 
                   className="w-full p-5 bg-slate-50 rounded-2xl font-black uppercase border border-slate-200 text-slate-900" 
                   value={form.categoria} 
-                  onChange={e => setForm({...form, categoria: e.target.value as any, subcategoria: ''})}
+                  onChange={e => setForm({...form, categoria: e.target.value, subcategoria: ''})}
                 >
-                  <option value="musica">🎸 Music is cool</option>
-                  <option value="danza">💃 Club de baile</option>
-                  <option value="local">🏠 Locales</option>
+                  <option value="">Seleccionar...</option>
+                  {academias.map(aca => (
+                    <option key={aca.id} value={aca.id}>{aca.nombre}</option>
+                  ))}
                 </select>
               </div>
               <div className="space-y-1">
                 <label className="text-[9px] font-black uppercase text-slate-400 ml-4">Subcategoría</label>
-                <select 
-                  className="w-full p-5 bg-slate-50 rounded-2xl font-black uppercase border border-slate-200 text-slate-900" 
-                  value={form.subcategoria} 
-                  onChange={e => setForm({...form, subcategoria: e.target.value})}
-                  required
-                >
-                  <option value="">Seleccionar...</option>
-                  {subcategorias[form.categoria as keyof typeof subcategorias].map(sub => (
-                    <option key={sub} value={sub}>{sub}</option>
-                  ))}
-                </select>
+                {!mostrandoNuevaSubcat ? (
+                  <select 
+                    className="w-full p-5 bg-slate-50 rounded-2xl font-black uppercase border border-slate-200 text-slate-900" 
+                    value={form.subcategoria} 
+                    onChange={e => {
+                      if (e.target.value === 'NEW') {
+                        setMostrandoNuevaSubcat(true);
+                      } else {
+                        setForm({...form, subcategoria: e.target.value});
+                      }
+                    }}
+                    required
+                  >
+                    <option value="">Seleccionar...</option>
+                    {academias.find(a => a.id === form.categoria)?.subcategorias?.map((sub: string) => (
+                      <option key={sub} value={sub}>{sub}</option>
+                    ))}
+                    <option value="NEW" className="text-indigo-600 font-bold">+ CREAR NUEVA...</option>
+                  </select>
+                ) : (
+                  <div className="flex gap-2">
+                    <input 
+                      type="text" 
+                      placeholder="Nueva subcat..." 
+                      className="flex-1 p-5 bg-indigo-50 rounded-2xl border border-indigo-200 text-slate-900 font-bold uppercase"
+                      value={nuevaSubcat}
+                      onChange={e => setNuevaSubcat(e.target.value)}
+                      autoFocus
+                    />
+                    <button 
+                      type="button"
+                      onClick={crearSubcategoria}
+                      className="bg-indigo-600 text-white px-4 rounded-2xl font-black"
+                    >✓</button>
+                    <button 
+                      type="button"
+                      onClick={() => setMostrandoNuevaSubcat(false)}
+                      className="bg-slate-200 text-slate-600 px-4 rounded-2xl font-black"
+                    >✕</button>
+                  </div>
+                )}
               </div>
             </div>
 
@@ -785,7 +865,7 @@ const AdminCursos = () => {
                     setEditando(null);
                     setForm({ 
                       titulo: '', 
-                      categoria: 'musica', 
+                      categoria: academias.length > 0 ? academias[0].id : '', 
                       subcategoria: '',
                       modalidades: [{ tipo: 'presencial', frecuencia: 'semanal', precio: '' }],
                       fechaInicio: '2025-09-01', 
@@ -812,7 +892,7 @@ const AdminCursos = () => {
                 <div className="flex justify-between items-start mb-4">
                   <div>
                     <span className="text-[9px] font-black uppercase bg-indigo-100 text-indigo-600 px-3 py-1 rounded-full mb-2 inline-block">
-                      {c.categoria === 'musica' ? 'Music is cool' : c.categoria === 'danza' ? 'Club de baile' : 'Locales'}
+                      {academias.find(a => a.id === c.categoria)?.nombre || c.categoria}
                     </span>
                     <h3 className="font-black text-2xl uppercase italic leading-none">{c.titulo}</h3>
                     <p className="text-[10px] text-indigo-500 font-black mt-1 uppercase tracking-widest">{c.horario} | {c.profesorNombre || c.profesor || 'Pendiente de asignar'}</p>
@@ -821,7 +901,7 @@ const AdminCursos = () => {
                     <div className="mt-2 space-y-1">
                       {c.modalidades?.map((m: any, i: number) => (
                         <p key={i} className="text-[9px] text-slate-700 font-bold uppercase tracking-widest">
-                          {m.tipo} | {m.frecuencia} | {m.precio}€
+                          {m.tipo} | {m.frecuencia} | {m.precio}€/mes
                         </p>
                       ))}
                     </div>

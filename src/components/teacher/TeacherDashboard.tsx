@@ -5,7 +5,7 @@ import { ref, uploadBytes, getDownloadURL, deleteObject } from 'firebase/storage
 import { useAuth } from '../../context/AuthContext';
 import { Link } from 'react-router-dom';
 import { registrarIngreso, MetodoPago } from '../../lib/finanzas';
-import MasterCalendar from '../shared/MasterCalendar';
+import KalianCalendar from '../shared/KalianCalendar';
 
 const TeacherDashboard = () => {
   const [cursos, setCursos] = useState<DocumentData[]>([]);
@@ -513,7 +513,7 @@ const TeacherDashboard = () => {
                 Volver a Lista
               </button>
             </div>
-            <MasterCalendar teacherMode={true} />
+            <KalianCalendar teacherMode={true} />
           </div>
         ) : (
           <div className="grid lg:grid-cols-3 gap-8">

@@ -172,16 +172,20 @@ const AdminSocios = () => {
     setLoading(false);
   };
 
-  const togglePago = async (socioId: string, valorActual: boolean) => {
+  const togglePago = async (socio: any, valorActual: boolean) => {
     try {
+      const socioId = socio.dni;
       const nuevoEstado = !valorActual;
       const pagoId = `${anioActual}_${mesActual}_${socioId}`;
       const pagoRef = doc(db, "pagos_mensuales", pagoId);
       const snap = await getDoc(pagoRef);
       
+      const monto = calcularMontoAportacion(socio);
+
       if (snap.exists()) {
         await updateDoc(pagoRef, {
           pagado: nuevoEstado,
+          monto: nuevoEstado ? monto : 0,
           actualizadoPor: 'admin',
           fechaActualizacion: new Date().toISOString()
         });
@@ -191,6 +195,7 @@ const AdminSocios = () => {
           mes: mesActual,
           anio: anioActual,
           pagado: nuevoEstado,
+          monto: nuevoEstado ? monto : 0,
           actualizadoPor: 'admin',
           fechaActualizacion: new Date().toISOString()
         });
@@ -199,7 +204,7 @@ const AdminSocios = () => {
       // Registrar en Finanzas si se marca como pagado
       if (nuevoEstado) {
         await registrarIngreso({
-          monto: 15,
+          monto: monto,
           concepto: `Cuota Soci@ ${meses[mesActual-1]} ${anioActual}`,
           categoria: 'Socio',
           metodo: metodoPago,
@@ -211,6 +216,21 @@ const AdminSocios = () => {
       console.error(err);
       alert("Error al actualizar pago");
     }
+  };
+
+  const calcularMontoAportacion = (socio: any) => {
+    const cursos = socio.cursos || [];
+    // Lógica Senior Logic Developer: 
+    // Salsa solamente: 15€
+    // Bachata solamente: 15€
+    // AMBOS: 25€ + 15€ cuota = 40€
+    const tieneSalsa = cursos.some((cId: string) => cId.toLowerCase().includes('salsa'));
+    const tieneBachata = cursos.some((cId: string) => cId.toLowerCase().includes('bachata') && !cId.toLowerCase().includes('coreográfico'));
+
+    if (tieneSalsa && tieneBachata) {
+      return 25 + 15; // 40€ total
+    }
+    return 15; // 15€ total (incluye cuota)
   };
 
   const meses = ["Enero", "Febrero", "Marzo", "Abril", "Mayo", "Junio", "Julio", "Agosto", "Septiembre", "Octubre", "Noviembre", "Diciembre"];
@@ -308,13 +328,23 @@ const AdminSocios = () => {
               const exp = s.membresias || {};
               const activas = Object.keys(exp).filter(cat => exp[cat] >= hoy);
               const estadoCalculado = activas.length > 0 ? 'activo' : 'inactivo';
+              const emailNoVerificado = s.verificado === false;
               
               return (
                 <div key={s.id} className="bg-black/40 p-8 rounded-[2.5rem] flex flex-col md:flex-row justify-between items-center gap-8 border border-kalian-gold/10 group hover:border-kalian-gold/40 transition-all duration-500">
                   <div className="flex items-center gap-8 w-full md:w-auto">
-                    <div className="w-16 h-16 bg-kalian-gold/10 rounded-2xl flex items-center justify-center text-3xl border border-kalian-gold/20 relative">
+                    <div 
+                      className="w-16 h-16 bg-kalian-gold/10 rounded-2xl flex items-center justify-center text-3xl border border-kalian-gold/20 relative cursor-help"
+                      title={
+                        emailNoVerificado 
+                          ? "⚠️ ERROR: Email pendiente de validación o rebotado" 
+                          : estadoCalculado === 'inactivo' 
+                            ? "Socio Inactivo: Sin membresías vigentes" 
+                            : "Socio Activo"
+                      }
+                    >
                       👤
-                      <div className={`absolute -top-1 -right-1 w-4 h-4 rounded-full border-2 border-black ${estadoCalculado === 'activo' ? 'bg-emerald-500' : 'bg-red-500'}`}></div>
+                      <div className={`absolute -top-1 -right-1 w-4 h-4 rounded-full border-2 border-black ${emailNoVerificado ? 'bg-amber-500 animate-pulse' : (estadoCalculado === 'activo' ? 'bg-emerald-500' : 'bg-red-500')}`}></div>
                     </div>
                     <div>
                       <p className="text-3xl kalian-poster-text text-kalian-cream group-hover:text-kalian-gold transition-colors leading-none mb-2">{s.nombre || 'Sin nombre'}</p>
@@ -334,14 +364,20 @@ const AdminSocios = () => {
                     <div className="flex gap-4 flex-wrap justify-end w-full md:w-auto">
                       {/* Estado de Pago Mensual */}
                       <button 
-                        onClick={() => togglePago(s.dni, !!pagosMensuales[s.dni]?.pagado)}
+                        onClick={() => togglePago(s, !!pagosMensuales[s.dni]?.pagado)}
                         className="flex flex-col items-center bg-black/20 p-3 rounded-2xl border border-kalian-gold/5 min-w-[120px] hover:bg-kalian-gold/5 transition-all"
                       >
                         <p className="text-[7px] font-black text-kalian-gold/80 uppercase tracking-widest mb-2">Aportación {meses[mesActual-1]}</p>
                         {pagosMensuales[s.dni]?.pagado ? (
-                          <span className="text-emerald-500 text-xs font-black">✅ PAGADO</span>
+                          <div className="flex flex-col items-center">
+                            <span className="text-emerald-500 text-xs font-black">✅ PAGADO</span>
+                            <span className="text-[8px] text-emerald-500/60 font-bold">{pagosMensuales[s.dni]?.monto || 15}€</span>
+                          </div>
                         ) : (
-                          <span className="text-red-500 text-xs font-black animate-pulse">❌ PENDIENTE</span>
+                          <div className="flex flex-col items-center">
+                            <span className="text-red-500 text-xs font-black animate-pulse">❌ PENDIENTE</span>
+                            <span className="text-[8px] text-red-500/60 font-bold">Sugerido: {calcularMontoAportacion(s)}€</span>
+                          </div>
                         )}
                       </button>
 

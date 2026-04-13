@@ -44,10 +44,10 @@ const EventCard: React.FC<EventCardProps> = ({
         )}
         <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-transparent to-transparent"></div>
         <div className="absolute bottom-4 left-6 right-6 flex justify-between items-end">
-          {isSocio && event.categoria !== 'ninguno' && (
+          {event.tiene_descuento && (
             <span className="bg-kalian-gold text-black text-[9px] font-black uppercase px-4 py-1.5 rounded-full tracking-widest shadow-lg">Descuento Soci@s</span>
           )}
-          <span className="text-kalian-gold kalian-poster-text text-4xl drop-shadow-lg ml-auto">{event.precio_estandar}€</span>
+          <span className="text-kalian-gold kalian-poster-text text-4xl drop-shadow-lg ml-auto">{event.precio_estandar}€/mes</span>
         </div>
       </div>
       

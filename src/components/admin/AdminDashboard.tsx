@@ -2,10 +2,13 @@ import React, { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { db } from '../../firebase';
 import { collection, onSnapshot, query, where } from 'firebase/firestore';
-import MasterCalendar from '../shared/MasterCalendar';
+import KalianCalendar from '../shared/KalianCalendar';
+import { useAuth } from '../../context/AuthContext';
 
 const AdminDashboard = () => {
   const [pendientes, setPendientes] = useState(0);
+
+  const { user } = useAuth();
 
   useEffect(() => {
     const q = query(collection(db, "solicitudes_cursos"), where("estado", "==", "pendiente"));
@@ -63,7 +66,7 @@ const AdminDashboard = () => {
       </div>
 
       <div className="w-full max-w-7xl relative z-10">
-        <MasterCalendar />
+        <KalianCalendar />
       </div>
     </div>
   );

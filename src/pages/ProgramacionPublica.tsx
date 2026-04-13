@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { db } from '../firebase';
-import { collection, getDocs, query, orderBy, DocumentData, addDoc, where, doc, getDoc } from 'firebase/firestore';
+import { collection, getDocs, query, orderBy, DocumentData, addDoc, where, doc, getDoc, onSnapshot } from 'firebase/firestore';
 import { Link } from 'react-router-dom';
 import { motion, AnimatePresence } from 'motion/react';
 import { useAuth } from '../context/AuthContext';
@@ -34,11 +34,6 @@ const ProgramacionPublica = () => {
   const [categoriaActiva, setCategoriaActiva] = useState<string | null>(null);
   const [subcategoriaActiva, setSubcategoriaActiva] = useState<string | null>(null);
 
-  const subcategorias: { [key: string]: string[] } = {
-    musica: ['Instrumento', 'Combo', 'Armonía moderna', 'Big Band', 'Master classes'],
-    danza: ['Bachata', 'Bachata coreográfico', 'Salsa']
-  };
-
   const [errorSeleccion, setErrorSeleccion] = useState<string | null>(null);
 
   const formatMeses = (inicio: string, fin: string) => {
@@ -54,27 +49,43 @@ const ProgramacionPublica = () => {
   };
 
   useEffect(() => {
-    const fetchData = async () => {
-      const qE = query(collection(db, "eventos"), orderBy("fecha", "asc"));
-      const qC = query(collection(db, "cursos"), orderBy("fechaInicio", "asc"));
+    const hoy = new Date().toISOString();
+
+    // Listen to events
+    const qE = query(collection(db, "eventos"), orderBy("fecha", "asc"));
+    const unsubE = onSnapshot(qE, (snap) => {
+      setEventos(snap.docs.map(d => ({ id: d.id, ...d.data() } as any)).filter(ev => ev.fecha >= hoy && ev.es_publico !== false));
+    });
+
+    // Listen to courses
+    const qC = query(collection(db, "cursos"), orderBy("fechaInicio", "asc"));
+    const unsubC = onSnapshot(qC, (snap) => {
+      setCursos(snap.docs.map(d => ({ id: d.id, ...d.data() })));
+    });
+
+    // Listen to academies
+    const qA = query(collection(db, "academias"), orderBy("orden", "asc"));
+    const unsubA = onSnapshot(qA, (snap) => {
+      setAcademias(snap.docs.map(d => ({ id: d.id, ...d.data() } as any)).filter(a => a.activo));
+    });
+
+    // Fetch static data
+    const fetchStatic = async () => {
       const qL = collection(db, "locales");
-      const qA = query(collection(db, "academias"), orderBy("orden", "asc"));
-      const [snapE, snapC, snapL, snapA, snapConfig] = await Promise.all([
-        getDocs(qE), 
-        getDocs(qC), 
-        getDocs(qL), 
-        getDocs(qA),
+      const [snapL, snapConfig] = await Promise.all([
+        getDocs(qL),
         getDoc(doc(db, "config", "site"))
       ]);
-      
-      const hoy = new Date().toISOString();
-      setEventos(snapE.docs.map(d => ({ id: d.id, ...d.data() } as any)).filter(ev => ev.fecha >= hoy && ev.es_publico !== false));
-      setCursos(snapC.docs.map(d => ({ id: d.id, ...d.data() })));
       setLocales(snapL.docs.map(d => ({ id: d.id, ...d.data() })));
-      setAcademias(snapA.docs.map(d => ({ id: d.id, ...d.data() } as any)).filter(a => a.activo));
       if (snapConfig.exists()) setConfig(snapConfig.data());
     };
-    fetchData();
+    fetchStatic();
+
+    return () => {
+      unsubE();
+      unsubC();
+      unsubA();
+    };
   }, []);
 
   const enviarSolicitud = async (e: React.FormEvent) => {
@@ -168,7 +179,7 @@ const ProgramacionPublica = () => {
 
         {/* CURSOS Y TALLERES */}
         <section className="space-y-12">
-          <SectionTitle title="ACADEMIA" subtitle="KALIAN" color={config?.titleColor} />
+          <SectionTitle title="KALIAN" subtitle="CLUB" color={config?.titleColor} />
 
           {!categoriaActiva ? (
             <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
@@ -193,7 +204,7 @@ const ProgramacionPublica = () => {
                     {aca.nombre}
                   </h3>
                   <p className={`${idx % 2 === 0 ? 'text-kalian-cream/60' : 'text-kalian-gold/60'} text-[10px] font-black uppercase tracking-[0.4em] leading-relaxed`}>
-                    {aca.lema}
+                    {aca.subcategorias?.join(' • ') || 'Especialidades Kalian'}
                   </p>
                   <div className="pt-4">
                     <span className={`${idx % 2 === 0 ? 'text-kalian-gold/40 group-hover:text-kalian-gold' : 'text-kalian-cream/40 group-hover:text-kalian-cream'} text-[9px] font-black uppercase tracking-[0.5em] transition-colors`}>
@@ -222,9 +233,25 @@ const ProgramacionPublica = () => {
               </div>
 
               <div className="text-center space-y-12">
+                {/* Cartel de la categoría */}
+                {academias.find(a => a.id === categoriaActiva)?.imageUrl && (
+                  <motion.div 
+                    initial={{ opacity: 0, scale: 0.9 }}
+                    animate={{ opacity: 1, scale: 1 }}
+                    className="max-w-md mx-auto rounded-[2rem] overflow-hidden border border-kalian-gold/20 shadow-2xl"
+                  >
+                    <img 
+                      src={academias.find(a => a.id === categoriaActiva)?.imageUrl} 
+                      alt={academias.find(a => a.id === categoriaActiva)?.nombre} 
+                      className="w-full h-auto object-cover"
+                      referrerPolicy="no-referrer"
+                    />
+                  </motion.div>
+                )}
+
                 <p className="text-kalian-gold/40 text-[12px] font-black uppercase tracking-[0.6em]">Selecciona una especialidad</p>
                 <div className="flex flex-wrap justify-center gap-6">
-                  {(subcategorias[categoriaActiva] || []).map(sub => (
+                  {(academias.find(a => a.id === categoriaActiva)?.subcategorias || []).map((sub: string) => (
                     <motion.button
                       key={sub}
                       whileHover={{ scale: 1.1, rotate: -2 }}
@@ -275,8 +302,8 @@ const ProgramacionPublica = () => {
                           className="p-10 md:p-12 flex flex-col md:flex-row justify-between items-center gap-8 group"
                         >
                           <div className="flex items-center gap-10 w-full md:w-auto">
-                            <div className={`w-24 h-24 rounded-[2rem] flex items-center justify-center text-5xl border border-kalian-gold/10 ${c.categoria === 'danza' ? 'bg-kalian-orange/10' : 'bg-kalian-gold/10'}`}>
-                              {c.categoria === 'danza' ? '💃' : '🎸'}
+                            <div className="w-24 h-24 rounded-[2rem] flex items-center justify-center text-5xl border border-kalian-gold/10 bg-kalian-gold/10">
+                              {academias.find(a => a.id === c.categoria)?.nombre?.toLowerCase().includes('danza') ? '💃' : '🎸'}
                             </div>
                             <div>
                               <h3 className="text-4xl kalian-poster-text text-kalian-cream group-hover:text-kalian-gold transition-colors leading-tight uppercase italic">{c.titulo}</h3>
@@ -294,8 +321,8 @@ const ProgramacionPublica = () => {
                             <div className="text-right">
                               <p className="text-4xl kalian-poster-text text-kalian-cream">
                                 {c.modalidades && c.modalidades.length > 0 
-                                  ? `Desde ${Math.min(...c.modalidades.map((m: any) => m.precio))}€` 
-                                  : `${c.precio || 0}€`}
+                                  ? `Desde ${Math.min(...c.modalidades.map((m: any) => m.precio))}€/mes` 
+                                  : `${c.precio || 0}€/mes`}
                               </p>
                               <p className="text-[9px] font-black uppercase text-kalian-gold/80 tracking-[0.2em] mt-1">Aportación</p>
                             </div>
@@ -458,7 +485,7 @@ const ProgramacionPublica = () => {
                       <span className="text-xl">★</span> IMPORTANTE
                     </p>
                     <p className="text-sm text-kalian-cream/90 italic leading-relaxed">
-                      {cursoDetalle.ventajas || `Este curso incluye el alta como soci@ de la asociación Kalian y acceso a descuentos en actividades de la misma categoría.`}
+                      {cursoDetalle.ventajas || `Este curso incluye el alta como soci@ de la asociación KALIAN y acceso a descuentos en actividades de la misma categoría.`}
                     </p>
                   </div>
 
@@ -507,7 +534,7 @@ const ProgramacionPublica = () => {
                                 </td>
                                 <td className="p-6">{m.tipo}</td>
                                 <td className="p-6">{m.frecuencia}</td>
-                                <td className="p-6 text-right font-black text-kalian-gold text-lg">{m.precio}€</td>
+                                <td className="p-6 text-right font-black text-kalian-gold text-lg">{m.precio}€/mes</td>
                               </tr>
                             );
                           })}
@@ -617,7 +644,7 @@ const ProgramacionPublica = () => {
                   {solicitudCurso.tipo === 'consulta' ? 'Solicitud de Información' : 'Formulario de Inscripción'}
                 </p>
                 <p className="text-[10px] font-black text-kalian-cream uppercase tracking-widest bg-kalian-gold/10 px-3 py-1 rounded-full border border-kalian-gold/20">
-                  {solicitudCurso.modalidad?.tipo} | {solicitudCurso.modalidad?.frecuencia} | {solicitudCurso.modalidad?.precio}€
+                  {solicitudCurso.modalidad?.tipo} | {solicitudCurso.modalidad?.frecuencia} | {solicitudCurso.modalidad?.precio}€/mes
                 </p>
               </div>
 

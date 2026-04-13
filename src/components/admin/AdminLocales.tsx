@@ -1,13 +1,20 @@
 import React, { useState, useEffect } from 'react';
 import { db } from '../../firebase';
-import { collection, getDocs, updateDoc, doc, DocumentData, setDoc, getDoc } from 'firebase/firestore';
+import { collection, getDocs, updateDoc, doc, DocumentData, setDoc, getDoc, query, where, writeBatch } from 'firebase/firestore';
 import { Link } from 'react-router-dom';
+import { registrarIngreso, MetodoPago } from '../../lib/finanzas';
 
 const AdminLocales = () => {
   const [locales, setLocales] = useState<DocumentData[]>([]);
   const [loading, setLoading] = useState(true);
   const [editando, setEditando] = useState<any | null>(null);
   const [msg, setMsg] = useState('');
+  const [metodoPago, setMetodoPago] = useState<MetodoPago>('Transferencia');
+
+  const mesActual = new Date().getMonth() + 1;
+  const anioActual = new Date().getFullYear();
+  const meses = ["Enero", "Febrero", "Marzo", "Abril", "Mayo", "Junio", "Julio", "Agosto", "Septiembre", "Octubre", "Noviembre", "Diciembre"];
+  const mesAnioKey = `${anioActual}_${mesActual}`;
 
   const fetchLocales = async () => {
     setLoading(true);
@@ -45,6 +52,71 @@ const AdminLocales = () => {
     } catch (err) { console.error(err); }
   };
 
+  const marcarPagoLocal = async (local: any) => {
+    if (!local.alquilado) return;
+    const yaPagado = local.ultimoPagoMesAnio === mesAnioKey;
+    if (yaPagado) {
+      if (!window.confirm("Este local ya figura como pagado este mes. ¿Deseas marcarlo como PENDIENTE? (Esto NO borrará los registros individuales de los socios)")) return;
+    } else {
+      if (!window.confirm(`¿Confirmas el pago de la aportación de ${local.nombre} para ${meses[mesActual-1]}?`)) return;
+    }
+
+    try {
+      setLoading(true);
+      const nuevoEstado = !yaPagado;
+      
+      // 1. Actualizar Local
+      await updateDoc(doc(db, "locales", local.id), {
+        ultimoPagoMesAnio: nuevoEstado ? mesAnioKey : ''
+      });
+
+      // 2. Si es pago, actualizar socios vinculados
+      if (nuevoEstado) {
+        const q = query(collection(db, "socios"), where("localId", "==", local.id));
+        const snap = await getDocs(q);
+        const batch = writeBatch(db);
+        
+        for (const sDoc of snap.docs) {
+          const socioId = sDoc.id;
+          const pagoId = `${anioActual}_${mesActual}_${socioId}`;
+          const pagoRef = doc(db, "pagos_mensuales", pagoId);
+          
+          batch.set(pagoRef, {
+            socioId,
+            mes: mesActual,
+            anio: anioActual,
+            pagado: true,
+            actualizadoPor: 'admin_bulk_local',
+            fechaActualizacion: new Date().toISOString(),
+            localId: local.id
+          }, { merge: true });
+        }
+        await batch.commit();
+
+        // 3. Registrar en Finanzas (Opcional pero recomendado para coherencia)
+        await registrarIngreso({
+          monto: 0, // Podría ser el total del local, pero aquí lo marcamos como regularización de grupo
+          concepto: `Aportación Local ${local.nombre} - ${meses[mesActual-1]}`,
+          categoria: 'Socio',
+          metodo: metodoPago,
+          local_id: local.id
+        });
+        
+        setMsg(`✅ Aportación de ${local.nombre} procesada para ${snap.size} soci@s`);
+      } else {
+        setMsg(`✅ Local ${local.nombre} marcado como pendiente`);
+      }
+
+      fetchLocales();
+      setTimeout(() => setMsg(''), 3000);
+    } catch (err) {
+      console.error(err);
+      alert("Error al procesar pago");
+    } finally {
+      setLoading(false);
+    }
+  };
+
   const guardarLocal = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!editando) return;
@@ -56,10 +128,35 @@ const AdminLocales = () => {
         nombreGrupo: editando.nombreGrupo || '',
         actividadArtistica: editando.actividadArtistica || '',
         fechaExpiracion: editando.fechaExpiracion || '',
-        inquilinos: editando.inquilinos || []
+        inquilinos: editando.inquilinos || [],
+        ultimoPagoMesAnio: editando.ultimoPagoMesAnio || ''
       });
 
-      // 2. Sincronizar Inquilinos como Socios
+      // 2. Sincronizar Pagos si se marcó como pagado en el modal
+      if (editando.alquilado && editando.ultimoPagoMesAnio === mesAnioKey) {
+        const q = query(collection(db, "socios"), where("localId", "==", editando.id));
+        const snap = await getDocs(q);
+        const batch = writeBatch(db);
+        
+        for (const sDoc of snap.docs) {
+          const socioId = sDoc.id;
+          const pagoId = `${anioActual}_${mesActual}_${socioId}`;
+          const pagoRef = doc(db, "pagos_mensuales", pagoId);
+          
+          batch.set(pagoRef, {
+            socioId,
+            mes: mesActual,
+            anio: anioActual,
+            pagado: true,
+            actualizadoPor: 'admin_modal_local',
+            fechaActualizacion: new Date().toISOString(),
+            localId: editando.id
+          }, { merge: true });
+        }
+        await batch.commit();
+      }
+
+      // 3. Sincronizar Inquilinos como Socios
       if (editando.alquilado && editando.inquilinos) {
         for (const inq of editando.inquilinos) {
           if (!inq.dni) continue;
@@ -122,7 +219,21 @@ const AdminLocales = () => {
             <Link to="/staff" className="text-indigo-600 font-bold text-xs uppercase tracking-widest">← Volver</Link>
             <h1 className="text-3xl font-black italic uppercase text-slate-900 mt-2">Gestión de Locales</h1>
           </div>
-          {msg && <div className="bg-emerald-500 text-white px-6 py-3 rounded-2xl font-bold animate-bounce shadow-lg">{msg}</div>}
+          <div className="flex items-center gap-4">
+            <div className="flex items-center gap-2 bg-white px-4 py-2 rounded-xl border border-slate-200">
+              <p className="text-[8px] font-black text-slate-400 uppercase tracking-widest">Método:</p>
+              <select 
+                value={metodoPago}
+                onChange={(e) => setMetodoPago(e.target.value as MetodoPago)}
+                className="bg-transparent text-[10px] text-slate-900 font-bold outline-none cursor-pointer"
+              >
+                <option value="Efectivo">Efectivo</option>
+                <option value="Tarjeta">Tarjeta</option>
+                <option value="Transferencia">Transferencia</option>
+              </select>
+            </div>
+            {msg && <div className="bg-emerald-500 text-white px-6 py-3 rounded-2xl font-bold animate-bounce shadow-lg">{msg}</div>}
+          </div>
         </header>
 
         {loading ? (
@@ -155,6 +266,16 @@ const AdminLocales = () => {
                       <p className="text-[10px] font-black uppercase text-indigo-600 tracking-tighter">Grupo: <span className="text-slate-900">{l.nombreGrupo}</span></p>
                       <p className="text-[10px] font-black uppercase text-slate-600 tracking-tighter">Actividad: <span className="text-slate-900">{l.actividadArtistica}</span></p>
                       <p className="text-[10px] font-black uppercase text-slate-600 tracking-tighter">Expira: <span className="text-slate-900">{l.fechaExpiracion === '2099-12-31' ? 'INDEFINIDA' : l.fechaExpiracion}</span></p>
+                      
+                      <div className="pt-4 border-t border-slate-100">
+                        <button 
+                          onClick={() => marcarPagoLocal(l)}
+                          className={`w-full p-3 rounded-xl font-black uppercase text-[9px] tracking-widest transition-all flex items-center justify-center gap-2 ${l.ultimoPagoMesAnio === mesAnioKey ? 'bg-emerald-500 text-white' : 'bg-amber-500 text-white animate-pulse'}`}
+                        >
+                          {l.ultimoPagoMesAnio === mesAnioKey ? '✅ APORTACIÓN PAGADA' : '❌ PAGO PENDIENTE'}
+                          <span className="opacity-60">({meses[mesActual-1]})</span>
+                        </button>
+                      </div>
                     </div>
                   )}
                 </div>
@@ -203,6 +324,25 @@ const AdminLocales = () => {
 
                     {editando.alquilado && (
                       <>
+                        <div className="p-4 bg-indigo-50 rounded-2xl border border-indigo-100 space-y-3">
+                          <div className="flex items-center justify-between">
+                            <span className="font-black uppercase text-[10px] text-indigo-600 tracking-widest">Aportación Mensual ({meses[mesActual-1]})</span>
+                            <button 
+                              type="button"
+                              onClick={() => {
+                                const yaPagado = editando.ultimoPagoMesAnio === mesAnioKey;
+                                setEditando({...editando, ultimoPagoMesAnio: yaPagado ? '' : mesAnioKey});
+                              }}
+                              className={`px-4 py-2 rounded-xl font-black uppercase text-[9px] transition-all ${editando.ultimoPagoMesAnio === mesAnioKey ? 'bg-emerald-500 text-white' : 'bg-amber-500 text-white animate-pulse'}`}
+                            >
+                              {editando.ultimoPagoMesAnio === mesAnioKey ? '✅ PAGADA' : '❌ PENDIENTE'}
+                            </button>
+                          </div>
+                          <p className="text-[8px] font-medium text-indigo-400 leading-tight">
+                            * Al guardar como "PAGADA", se actualizará automáticamente el estado de todos los socios vinculados a este local para este mes.
+                          </p>
+                        </div>
+
                         <div className="space-y-1">
                           <label className="text-[10px] font-black uppercase text-slate-400 ml-4">Nombre del Grupo</label>
                           <input type="text" className="w-full p-4 bg-slate-50 rounded-2xl outline-none border border-slate-100 font-bold" value={editando.nombreGrupo || ''} onChange={e => setEditando({...editando, nombreGrupo: e.target.value})} required />

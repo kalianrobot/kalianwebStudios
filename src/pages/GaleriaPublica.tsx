@@ -86,9 +86,21 @@ const GaleriaPublica = () => {
                     <div className="absolute inset-0 bg-gradient-to-t from-black via-black/20 to-transparent opacity-60 group-hover:opacity-80 transition-opacity"></div>
                     
                     <div className="absolute bottom-10 left-10 right-10">
-                      <span className="text-[9px] font-black text-kalian-gold uppercase tracking-[0.4em] mb-3 block">Exposición Activa</span>
+                      <span className="text-[9px] font-black text-kalian-gold uppercase tracking-[0.4em] mb-3 block">
+                        {new Date(expo.fechaInicio).toLocaleDateString('es-ES', { day: 'numeric', month: 'short', year: 'numeric' })}
+                      </span>
                       <h3 className="text-3xl kalian-poster-text text-kalian-gold uppercase italic leading-none mb-2">{expo.titulo}</h3>
-                      <p className="text-[10px] font-black text-kalian-cream/60 uppercase tracking-widest">Autor: {expo.autor}</p>
+                      <p className="text-[10px] font-black text-kalian-cream/60 uppercase tracking-widest mb-6">Autor/a: {expo.autor}</p>
+                      
+                      <button 
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setExpoSeleccionada(expo);
+                        }}
+                        className="w-full py-4 bg-kalian-gold text-black rounded-xl font-black uppercase text-[10px] tracking-[0.3em] hover:bg-white transition-all"
+                      >
+                        Ver cartel
+                      </button>
                     </div>
                   </div>
                 </motion.div>
@@ -120,7 +132,17 @@ const GaleriaPublica = () => {
                     <img src={expo.imagenUrl} alt={expo.titulo} className="w-full h-full object-cover" referrerPolicy="no-referrer" />
                   </div>
                   <h4 className="text-[10px] kalian-poster-text text-kalian-gold uppercase italic truncate">{expo.titulo}</h4>
-                  <p className="text-[8px] font-black text-kalian-cream/40 uppercase tracking-widest">{expo.autor}</p>
+                  <p className="text-[8px] font-black text-kalian-cream/40 uppercase tracking-widest mb-2">{expo.autor}</p>
+                  <p className="text-[7px] font-black text-kalian-gold/30 uppercase tracking-widest mb-3">{expo.fechaInicio}</p>
+                  <button 
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setExpoSeleccionada(expo);
+                    }}
+                    className="w-full py-2 bg-kalian-gold/10 text-kalian-gold border border-kalian-gold/20 rounded-lg font-black uppercase text-[7px] tracking-widest hover:bg-kalian-gold hover:text-black transition-all"
+                  >
+                    Ver cartel
+                  </button>
                 </div>
               ))}
             </div>

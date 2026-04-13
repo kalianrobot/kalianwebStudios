@@ -14,6 +14,8 @@ const PerfilSocio = () => {
   const navigate = useNavigate();
   const [membresiasAMostrar, setMembresiasAMostrar] = useState<{cat: string, fecha: string}[]>([]);
 
+  const [pagoMensual, setPagoMensual] = useState<any>(null);
+
   useEffect(() => {
     const cargarDatos = async () => {
       if (!auth.currentUser) {
@@ -24,23 +26,34 @@ const PerfilSocio = () => {
       try {
         const qSocio = query(collection(db, "socios"), where("uid", "==", auth.currentUser.uid));
         const snapSocio = await getDocs(qSocio);
-        let snapEmail: any = null;
         let sData = null;
+        let socioRef = null;
 
         if (!snapSocio.empty) {
           sData = snapSocio.docs[0].data();
+          socioRef = snapSocio.docs[0].ref;
         } else if (auth.currentUser.email) {
-          // Fallback por email para vincular socios creados por admin
           const qEmail = query(collection(db, "socios"), where("email", "==", auth.currentUser.email));
-          snapEmail = await getDocs(qEmail);
+          const snapEmail = await getDocs(qEmail);
           if (!snapEmail.empty) {
             sData = snapEmail.docs[0].data();
-            await updateDoc(snapEmail.docs[0].ref, { uid: auth.currentUser.uid });
+            socioRef = snapEmail.docs[0].ref;
+            await updateDoc(socioRef, { uid: auth.currentUser.uid });
           }
         }
 
         if (sData) {
           setUsuario(sData);
+          
+          // Cargar pago mensual
+          const mesActual = new Date().getMonth() + 1;
+          const anioActual = new Date().getFullYear();
+          const pagoId = `${anioActual}_${mesActual}_${sData.dni}`;
+          const pagoSnap = await getDoc(doc(db, "pagos_mensuales", pagoId));
+          if (pagoSnap.exists()) {
+            setPagoMensual(pagoSnap.data());
+          }
+
           let cursosRes: any[] = [];
           // Cargar cursos detallados
           if (sData.cursos && sData.cursos.length > 0) {
@@ -129,11 +142,12 @@ const PerfilSocio = () => {
 
           // Si hubo cambios o faltaba el mapa, actualizamos en BDD para futuras sesiones
           if (huboCambios || !sData.membresias) {
-            const socioRef = snapSocio.empty ? snapEmail.docs[0].ref : snapSocio.docs[0].ref;
-            await updateDoc(socioRef, { 
-              membresias: m,
-              estado: Object.values(m).some(f => f >= hoy) ? 'activo' : 'inactivo'
-            });
+            if (socioRef) {
+              await updateDoc(socioRef, { 
+                membresias: m,
+                estado: Object.values(m).some(f => f >= hoy) ? 'activo' : 'inactivo'
+              });
+            }
           }
 
           // Filtrar las que vamos a mostrar (solo activas)
@@ -281,6 +295,21 @@ const PerfilSocio = () => {
     );
   }
 
+  const calcularAportacionSugerida = () => {
+    if (!usuario) return 15;
+    const cursos = usuario.cursos || [];
+    const tieneSalsa = cursos.some((cId: string) => cId.toLowerCase().includes('salsa'));
+    const tieneBachata = cursos.some((cId: string) => cId.toLowerCase().includes('bachata') && !cId.toLowerCase().includes('coreográfico'));
+
+    if (tieneSalsa && tieneBachata) {
+      return 40; // 25€ especial + 15€ cuota
+    }
+    return 15;
+  };
+
+  const meses = ["Enero", "Febrero", "Marzo", "Abril", "Mayo", "Junio", "Julio", "Agosto", "Septiembre", "Octubre", "Noviembre", "Diciembre"];
+  const mesActualStr = meses[new Date().getMonth()];
+
   return (
     <div className="min-h-screen bg-kalian-dark p-6 md:p-12 text-kalian-cream font-sans">
       <header className="max-w-6xl mx-auto mb-20 flex flex-col md:flex-row justify-between items-start md:items-end gap-8">
@@ -333,20 +362,36 @@ const PerfilSocio = () => {
               <h2 className="text-5xl md:text-7xl kalian-poster-text text-kalian-cream leading-none uppercase italic">{usuario?.nombre}</h2>
               
               <div className="mt-8 space-y-4">
-                <p className="text-[10px] font-black text-kalian-gold/40 uppercase tracking-[0.3em]">Membresías Activas:</p>
-                <div className="flex flex-wrap justify-center lg:justify-start gap-4">
-                  {membresiasAMostrar.length > 0 ? (
-                    membresiasAMostrar.map(({cat, fecha}) => (
-                      <div key={cat} className="flex flex-col bg-kalian-gold/10 border border-kalian-gold/20 px-6 py-3 rounded-2xl group/item hover:bg-kalian-gold/20 transition-colors">
-                        <span className="text-kalian-gold text-[10px] font-black uppercase tracking-widest">{getNombreCategoria(cat)}</span>
-                        <span className="text-kalian-cream/40 text-[8px] font-bold uppercase tracking-tighter">Válido hasta: {fecha}</span>
-                      </div>
-                    ))
-                  ) : (
-                    <div className="bg-red-500/10 border border-red-500/20 px-6 py-3 rounded-2xl">
-                      <span className="text-red-500/60 text-[10px] font-black uppercase tracking-widest italic">Sin membresías activas</span>
+                <div className="flex flex-col lg:flex-row gap-4">
+                  <div className="flex flex-col">
+                    <p className="text-[10px] font-black text-kalian-gold/40 uppercase tracking-[0.3em] mb-2">Membresías Activas:</p>
+                    <div className="flex flex-wrap justify-center lg:justify-start gap-4">
+                      {membresiasAMostrar.length > 0 ? (
+                        membresiasAMostrar.map(({cat, fecha}) => (
+                          <div key={cat} className="flex flex-col bg-kalian-gold/10 border border-kalian-gold/20 px-6 py-3 rounded-2xl group/item hover:bg-kalian-gold/20 transition-colors">
+                            <span className="text-kalian-gold text-[10px] font-black uppercase tracking-widest">{getNombreCategoria(cat)}</span>
+                            <span className="text-kalian-cream/40 text-[8px] font-bold uppercase tracking-tighter">Válido hasta: {fecha}</span>
+                          </div>
+                        ))
+                      ) : (
+                        <div className="bg-red-500/10 border border-red-500/20 px-6 py-3 rounded-2xl">
+                          <span className="text-red-500/60 text-[10px] font-black uppercase tracking-widest italic">Sin membresías activas</span>
+                        </div>
+                      )}
                     </div>
-                  )}
+                  </div>
+
+                  <div className="flex flex-col lg:ml-8">
+                    <p className="text-[10px] font-black text-kalian-gold/40 uppercase tracking-[0.3em] mb-2">Aportación {mesActualStr}:</p>
+                    <div className={`flex flex-col px-6 py-3 rounded-2xl border ${pagoMensual?.pagado ? 'bg-emerald-500/10 border-emerald-500/20' : 'bg-amber-500/10 border-amber-500/20'}`}>
+                      <span className={`text-[10px] font-black uppercase tracking-widest ${pagoMensual?.pagado ? 'text-emerald-500' : 'text-amber-500'}`}>
+                        {pagoMensual?.pagado ? '✅ PAGADO' : '❌ PENDIENTE'}
+                      </span>
+                      <span className="text-kalian-cream/40 text-[8px] font-bold uppercase tracking-tighter">
+                        {pagoMensual?.pagado ? `Monto: ${pagoMensual.monto}€/mes` : `Sugerido: ${calcularAportacionSugerida()}€/mes`}
+                      </span>
+                    </div>
+                  </div>
                 </div>
               </div>
             </div>

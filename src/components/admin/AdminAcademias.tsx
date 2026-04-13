@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { db, storage } from '../../firebase';
-import { collection, setDoc, doc, getDocs, deleteDoc, query, orderBy, DocumentData, updateDoc } from 'firebase/firestore';
+import { collection, setDoc, doc, getDocs, deleteDoc, query, orderBy, DocumentData, updateDoc, deleteField } from 'firebase/firestore';
 import { ref, uploadBytes, getDownloadURL, deleteObject } from 'firebase/storage';
 import { Link } from 'react-router-dom';
 
@@ -19,20 +19,20 @@ const AdminAcademias = () => {
         {
           id: 'musica',
           nombre: 'Music is Cool',
-          lema: 'Instrumento • Combo • Armonía moderna • Big Band • Master classes',
           imageUrl: 'https://images.unsplash.com/photo-1511379938547-c1f69419868d?q=80&w=2070&auto=format&fit=crop',
           orden: 1,
           activo: true,
-          storagePath: ''
+          storagePath: '',
+          subcategorias: ['Instrumento', 'Combo', 'Armonía moderna', 'Big Band', 'Master classes']
         },
         {
           id: 'danza',
           nombre: 'Club de Baile',
-          lema: 'Bachata • Bachata coreográfico • Salsa',
           imageUrl: 'https://images.unsplash.com/photo-1508700115892-45ecd05ae2ad?q=80&w=2069&auto=format&fit=crop',
           orden: 2,
           activo: true,
-          storagePath: ''
+          storagePath: '',
+          subcategorias: ['Bachata', 'Bachata coreográfico', 'Salsa']
         }
       ];
 
@@ -50,13 +50,13 @@ const AdminAcademias = () => {
     }
   };
 
-  const [form, setForm] = useState({
+  const [form, setForm] = useState<any>({
     nombre: '',
-    lema: '',
     orden: 0,
     activo: true,
     imageUrl: '',
-    storagePath: ''
+    storagePath: '',
+    subcategorias: []
   });
   const [archivo, setArchivo] = useState<File | null>(null);
 
@@ -65,7 +65,34 @@ const AdminAcademias = () => {
     try {
       const q = query(collection(db, "academias"), orderBy("orden", "asc"));
       const snap = await getDocs(q);
-      setAcademias(snap.docs.map(d => ({ id: d.id, ...d.data() })));
+      const list = snap.docs.map(d => ({ id: d.id, ...d.data() })) as any[];
+      
+      // MIGRACIÓN: Si detectamos 'lema' y no hay subcategorías, migramos
+      let huboMigracion = false;
+      for (const aca of list) {
+        if (aca.lema && (!aca.subcategorias || aca.subcategorias.length === 0)) {
+          console.log(`Migrando lema de ${aca.nombre}...`);
+          const nuevasSub = aca.lema.split('•').map((s: string) => s.trim()).filter((s: string) => s !== '');
+          await updateDoc(doc(db, "academias", aca.id), {
+            subcategorias: nuevasSub,
+            lema: deleteField() // Borramos el campo lema
+          });
+          huboMigracion = true;
+        } else if (aca.lema) {
+          // Si tiene lema pero ya tiene subcategorías, simplemente borramos el lema
+          await updateDoc(doc(db, "academias", aca.id), {
+            lema: deleteField()
+          });
+          huboMigracion = true;
+        }
+      }
+      
+      if (huboMigracion) {
+        fetchAcademias(); // Recargamos si hubo cambios
+        return;
+      }
+
+      setAcademias(list);
     } catch (err) {
       console.error("Error fetching academias:", err);
     }
@@ -103,11 +130,13 @@ const AdminAcademias = () => {
         setMsg("✅ Academia actualizada con éxito");
       } else {
         const customId = form.nombre.toLowerCase().trim().replace(/\s+/g, '-');
-        await setDoc(doc(db, "academias", customId), academiaData);
+        // Ensure subcategorias is initialized as empty array for new academies
+        const newData = { ...academiaData, subcategorias: academiaData.subcategorias || [] };
+        await setDoc(doc(db, "academias", customId), newData);
         setMsg("✅ Academia creada con éxito");
       }
 
-      setForm({ nombre: '', lema: '', orden: 0, activo: true, imageUrl: '', storagePath: '' });
+      setForm({ nombre: '', orden: 0, activo: true, imageUrl: '', storagePath: '', subcategorias: [] });
       setArchivo(null);
       setEditando(null);
       fetchAcademias();
@@ -170,11 +199,6 @@ const AdminAcademias = () => {
                 <input type="text" placeholder="EJ: MUSIC IS COOL" className="w-full p-4 bg-kalian-gold/10 rounded-xl outline-none border border-kalian-gold/20 focus:border-kalian-gold transition-all text-kalian-cream font-bold placeholder:text-kalian-cream/50" value={form.nombre} onChange={e => setForm({...form, nombre: e.target.value})} required />
               </div>
 
-              <div className="space-y-2">
-                <label className="text-[9px] font-black uppercase text-kalian-gold/90 ml-4 tracking-widest">Lema / Descripción corta</label>
-                <input type="text" placeholder="EJ: INSTRUMENTO • COMBO..." className="w-full p-4 bg-kalian-gold/10 rounded-xl outline-none border border-kalian-gold/20 focus:border-kalian-gold transition-all text-kalian-cream font-bold placeholder:text-kalian-cream/50" value={form.lema} onChange={e => setForm({...form, lema: e.target.value})} required />
-              </div>
-
               <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-2">
                   <label className="text-[9px] font-black uppercase text-kalian-gold/90 ml-4 tracking-widest">Orden</label>
@@ -207,6 +231,60 @@ const AdminAcademias = () => {
                 )}
               </div>
 
+              {/* GESTIÓN DE SUBCATEGORÍAS */}
+              <div className="space-y-4 pt-4 border-t border-kalian-gold/10">
+                <label className="text-[9px] font-black uppercase text-kalian-gold/90 ml-4 tracking-widest">Subcategorías / Especialidades</label>
+                <div className="flex flex-wrap gap-2">
+                  {form.subcategorias.map((sub: string, index: number) => (
+                    <div key={index} className="flex items-center gap-2 bg-kalian-gold/10 text-kalian-gold px-3 py-1.5 rounded-lg border border-kalian-gold/20 text-[10px] font-bold uppercase">
+                      {sub}
+                      <button 
+                        type="button"
+                        onClick={() => {
+                          const newSubs = form.subcategorias.filter((_: any, i: number) => i !== index);
+                          setForm({...form, subcategorias: newSubs});
+                        }}
+                        className="hover:text-white transition-colors"
+                      >
+                        ✕
+                      </button>
+                    </div>
+                  ))}
+                </div>
+                <div className="flex gap-2">
+                  <input 
+                    type="text" 
+                    id="new-sub-input"
+                    placeholder="Nueva subcategoría..." 
+                    className="flex-1 p-3 bg-kalian-gold/5 rounded-xl outline-none border border-kalian-gold/10 focus:border-kalian-gold/40 transition-all text-[10px] font-bold text-kalian-cream"
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter') {
+                        e.preventDefault();
+                        const val = (e.target as HTMLInputElement).value.trim();
+                        if (val && !form.subcategorias.includes(val)) {
+                          setForm({...form, subcategorias: [...form.subcategorias, val]});
+                          (e.target as HTMLInputElement).value = '';
+                        }
+                      }
+                    }}
+                  />
+                  <button 
+                    type="button"
+                    onClick={() => {
+                      const input = document.getElementById('new-sub-input') as HTMLInputElement;
+                      const val = input.value.trim();
+                      if (val && !form.subcategorias.includes(val)) {
+                        setForm({...form, subcategorias: [...form.subcategorias, val]});
+                        input.value = '';
+                      }
+                    }}
+                    className="bg-kalian-gold/20 text-kalian-gold px-4 rounded-xl font-black text-xs hover:bg-kalian-gold hover:text-black transition-all"
+                  >
+                    +
+                  </button>
+                </div>
+              </div>
+
               <div className="flex gap-2 pt-4">
                 <button 
                   disabled={subiendo}
@@ -219,7 +297,7 @@ const AdminAcademias = () => {
                     type="button"
                     onClick={() => {
                       setEditando(null);
-                      setForm({ nombre: '', lema: '', orden: 0, activo: true, imageUrl: '', storagePath: '' });
+                      setForm({ nombre: '', orden: 0, activo: true, imageUrl: '', storagePath: '', subcategorias: [] });
                       setArchivo(null);
                     }}
                     className="bg-white/10 text-white px-4 rounded-xl font-black uppercase text-[10px]"
@@ -248,7 +326,16 @@ const AdminAcademias = () => {
                           {!aca.activo && <span className="text-[10px] font-black bg-red-500/10 text-red-500 px-2 py-0.5 rounded-md uppercase">Inactivo</span>}
                         </div>
                         <h3 className="text-3xl kalian-poster-text text-kalian-cream group-hover:text-kalian-gold transition-colors uppercase italic leading-none">{aca.nombre}</h3>
-                        <p className="text-[10px] text-kalian-gold/40 font-black uppercase tracking-[0.2em] mt-2">{aca.lema}</p>
+                        <p className="text-[10px] text-kalian-gold/40 font-black uppercase tracking-[0.2em] mt-2">
+                          {aca.subcategorias?.join(' • ') || 'Sin especialidades'}
+                        </p>
+                        {aca.subcategorias && aca.subcategorias.length > 0 && (
+                          <div className="flex flex-wrap gap-1 mt-3">
+                            {aca.subcategorias.map((sub: string) => (
+                              <span key={sub} className="text-[8px] bg-kalian-gold/5 text-kalian-gold/60 px-2 py-0.5 rounded border border-kalian-gold/10 uppercase font-bold">{sub}</span>
+                            ))}
+                          </div>
+                        )}
                       </div>
                     </div>
                     <div className="flex gap-2 relative z-10">
@@ -257,11 +344,11 @@ const AdminAcademias = () => {
                           setEditando(aca.id);
                           setForm({
                             nombre: aca.nombre,
-                            lema: aca.lema,
                             orden: aca.orden,
                             activo: aca.activo,
                             imageUrl: aca.imageUrl,
-                            storagePath: aca.storagePath
+                            storagePath: aca.storagePath,
+                            subcategorias: aca.subcategorias || []
                           });
                           window.scrollTo({ top: 0, behavior: 'smooth' });
                         }}

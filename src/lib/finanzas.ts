@@ -9,7 +9,8 @@ export interface IngresoData {
   concepto: string;
   categoria: CategoriaIngreso;
   metodo: MetodoPago;
-  socio_id: string;
+  socio_id?: string;
+  local_id?: string;
   staff_id?: string;
 }
 

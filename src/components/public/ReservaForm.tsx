@@ -552,23 +552,23 @@ const ReservaForm = ({ item, alCerrar }: ReservaFormProps) => {
               <div className="bg-black/40 p-8 rounded-[2.5rem] border border-kalian-gold/10 space-y-4 shadow-inner">
                 <div className="flex justify-between items-center text-[10px] font-black uppercase text-kalian-gold/90 tracking-[0.2em]">
                   <span>{esCurso ? 'Aportación Mensual' : 'Aportación Base'}</span>
-                  <span>{precioBase}€</span>
+                  <span>{precioBase}€/mes</span>
                 </div>
                 {precioCalculado.esSocio && (
                 <div className="flex justify-between items-center text-[10px] font-black uppercase text-kalian-gold/90 tracking-[0.2em]">
                   <span>Descuento Soci@s</span>
-                  <span>{item.precio_descuento}€</span>
+                  <span>{item.precio_descuento}€/mes</span>
                 </div>
                 )}
                 {precioCalculado.esClave && (
                 <div className="flex justify-between items-center text-[10px] font-black uppercase text-emerald-400 tracking-[0.2em]">
                   <span>Descuento Cupón</span>
-                  <span>{item.precio_clave}€</span>
+                  <span>{item.precio_clave}€/mes</span>
                 </div>
                 )}
                 <div className="flex justify-between items-center pt-4 border-t border-kalian-gold/10">
                   <span className="text-sm font-black uppercase text-kalian-cream tracking-[0.3em]">Total</span>
-                  <span className="text-5xl kalian-poster-text text-kalian-gold italic drop-shadow-lg">{precioCalculado.total}€</span>
+                  <span className="text-5xl kalian-poster-text text-kalian-gold italic drop-shadow-lg">{precioCalculado.total}€/mes</span>
                 </div>
                 <p className="text-[9px] text-kalian-gold/30 font-black uppercase text-center pt-2 tracking-widest leading-relaxed">
                   {precioCalculado.esSocio ? `✓ DESCUENTO APLICADO (SOCI@S ${getNombreCategoria(categoriaActividad).toUpperCase()})` : 

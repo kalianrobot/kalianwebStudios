@@ -42,7 +42,7 @@ ENTRADA HASTA LAS 00:00. RESERVAS DISPONIBLES HASTA COMPLETAR AFORO.`;
 
   const fetchEventos = async () => {
     try {
-      const snap = await getDocs(query(collection(db, "eventos"), orderBy("fecha", "desc")));
+      const snap = await getDocs(query(collection(db, "eventos"), orderBy("fecha", "asc")));
       setEventos(snap.docs.map(d => ({ id: d.id, ...d.data() })));
     } catch (err) { console.error(err); }
   };
@@ -199,8 +199,8 @@ ENTRADA HASTA LAS 00:00. RESERVAS DISPONIBLES HASTA COMPLETAR AFORO.`;
               <input type="datetime-local" className="w-full p-5 bg-kalian-gold/5 rounded-2xl outline-none border border-kalian-gold/10 focus:border-kalian-gold transition-all text-kalian-cream font-bold" value={form.fecha} onChange={e => setForm({...form, fecha: e.target.value})} required />
             </div>
             <div className="space-y-2">
-              <label className="text-[9px] font-black uppercase text-kalian-gold/80 ml-4 tracking-widest">Precio Estándar (€)</label>
-              <input type="number" placeholder="PRECIO (€)" className="w-full p-5 bg-kalian-gold/5 rounded-2xl outline-none border border-kalian-gold/10 focus:border-kalian-gold transition-all text-kalian-gold font-black text-xl" value={form.precio_estandar} onChange={e => setForm({...form, precio_estandar: e.target.value})} required />
+              <label className="text-[9px] font-black uppercase text-kalian-gold/80 ml-4 tracking-widest">Aportación Estándar (€/mes)</label>
+              <input type="number" placeholder="APORTACIÓN (€/mes)" className="w-full p-5 bg-kalian-gold/5 rounded-2xl outline-none border border-kalian-gold/10 focus:border-kalian-gold transition-all text-kalian-gold font-black text-xl" value={form.precio_estandar} onChange={e => setForm({...form, precio_estandar: e.target.value})} required />
             </div>
           </div>
 
@@ -217,8 +217,8 @@ ENTRADA HASTA LAS 00:00. RESERVAS DISPONIBLES HASTA COMPLETAR AFORO.`;
             </div>
             {form.tiene_descuento && (
               <div className="space-y-2">
-                <label className="text-[9px] font-black uppercase text-kalian-gold/80 ml-4 tracking-widest">Precio Soci@s (€)</label>
-                <input type="number" placeholder="PRECIO SOCI@S (€)" className="w-full p-5 bg-kalian-gold/5 rounded-2xl outline-none border border-kalian-gold/10 focus:border-kalian-gold transition-all text-kalian-gold font-black text-xl" value={form.precio_descuento} onChange={e => setForm({...form, precio_descuento: e.target.value})} required />
+                <label className="text-[9px] font-black uppercase text-kalian-gold/80 ml-4 tracking-widest">Aportación Soci@s (€/mes)</label>
+                <input type="number" placeholder="APORTACIÓN SOCI@S (€/mes)" className="w-full p-5 bg-kalian-gold/5 rounded-2xl outline-none border border-kalian-gold/10 focus:border-kalian-gold transition-all text-kalian-gold font-black text-xl" value={form.precio_descuento} onChange={e => setForm({...form, precio_descuento: e.target.value})} required />
               </div>
             )}
           </div>
@@ -231,8 +231,8 @@ ENTRADA HASTA LAS 00:00. RESERVAS DISPONIBLES HASTA COMPLETAR AFORO.`;
             </div>
             {form.clave_descuento && (
               <div className="space-y-2">
-                <label className="text-[9px] font-black uppercase text-kalian-gold/80 ml-4 tracking-widest">Precio con Clave (€)</label>
-                <input type="number" placeholder="PRECIO CLAVE (€)" className="w-full p-5 bg-black/40 rounded-2xl outline-none border border-kalian-gold/10 focus:border-kalian-gold transition-all text-kalian-gold font-black text-xl" value={form.precio_clave} onChange={e => setForm({...form, precio_clave: e.target.value})} required />
+                <label className="text-[9px] font-black uppercase text-kalian-gold/80 ml-4 tracking-widest">Aportación con Clave (€/mes)</label>
+                <input type="number" placeholder="APORTACIÓN CLAVE (€/mes)" className="w-full p-5 bg-black/40 rounded-2xl outline-none border border-kalian-gold/10 focus:border-kalian-gold transition-all text-kalian-gold font-black text-xl" value={form.precio_clave} onChange={e => setForm({...form, precio_clave: e.target.value})} required />
               </div>
             )}
           </div>
@@ -345,11 +345,11 @@ ENTRADA HASTA LAS 00:00. RESERVAS DISPONIBLES HASTA COMPLETAR AFORO.`;
                 <div>
                   <h3 className="text-3xl kalian-poster-text text-kalian-cream group-hover:text-kalian-gold transition-colors uppercase italic">{ev.titulo}</h3>
                   <p className="text-[10px] text-kalian-gold/80 font-black uppercase tracking-[0.3em] mt-2">
-                    {new Date(ev.fecha).toLocaleString('es-ES', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })} | {ev.categoria.toUpperCase()} | {ev.precio_estandar}€ {ev.tiene_descuento ? `(Soci@s: ${ev.precio_descuento}€)` : '(Sin dto)'} | RESERVADO: {ev.aforo_reservado || 0}/{ev.aforo_maximo} | CHECK-IN: {ev.aforo_actual || 0} | MÁX ACOMP: {ev.max_acompanantes || 4} | {ev.es_publico !== false ? '🟢 PÚBLICO' : '🔴 PRIVADO'}
+                    {new Date(ev.fecha).toLocaleString('es-ES', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })} | {ev.categoria.toUpperCase()} | {ev.precio_estandar}€/mes {ev.tiene_descuento ? `(Soci@s: ${ev.precio_descuento}€/mes)` : '(Sin dto)'} | RESERVADO: {ev.aforo_reservado || 0}/{ev.aforo_maximo} | CHECK-IN: {ev.aforo_actual || 0} | MÁX ACOMP: {ev.max_acompanantes || 4} | {ev.es_publico !== false ? '🟢 PÚBLICO' : '🔴 PRIVADO'}
                   </p>
                 </div>
               </div>
-              <div className="flex gap-2">
+              <div className="flex flex-wrap gap-2">
                 <button 
                   onClick={() => {
                     setEditando(ev.id);
@@ -378,6 +378,37 @@ ENTRADA HASTA LAS 00:00. RESERVAS DISPONIBLES HASTA COMPLETAR AFORO.`;
                   className="bg-kalian-gold/10 text-kalian-gold hover:bg-kalian-gold hover:text-black px-6 py-3 rounded-xl font-black text-[10px] uppercase tracking-widest transition-all"
                 >
                   EDITAR
+                </button>
+                <button 
+                  onClick={() => {
+                    setEditando(null);
+                    setForm({
+                      titulo: `${ev.titulo} (COPIA)`,
+                      fecha: ev.fecha || '',
+                      precio_estandar: ev.precio_estandar?.toString() || '',
+                      categoria: ev.categoria || 'musica',
+                      aforo_maximo: ev.aforo_maximo?.toString() || '50',
+                      aforo_reservado: 0,
+                      aforo_actual: 0,
+                      tiene_descuento: ev.tiene_descuento || false,
+                      precio_descuento: ev.precio_descuento?.toString() || '',
+                      clave_descuento: ev.clave_descuento || '',
+                      precio_clave: ev.precio_clave?.toString() || '',
+                      apertura_socios: ev.apertura_socios || '',
+                      apertura_general: ev.apertura_general || '',
+                      imagenUrl: ev.imagenUrl || '',
+                      reglas: ev.reglas || defaultReglas,
+                      descripcion: ev.descripcion || '',
+                      max_acompanantes: ev.max_acompanantes?.toString() || '4',
+                      es_publico: ev.es_publico !== false
+                    });
+                    window.scrollTo({ top: 0, behavior: 'smooth' });
+                    setMsg("📋 Datos copiados. Ajusta la fecha y guarda para duplicar.");
+                    setTimeout(() => setMsg(''), 3000);
+                  }}
+                  className="bg-blue-500/10 text-blue-500 hover:bg-blue-500 hover:text-white px-6 py-3 rounded-xl font-black text-[10px] uppercase tracking-widest transition-all"
+                >
+                  DUPLICAR
                 </button>
                 <button 
                   onClick={async () => { 

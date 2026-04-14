@@ -52,6 +52,7 @@ const AdminCursos = () => {
   const [conflictos, setConflictos] = useState<string[]>([]);
   const [solicitudes, setSolicitudes] = useState<DocumentData[]>([]);
   const [manualAlumno, setManualAlumno] = useState({ dni: '', nombre: '', email: '' });
+  const [tabActiva, setTabActiva] = useState<'activos' | 'proximos' | 'historico'>('activos');
 
   const fetchCursos = async () => {
     const snap = await getDocs(query(collection(db, "cursos"), orderBy("categoria", "asc")));
@@ -75,6 +76,19 @@ const AdminCursos = () => {
     const snapProf = await getDocs(query(collection(db, "profesores"), orderBy("nombre", "asc")));
     setProfesores(snapProf.docs.map(d => ({ id: d.id, ...d.data() })));
   };
+
+  const hoy = new Date().toISOString().split('T')[0];
+
+  const cursosActivos = cursos.filter(c => c.fechaInicio <= hoy && c.fechaFin >= hoy)
+    .sort((a, b) => a.fechaInicio.localeCompare(b.fechaInicio));
+    
+  const cursosProximos = cursos.filter(c => c.fechaInicio > hoy)
+    .sort((a, b) => a.fechaInicio.localeCompare(b.fechaInicio));
+    
+  const cursosHistorico = cursos.filter(c => c.fechaFin < hoy)
+    .sort((a, b) => b.fechaFin.localeCompare(a.fechaFin));
+
+  const cursosAMostrar = tabActiva === 'activos' ? cursosActivos : tabActiva === 'proximos' ? cursosProximos : cursosHistorico;
 
   useEffect(() => { fetchCursos(); }, []);
 
@@ -265,6 +279,28 @@ const AdminCursos = () => {
       } catch (err) {
         console.error(err);
         alert("Error al eliminar las sesiones.");
+      }
+    }
+  };
+
+  const duplicarCurso = async (curso: DocumentData) => {
+    if (window.confirm(`¿Quieres duplicar el curso "${curso.titulo}"? Se creará una copia sin alumnos.`)) {
+      try {
+        const { id, alumnos, aforo_actual, ...data } = curso;
+        const nuevoCurso = {
+          ...data,
+          titulo: `${data.titulo} (COPIA)`,
+          alumnos: [],
+          aforo_actual: 0
+        };
+        const docRef = doc(collection(db, "cursos"));
+        await setDoc(docRef, nuevoCurso);
+        fetchCursos();
+        setMsg("✅ Curso duplicado correctamente");
+        setTimeout(() => setMsg(''), 3000);
+      } catch (err) {
+        console.error(err);
+        alert("Error al duplicar");
       }
     }
   };
@@ -916,150 +952,182 @@ const AdminCursos = () => {
           </form>
 
           {/* LISTADO Y GESTIÓN */}
-          <div className="space-y-4">
-            <h2 className="text-xl font-black uppercase italic mb-4 ml-4 text-slate-600">Cursos Activos</h2>
-            {cursos.map(c => (
-              <div key={c.id} className="bg-white p-8 rounded-[2.5rem] shadow-lg border border-slate-100 group">
-                <div className="flex justify-between items-start mb-4">
-                  <div>
-                    <span className="text-[9px] font-black uppercase bg-indigo-100 text-indigo-600 px-3 py-1 rounded-full mb-2 inline-block">
-                      {academias.find(a => a.id === c.categoria)?.nombre || c.categoria}
-                    </span>
-                    <h3 className="font-black text-2xl uppercase italic leading-none">{c.titulo}</h3>
-                    <p className="text-[10px] text-indigo-500 font-black mt-1 uppercase tracking-widest">{c.horario} | {c.profesorNombre || c.profesor || 'Pendiente de asignar'}</p>
-                    <p className="text-[8px] text-slate-500 font-mono mt-1">ID Prof: {c.profesorId || 'SIN ID'}</p>
-                    <p className="text-[10px] text-slate-600 font-bold mt-2 uppercase tracking-widest">{c.fechaInicio} al {c.fechaFin}</p>
-                    <div className="mt-2 space-y-1">
-                      {c.modalidades?.map((m: any, i: number) => (
-                        <p key={i} className="text-[9px] text-slate-700 font-bold uppercase tracking-widest">
-                          {m.tipo} | {m.frecuencia} | {m.precio}€/mes
-                        </p>
-                      ))}
-                    </div>
-                  </div>
-                  <div className="text-right">
-                    <p className={`text-xl font-black italic ${c.aforo_disponible ? 'text-emerald-500' : 'text-red-500'}`}>
-                      {c.aforo_disponible ? 'DISPONIBLE' : 'COMPLETO'}
-                    </p>
-                    <p className="text-[8px] font-black uppercase text-slate-500">{c.alumnos?.length || 0} Alumnos</p>
-                  </div>
+          <div className="space-y-6">
+            <div className="flex gap-4 mb-8 bg-slate-100 p-2 rounded-[2rem] w-fit mx-auto md:mx-0">
+              <button 
+                onClick={() => setTabActiva('activos')}
+                className={`px-8 py-3 rounded-[1.5rem] font-black uppercase text-[10px] tracking-widest transition-all ${tabActiva === 'activos' ? 'bg-white text-indigo-600 shadow-sm' : 'text-slate-500 hover:text-slate-800'}`}
+              >
+                Activos ({cursosActivos.length})
+              </button>
+              <button 
+                onClick={() => setTabActiva('proximos')}
+                className={`px-8 py-3 rounded-[1.5rem] font-black uppercase text-[10px] tracking-widest transition-all ${tabActiva === 'proximos' ? 'bg-white text-indigo-600 shadow-sm' : 'text-slate-500 hover:text-slate-800'}`}
+              >
+                Próximos ({cursosProximos.length})
+              </button>
+              <button 
+                onClick={() => setTabActiva('historico')}
+                className={`px-8 py-3 rounded-[1.5rem] font-black uppercase text-[10px] tracking-widest transition-all ${tabActiva === 'historico' ? 'bg-white text-indigo-600 shadow-sm' : 'text-slate-500 hover:text-slate-800'}`}
+              >
+                Histórico ({cursosHistorico.length})
+              </button>
+            </div>
+
+            <div className="space-y-4">
+              {cursosAMostrar.length === 0 ? (
+                <div className="bg-white p-12 rounded-[3rem] text-center border-2 border-dashed border-slate-200">
+                  <p className="text-slate-400 font-bold uppercase tracking-widest text-xs">No hay cursos en esta categoría</p>
                 </div>
+              ) : (
+                cursosAMostrar.map(c => (
+                  <div key={c.id} className="bg-white p-8 rounded-[2.5rem] shadow-lg border border-slate-100 group">
+                    <div className="flex justify-between items-start mb-4">
+                      <div>
+                        <span className="text-[9px] font-black uppercase bg-indigo-100 text-indigo-600 px-3 py-1 rounded-full mb-2 inline-block">
+                          {academias.find(a => a.id === c.categoria)?.nombre || c.categoria}
+                        </span>
+                        <h3 className="font-black text-2xl uppercase italic leading-none">{c.titulo}</h3>
+                        <p className="text-[10px] text-indigo-500 font-black mt-1 uppercase tracking-widest">{c.horario} | {c.profesorNombre || c.profesor || 'Pendiente de asignar'}</p>
+                        <p className="text-[8px] text-slate-500 font-mono mt-1">ID Prof: {c.profesorId || 'SIN ID'}</p>
+                        <p className="text-[10px] text-slate-600 font-bold mt-2 uppercase tracking-widest">{c.fechaInicio} al {c.fechaFin}</p>
+                        <div className="mt-2 space-y-1">
+                          {c.modalidades?.map((m: any, i: number) => (
+                            <p key={i} className="text-[9px] text-slate-700 font-bold uppercase tracking-widest">
+                              {m.tipo} | {m.frecuencia} | {m.precio}€/mes
+                            </p>
+                          ))}
+                        </div>
+                      </div>
+                      <div className="text-right">
+                        <p className={`text-xl font-black italic ${c.aforo_disponible ? 'text-emerald-500' : 'text-red-500'}`}>
+                          {c.aforo_disponible ? 'DISPONIBLE' : 'COMPLETO'}
+                        </p>
+                        <p className="text-[8px] font-black uppercase text-slate-500">{c.alumnos?.length || 0} Alumnos</p>
+                      </div>
+                    </div>
 
-                {cursoSeleccionado === c.id ? (
-                  <div className="mt-6 bg-slate-50 p-6 rounded-3xl space-y-4 animate-in slide-in-from-top-2">
-                    <h4 className="text-[10px] font-black uppercase text-slate-600">Alta Manual de Alumno</h4>
-                    <div className="grid grid-cols-2 gap-3">
-                      <input 
-                        type="text" placeholder="DNI" 
-                        className="p-4 bg-white rounded-xl font-black uppercase outline-none ring-2 ring-indigo-500 text-xs" 
-                        value={manualAlumno.dni}
-                        onChange={e => setManualAlumno({...manualAlumno, dni: e.target.value.toUpperCase()})}
-                      />
-                      <input 
-                        type="text" placeholder="NOMBRE" 
-                        className="p-4 bg-white rounded-xl font-bold outline-none ring-2 ring-indigo-500 text-xs" 
-                        value={manualAlumno.nombre}
-                        onChange={e => setManualAlumno({...manualAlumno, nombre: e.target.value})}
-                      />
-                    </div>
-                    <input 
-                      type="email" placeholder="EMAIL" 
-                      className="w-full p-4 bg-white rounded-xl font-bold outline-none ring-2 ring-indigo-500 text-xs" 
-                      value={manualAlumno.email}
-                      onChange={e => setManualAlumno({...manualAlumno, email: e.target.value})}
-                    />
-                    <div className="flex gap-2">
-                      <button 
-                        onClick={() => añadirAlumno(c.id, c.aforo_actual || 0, c.aforo_total, c.fechaFin, c.categoria)}
-                        className="flex-1 bg-indigo-600 text-white p-4 rounded-xl font-black uppercase text-xs"
-                      >Añadir Alumno</button>
-                      <button onClick={() => setCursoSeleccionado(null)} className="bg-slate-200 text-slate-500 px-6 rounded-xl font-bold">Cancelar</button>
-                    </div>
-                  </div>
-                ) : (
-                  <div className="mt-6 flex justify-between items-center">
-                    <div className="flex gap-2">
-                      <button 
-                        onClick={() => {
-                          setEditando(c.id);
-                          setForm({
-                            titulo: c.titulo,
-                            categoria: c.categoria,
-                            subcategoria: c.subcategoria || '',
-                            modalidades: c.modalidades || [{ tipo: 'presencial', frecuencia: 'semanal', precio: '' }],
-                            fechaInicio: c.fechaInicio,
-                            fechaFin: c.fechaFin,
-                            aforo_disponible: c.aforo_disponible !== false,
-                            horario: c.horario,
-                            profesorId: c.profesorId || '',
-                            profesorNombre: c.profesorNombre || c.profesor || '',
-                            descripcion: c.descripcion || '',
-                            ventajas: c.ventajas || '',
-                            diasSemana: c.diasSemana || [1],
-                            horaInicio: c.horaInicio || '18:00',
-                            horaFin: c.horaFin || '19:30',
-                            sala: c.sala || 'Sala Grande',
-                            programacionAutomatica: c.programacionAutomatica || false
-                          });
-                          window.scrollTo({ top: 0, behavior: 'smooth' });
-                        }}
-                        className="bg-indigo-100 text-indigo-600 px-6 py-3 rounded-xl font-black uppercase text-[10px] tracking-widest hover:bg-indigo-200 transition-all"
-                      >Editar</button>
-                      <button 
-                        onClick={() => setCursoSeleccionado(c.id)}
-                        className="bg-slate-900 text-white px-8 py-3 rounded-xl font-black uppercase text-[10px] tracking-widest hover:bg-indigo-600 transition-all"
-                      >+ Inscribir Alumno</button>
-                      <button 
-                        onClick={() => {
-                          setGestionandoSesiones(c.id);
-                          fetchSesiones(c.id);
-                        }}
-                        className="bg-amber-100 text-amber-600 px-6 py-3 rounded-xl font-black uppercase text-[10px] tracking-widest hover:bg-amber-200 transition-all"
-                      >📅 Sesiones</button>
-                    </div>
-                    <button 
-                      onClick={async () => { 
-                        if (window.confirm("¿Seguro que quieres eliminar este curso?")) {
-                          try {
-                            // 1. Limpiar referencias en socios
-                            const sociosQuery = query(collection(db, "socios"), where("cursos", "array-contains", c.id));
-                            const sociosSnap = await getDocs(sociosQuery);
-                            
-                            const batch = writeBatch(db);
-                            
-                            if (!sociosSnap.empty) {
-                              sociosSnap.docs.forEach(socioDoc => {
-                                batch.update(socioDoc.ref, {
-                                  cursos: arrayRemove(c.id)
-                                });
+                    {cursoSeleccionado === c.id ? (
+                      <div className="mt-6 bg-slate-50 p-6 rounded-3xl space-y-4 animate-in slide-in-from-top-2">
+                        <h4 className="text-[10px] font-black uppercase text-slate-600">Alta Manual de Alumno</h4>
+                        <div className="grid grid-cols-2 gap-3">
+                          <input 
+                            type="text" placeholder="DNI" 
+                            className="p-4 bg-white rounded-xl font-black uppercase outline-none ring-2 ring-indigo-500 text-xs" 
+                            value={manualAlumno.dni}
+                            onChange={e => setManualAlumno({...manualAlumno, dni: e.target.value.toUpperCase()})}
+                          />
+                          <input 
+                            type="text" placeholder="NOMBRE" 
+                            className="p-4 bg-white rounded-xl font-bold outline-none ring-2 ring-indigo-500 text-xs" 
+                            value={manualAlumno.nombre}
+                            onChange={e => setManualAlumno({...manualAlumno, nombre: e.target.value})}
+                          />
+                        </div>
+                        <input 
+                          type="email" placeholder="EMAIL" 
+                          className="w-full p-4 bg-white rounded-xl font-bold outline-none ring-2 ring-indigo-500 text-xs" 
+                          value={manualAlumno.email}
+                          onChange={e => setManualAlumno({...manualAlumno, email: e.target.value})}
+                        />
+                        <div className="flex gap-2">
+                          <button 
+                            onClick={() => añadirAlumno(c.id, c.aforo_actual || 0, c.aforo_total, c.fechaFin, c.categoria)}
+                            className="flex-1 bg-indigo-600 text-white p-4 rounded-xl font-black uppercase text-xs"
+                          >Añadir Alumno</button>
+                          <button onClick={() => setCursoSeleccionado(null)} className="bg-slate-200 text-slate-500 px-6 rounded-xl font-bold">Cancelar</button>
+                        </div>
+                      </div>
+                    ) : (
+                      <div className="mt-6 flex flex-wrap justify-between items-center gap-4">
+                        <div className="flex flex-wrap gap-2">
+                          <button 
+                            onClick={() => {
+                              setEditando(c.id);
+                              setForm({
+                                titulo: c.titulo,
+                                categoria: c.categoria,
+                                subcategoria: c.subcategoria || '',
+                                modalidades: c.modalidades || [{ tipo: 'presencial', frecuencia: 'semanal', precio: '' }],
+                                fechaInicio: c.fechaInicio,
+                                fechaFin: c.fechaFin,
+                                aforo_disponible: c.aforo_disponible !== false,
+                                horario: c.horario,
+                                profesorId: c.profesorId || '',
+                                profesorNombre: c.profesorNombre || c.profesor || '',
+                                descripcion: c.descripcion || '',
+                                ventajas: c.ventajas || '',
+                                diasSemana: c.diasSemana || [1],
+                                horaInicio: c.horaInicio || '18:00',
+                                horaFin: c.horaFin || '19:30',
+                                sala: c.sala || 'Sala Grande',
+                                programacionAutomatica: c.programacionAutomatica || false
                               });
+                              window.scrollTo({ top: 0, behavior: 'smooth' });
+                            }}
+                            className="bg-indigo-100 text-indigo-600 px-6 py-3 rounded-xl font-black uppercase text-[10px] tracking-widest hover:bg-indigo-200 transition-all"
+                          >Editar</button>
+                          <button 
+                            onClick={() => setCursoSeleccionado(c.id)}
+                            className="bg-slate-900 text-white px-8 py-3 rounded-xl font-black uppercase text-[10px] tracking-widest hover:bg-indigo-600 transition-all"
+                          >+ Inscribir Alumno</button>
+                          <button 
+                            onClick={() => {
+                              setGestionandoSesiones(c.id);
+                              fetchSesiones(c.id);
+                            }}
+                            className="bg-amber-100 text-amber-600 px-6 py-3 rounded-xl font-black uppercase text-[10px] tracking-widest hover:bg-amber-200 transition-all"
+                          >📅 Sesiones</button>
+                          <button 
+                            onClick={() => duplicarCurso(c)}
+                            className="bg-emerald-100 text-emerald-600 px-6 py-3 rounded-xl font-black uppercase text-[10px] tracking-widest hover:bg-emerald-200 transition-all"
+                          >📋 Duplicar</button>
+                        </div>
+                        <button 
+                          onClick={async () => { 
+                            if (window.confirm("¿Seguro que quieres eliminar este curso?")) {
+                              try {
+                                // 1. Limpiar referencias en socios
+                                const sociosQuery = query(collection(db, "socios"), where("cursos", "array-contains", c.id));
+                                const sociosSnap = await getDocs(sociosQuery);
+                                
+                                const batch = writeBatch(db);
+                                
+                                if (!sociosSnap.empty) {
+                                  sociosSnap.docs.forEach(socioDoc => {
+                                    batch.update(socioDoc.ref, {
+                                      cursos: arrayRemove(c.id)
+                                    });
+                                  });
+                                }
+
+                                // 2. Borrar sesiones del curso
+                                const sesionesSnap = await getDocs(collection(db, "cursos", c.id, "sesiones"));
+                                sesionesSnap.docs.forEach(d => batch.delete(d.ref));
+
+                                // 3. Borrar el curso
+                                batch.delete(doc(db, "cursos", c.id)); 
+
+                                await batch.commit();
+                                fetchCursos(); 
+                                setMsg("✅ Curso y sus sesiones eliminados correctamente");
+                                setTimeout(() => setMsg(''), 3000);
+                              } catch (err) {
+                                console.error(err);
+                                alert("Error al eliminar el curso");
+                              }
                             }
-
-                            // 2. Borrar sesiones del curso
-                            const sesionesSnap = await getDocs(collection(db, "cursos", c.id, "sesiones"));
-                            sesionesSnap.docs.forEach(d => batch.delete(d.ref));
-
-                            // 3. Borrar el curso
-                            batch.delete(doc(db, "cursos", c.id)); 
-
-                            await batch.commit();
-                            fetchCursos(); 
-                            setMsg("✅ Curso y sus sesiones eliminados correctamente");
-                            setTimeout(() => setMsg(''), 3000);
-                          } catch (err) {
-                            console.error(err);
-                            alert("Error al eliminar el curso");
-                          }
-                        }
-                      }} 
-                      className="text-red-300 hover:text-red-500 font-bold text-[10px] uppercase"
-                    >
-                      Eliminar
-                    </button>
+                          }} 
+                          className="text-red-300 hover:text-red-500 font-bold text-[10px] uppercase"
+                        >
+                          Eliminar
+                        </button>
+                      </div>
+                    )}
                   </div>
-                )}
-              </div>
-            ))}
+                ))
+              )}
+            </div>
           </div>
         </div>
 
@@ -1170,7 +1238,7 @@ const AdminCursos = () => {
                 <div className="space-y-3">
                   <div className="flex justify-between items-center px-2">
                     <h4 className="text-[10px] font-black uppercase text-slate-500 tracking-widest">Sesiones Programadas</h4>
-                    {sesiones.length > 0 && (
+                    {sesiones.length > 0 && (cursos.find(c => c.id === gestionandoSesiones)?.fechaFin >= hoy) && (
                       <button 
                         onClick={eliminarTodasLasSesiones}
                         className="flex items-center gap-1 text-[9px] font-black text-red-500 uppercase hover:bg-red-50 px-3 py-1 rounded-lg transition-all border border-red-100"

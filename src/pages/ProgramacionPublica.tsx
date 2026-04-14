@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { db } from '../firebase';
 import { collection, getDocs, query, orderBy, DocumentData, addDoc, where, doc, getDoc, onSnapshot } from 'firebase/firestore';
 import { Link } from 'react-router-dom';
@@ -33,6 +33,7 @@ const ProgramacionPublica = () => {
 
   const [categoriaActiva, setCategoriaActiva] = useState<string | null>(null);
   const [subcategoriaActiva, setSubcategoriaActiva] = useState<string | null>(null);
+  const cursosListRef = useRef<HTMLDivElement>(null);
 
   const [errorSeleccion, setErrorSeleccion] = useState<string | null>(null);
 
@@ -87,6 +88,17 @@ const ProgramacionPublica = () => {
       unsubA();
     };
   }, []);
+
+  // Scroll automático al seleccionar subcategoría
+  useEffect(() => {
+    if (subcategoriaActiva && cursosListRef.current) {
+      const yOffset = -100; // Ajuste para que el encabezado no quede pegado al borde superior
+      const element = cursosListRef.current;
+      const y = element.getBoundingClientRect().top + window.pageYOffset + yOffset;
+      
+      window.scrollTo({ top: y, behavior: 'smooth' });
+    }
+  }, [subcategoriaActiva]);
 
   const enviarSolicitud = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -286,7 +298,7 @@ const ProgramacionPublica = () => {
                 </div>
               </div>
 
-              <div className="space-y-8">
+              <div className="space-y-8" ref={cursosListRef}>
                 {cursos.filter(c => c.categoria === categoriaActiva && c.subcategoria === subcategoriaActiva).length > 0 ? (
                   cursos.filter(c => c.categoria === categoriaActiva && c.subcategoria === subcategoriaActiva).map(c => {
                     return (

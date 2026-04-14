@@ -1,8 +1,9 @@
 import React, { useState, useEffect } from 'react';
 import { db } from '../../firebase';
-import { collection, getDocs, updateDoc, doc, DocumentData, setDoc, getDoc, query, where, writeBatch } from 'firebase/firestore';
+import { collection, getDocs, updateDoc, doc, DocumentData, setDoc, getDoc, query, where, writeBatch, onSnapshot } from 'firebase/firestore';
 import { Link } from 'react-router-dom';
 import { registrarIngreso, MetodoPago } from '../../lib/finanzas';
+import { fetchConfig } from '../../lib/configService';
 
 const AdminLocales = () => {
   const [locales, setLocales] = useState<DocumentData[]>([]);
@@ -10,17 +11,19 @@ const AdminLocales = () => {
   const [editando, setEditando] = useState<any | null>(null);
   const [msg, setMsg] = useState('');
   const [metodoPago, setMetodoPago] = useState<MetodoPago>('Transferencia');
+  const [cuotaGlobal, setCuotaGlobal] = useState(15);
 
   const mesActual = new Date().getMonth() + 1;
   const anioActual = new Date().getFullYear();
   const meses = ["Enero", "Febrero", "Marzo", "Abril", "Mayo", "Junio", "Julio", "Agosto", "Septiembre", "Octubre", "Noviembre", "Diciembre"];
   const mesAnioKey = `${anioActual}_${mesActual}`;
 
-  const fetchLocales = async () => {
-    setLoading(true);
-    try {
-      const snap = await getDocs(collection(db, "locales"));
+  useEffect(() => { 
+    fetchConfig().then(conf => setCuotaGlobal(conf.cuotaMensualSocio));
+
+    const unsub = onSnapshot(collection(db, "locales"), (snap) => {
       if (snap.empty) {
+        // Initial setup if empty
         const initial = [
           { id: 'L1', nombre: 'Local 1', estado: 'disponible', alquilado: false, inquilinos: [], fechaExpiracion: '2099-12-31' },
           { id: 'L2', nombre: 'Local 2', estado: 'disponible', alquilado: false, inquilinos: [], fechaExpiracion: '2099-12-31' },
@@ -30,25 +33,23 @@ const AdminLocales = () => {
           { id: 'L6', nombre: 'Local 6', estado: 'disponible', alquilado: false, inquilinos: [], fechaExpiracion: '2099-12-31' },
           { id: 'L7', nombre: 'Local 7', estado: 'disponible', alquilado: false, inquilinos: [], fechaExpiracion: '2099-12-31' },
         ];
-        for (const loc of initial) {
+        initial.forEach(loc => {
           const { id, ...data } = loc;
-          await setDoc(doc(db, "locales", id), data);
-        }
-        setLocales(initial);
+          setDoc(doc(db, "locales", id), data);
+        });
       } else {
         setLocales(snap.docs.map(d => ({ id: d.id, ...d.data() })));
       }
-    } catch (err) { console.error(err); }
-    setLoading(false);
-  };
+      setLoading(false);
+    });
 
-  useEffect(() => { fetchLocales(); }, []);
+    return () => unsub();
+  }, []);
 
   const toggleEstado = async (id: string, actual: string) => {
     const nuevo = actual === 'disponible' ? 'mantenimiento' : 'disponible';
     try {
       await updateDoc(doc(db, "locales", id), { estado: nuevo });
-      fetchLocales();
     } catch (err) { console.error(err); }
   };
 
@@ -56,7 +57,7 @@ const AdminLocales = () => {
     if (!local.alquilado) return;
     const yaPagado = local.ultimoPagoMesAnio === mesAnioKey;
     if (yaPagado) {
-      if (!window.confirm("Este local ya figura como pagado este mes. ¿Deseas marcarlo como PENDIENTE? (Esto NO borrará los registros individuales de los socios)")) return;
+      if (!window.confirm("Este local ya figura como pagado este mes. ¿Deseas marcarlo como PENDIENTE? (Los soci@s vinculados también se marcarán como pendientes)")) return;
     } else {
       if (!window.confirm(`¿Confirmas el pago de la aportación de ${local.nombre} para ${meses[mesActual-1]}?`)) return;
     }
@@ -64,50 +65,55 @@ const AdminLocales = () => {
     try {
       setLoading(true);
       const nuevoEstado = !yaPagado;
+      const batch = writeBatch(db);
       
       // 1. Actualizar Local
       await updateDoc(doc(db, "locales", local.id), {
         ultimoPagoMesAnio: nuevoEstado ? mesAnioKey : ''
       });
 
-      // 2. Si es pago, actualizar socios vinculados
-      if (nuevoEstado) {
-        const q = query(collection(db, "socios"), where("localId", "==", local.id));
-        const snap = await getDocs(q);
-        const batch = writeBatch(db);
+      // 2. Obtener socios vinculados
+      const q = query(collection(db, "socios"), where("localId", "==", local.id));
+      const snap = await getDocs(q);
+      
+      // 3. Actualizar estado de pago de los socios
+      for (const sDoc of snap.docs) {
+        const socioId = sDoc.id;
+        const pagoId = `${anioActual}_${mesActual}_${socioId}`;
+        const pagoRef = doc(db, "pagos_mensuales", pagoId);
         
-        for (const sDoc of snap.docs) {
-          const socioId = sDoc.id;
-          const pagoId = `${anioActual}_${mesActual}_${socioId}`;
-          const pagoRef = doc(db, "pagos_mensuales", pagoId);
-          
-          batch.set(pagoRef, {
-            socioId,
-            mes: mesActual,
-            anio: anioActual,
-            pagado: true,
-            actualizadoPor: 'admin_bulk_local',
-            fechaActualizacion: new Date().toISOString(),
-            localId: local.id
-          }, { merge: true });
-        }
-        await batch.commit();
-
-        // 3. Registrar en Finanzas (Opcional pero recomendado para coherencia)
-        await registrarIngreso({
-          monto: 0, // Podría ser el total del local, pero aquí lo marcamos como regularización de grupo
-          concepto: `Aportación Local ${local.nombre} - ${meses[mesActual-1]}`,
-          categoria: 'Socio',
-          metodo: metodoPago,
-          local_id: local.id
-        });
-        
-        setMsg(`✅ Aportación de ${local.nombre} procesada para ${snap.size} soci@s`);
-      } else {
-        setMsg(`✅ Local ${local.nombre} marcado como pendiente`);
+        batch.set(pagoRef, {
+          socioId,
+          mes: mesActual,
+          anio: anioActual,
+          pagado: nuevoEstado,
+          monto: nuevoEstado ? cuotaGlobal : 0,
+          actualizadoPor: 'admin_bulk_local',
+          fechaActualizacion: new Date().toISOString(),
+          localId: local.id
+        }, { merge: true });
       }
 
-      fetchLocales();
+      // 4. Registrar en Finanzas (Aportación o Devolución)
+      const montoTransaccion = snap.size * cuotaGlobal;
+      await registrarIngreso({
+        monto: nuevoEstado ? montoTransaccion : -montoTransaccion,
+        concepto: nuevoEstado 
+          ? `Aportación Local ${local.nombre} (${snap.size} socios) - ${meses[mesActual-1]}`
+          : `REVERSIÓN: Aportación Local ${local.nombre} - ${meses[mesActual-1]}`,
+        categoria: 'Aportación Socio Local',
+        metodo: metodoPago,
+        local_id: local.id
+      });
+      
+      await batch.commit();
+      
+      if (nuevoEstado) {
+        setMsg(`✅ Aportación de ${local.nombre} procesada (${montoTransaccion}€)`);
+      } else {
+        setMsg(`⚠️ Pago revertido para ${local.nombre}. Soci@s marcados como pendientes.`);
+      }
+
       setTimeout(() => setMsg(''), 3000);
     } catch (err) {
       console.error(err);
@@ -122,6 +128,11 @@ const AdminLocales = () => {
     if (!editando) return;
 
     try {
+      setLoading(true);
+      const localOriginal = locales.find(l => l.id === editando.id);
+      const estabaPagado = localOriginal?.ultimoPagoMesAnio === mesAnioKey;
+      const ahoraPagado = editando.ultimoPagoMesAnio === mesAnioKey;
+
       // 1. Actualizar Local
       await updateDoc(doc(db, "locales", editando.id), {
         alquilado: editando.alquilado,
@@ -132,12 +143,13 @@ const AdminLocales = () => {
         ultimoPagoMesAnio: editando.ultimoPagoMesAnio || ''
       });
 
-      // 2. Sincronizar Pagos si se marcó como pagado en el modal
-      if (editando.alquilado && editando.ultimoPagoMesAnio === mesAnioKey) {
+      // 2. Sincronizar Pagos si el estado de pago CAMBIÓ
+      if (estabaPagado !== ahoraPagado) {
         const q = query(collection(db, "socios"), where("localId", "==", editando.id));
         const snap = await getDocs(q);
         const batch = writeBatch(db);
         
+        // Actualizar socios
         for (const sDoc of snap.docs) {
           const socioId = sDoc.id;
           const pagoId = `${anioActual}_${mesActual}_${socioId}`;
@@ -147,13 +159,28 @@ const AdminLocales = () => {
             socioId,
             mes: mesActual,
             anio: anioActual,
-            pagado: true,
+            pagado: ahoraPagado,
+            monto: ahoraPagado ? cuotaGlobal : 0,
             actualizadoPor: 'admin_modal_local',
             fechaActualizacion: new Date().toISOString(),
             localId: editando.id
           }, { merge: true });
         }
         await batch.commit();
+
+        // Registrar en Finanzas (Aportación o Reversión)
+        const montoTransaccion = snap.size * cuotaGlobal;
+        if (montoTransaccion > 0) {
+          await registrarIngreso({
+            monto: ahoraPagado ? montoTransaccion : -montoTransaccion,
+            concepto: ahoraPagado 
+              ? `Aportación Local ${editando.nombre} (${snap.size} socios) - ${meses[mesActual-1]}`
+              : `REVERSIÓN: Aportación Local ${editando.nombre} - ${meses[mesActual-1]}`,
+            categoria: 'Aportación Socio Local',
+            metodo: metodoPago,
+            local_id: editando.id
+          });
+        }
       }
 
       // 3. Sincronizar Inquilinos como Socios
@@ -187,7 +214,6 @@ const AdminLocales = () => {
       setMsg("✅ Local actualizado y soci@s sincronizados");
       setTimeout(() => setMsg(''), 3000);
       setEditando(null);
-      fetchLocales();
     } catch (err) {
       console.error(err);
       alert("Error al guardar");

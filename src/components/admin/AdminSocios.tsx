@@ -1,11 +1,12 @@
 import React, { useState, useEffect } from 'react';
 import { db } from '../../firebase';
-import { collection, getDocs, doc, setDoc, getDoc, query, orderBy, DocumentData, deleteDoc, where } from 'firebase/firestore';
+import { collection, getDocs, doc, setDoc, getDoc, query, orderBy, DocumentData, deleteDoc, where, onSnapshot } from 'firebase/firestore';
 import { Link } from 'react-router-dom';
 import { createSocioAuth } from '../../lib/adminAuth';
 import { sendWelcomeEmail, sendMembershipUpdateEmail } from '../../lib/brevoService';
 import { updateDoc, increment } from 'firebase/firestore';
 import { registrarIngreso, MetodoPago } from '../../lib/finanzas';
+import { fetchConfig } from '../../lib/configService';
 
 import { motion, AnimatePresence } from 'motion/react';
 
@@ -21,41 +22,48 @@ const AdminSocios = () => {
   const [cleaning, setCleaning] = useState(false);
   const [editando, setEditando] = useState<any | null>(null);
   const [formEdit, setFormEdit] = useState<any>({});
+  const [cuotaGlobal, setCuotaGlobal] = useState(15);
   const hoy = new Date().toISOString().split('T')[0];
 
   const mesActual = new Date().getMonth() + 1;
   const anioActual = new Date().getFullYear();
 
-  const fetchSocios = async () => {
-    setLoading(true);
-    try {
-      const snap = await getDocs(query(collection(db, "socios"), orderBy("nombre", "asc")));
-      setSocios(snap.docs.map(d => ({ id: d.id, ...d.data() })));
-      
-      // Fetch existing courses to filter UI
-      const cursosSnap = await getDocs(collection(db, "cursos"));
-      const ids = new Set(cursosSnap.docs.map(d => d.id));
-      setCursosExistentes(ids);
+  useEffect(() => { 
+    fetchConfig().then(conf => setCuotaGlobal(conf.cuotaMensualSocio));
 
-      // Fetch all monthly payments for the current month
-      const qPagos = query(
-        collection(db, "pagos_mensuales"),
-        where("mes", "==", mesActual),
-        where("anio", "==", anioActual)
-      );
-      const snapPagos = await getDocs(qPagos);
+    // Real-time socios
+    const qSocios = query(collection(db, "socios"), orderBy("nombre", "asc"));
+    const unsubSocios = onSnapshot(qSocios, (snap) => {
+      setSocios(snap.docs.map(d => ({ id: d.id, ...d.data() })));
+    });
+
+    // Real-time payments
+    const qPagos = query(
+      collection(db, "pagos_mensuales"),
+      where("mes", "==", mesActual),
+      where("anio", "==", anioActual)
+    );
+    const unsubPagos = onSnapshot(qPagos, (snap) => {
       const mapPagos: Record<string, any> = {};
-      snapPagos.docs.forEach(d => {
+      snap.docs.forEach(d => {
         mapPagos[d.data().socioId] = d.data();
       });
       setPagosMensuales(mapPagos);
-    } catch (err) {
-      console.error(err);
-    }
-    setLoading(false);
-  };
+    });
 
-  useEffect(() => { fetchSocios(); }, []);
+    // Fetch courses once (they don't change often)
+    getDocs(collection(db, "cursos")).then(cursosSnap => {
+      const ids = new Set(cursosSnap.docs.map(d => d.id));
+      setCursosExistentes(ids);
+    });
+
+    setLoading(false);
+
+    return () => {
+      unsubSocios();
+      unsubPagos();
+    };
+  }, [mesActual, anioActual]);
 
   const handleCleanup = async () => {
     if (!window.confirm("¿Seguro que quieres limpiar la base de datos? Se eliminarán soci@s que lleven más de 4 meses inactivos.")) return;
@@ -79,7 +87,6 @@ const AdminSocios = () => {
         }
       }
       setMsg(`✅ Limpieza completada: ${eliminados} soci@s eliminados`);
-      fetchSocios();
     } catch (err) {
       console.error(err);
       alert("Error en la limpieza");
@@ -94,7 +101,6 @@ const AdminSocios = () => {
       await deleteDoc(doc(db, "socios", id));
       setMsg("✅ Soci@s eliminado");
       setTimeout(() => setMsg(''), 3000);
-      fetchSocios();
     } catch (err) {
       console.error(err);
       alert("Error al eliminar");
@@ -147,7 +153,6 @@ const AdminSocios = () => {
       setTimeout(() => setMsg(''), 3000);
       setForm({ dni: '', nombre: '', email: '' });
       setShowForm(false);
-      fetchSocios();
     } catch (err) {
       console.error(err);
       alert("Error al crear soci@s");
@@ -164,7 +169,6 @@ const AdminSocios = () => {
       setMsg("✅ Soci@s actualizado y email enviado");
       setTimeout(() => setMsg(''), 3000);
       setEditando(null);
-      fetchSocios();
     } catch (err) {
       console.error(err);
       alert("Error al actualizar");
@@ -211,7 +215,6 @@ const AdminSocios = () => {
           socio_id: socioId
         });
       }
-      fetchSocios();
     } catch (err) {
       console.error(err);
       alert("Error al actualizar pago");
@@ -228,9 +231,9 @@ const AdminSocios = () => {
     const tieneBachata = cursos.some((cId: string) => cId.toLowerCase().includes('bachata') && !cId.toLowerCase().includes('coreográfico'));
 
     if (tieneSalsa && tieneBachata) {
-      return 25 + 15; // 40€ total
+      return 25 + cuotaGlobal; // 25€ extra + cuota base
     }
-    return 15; // 15€ total (incluye cuota)
+    return cuotaGlobal; // cuota base total
   };
 
   const meses = ["Enero", "Febrero", "Marzo", "Abril", "Mayo", "Junio", "Julio", "Agosto", "Septiembre", "Octubre", "Noviembre", "Diciembre"];
@@ -269,7 +272,6 @@ const AdminSocios = () => {
             >
               {showForm ? 'CANCELAR' : '+ NUEVO SOCI@S'}
             </button>
-            <button onClick={fetchSocios} className="p-3 bg-kalian-gold/10 text-kalian-gold rounded-2xl border border-kalian-gold/20 hover:bg-kalian-gold/20 transition-all">🔄</button>
           </div>
         </header>
 
@@ -371,7 +373,7 @@ const AdminSocios = () => {
                         {pagosMensuales[s.dni]?.pagado ? (
                           <div className="flex flex-col items-center">
                             <span className="text-emerald-500 text-xs font-black">✅ PAGADO</span>
-                            <span className="text-[8px] text-emerald-500/60 font-bold">{pagosMensuales[s.dni]?.monto || 15}€</span>
+                            <span className="text-[8px] text-emerald-500/60 font-bold">{pagosMensuales[s.dni]?.monto || cuotaGlobal}€</span>
                           </div>
                         ) : (
                           <div className="flex flex-col items-center">

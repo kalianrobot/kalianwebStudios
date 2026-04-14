@@ -1,7 +1,7 @@
 import { db } from '../firebase';
 import { collection, addDoc, serverTimestamp, Timestamp } from 'firebase/firestore';
 
-export type CategoriaIngreso = 'Socio' | 'Curso' | 'Evento';
+export type CategoriaIngreso = 'Socio' | 'Curso' | 'Evento' | 'Aportación Socio Local';
 export type MetodoPago = 'Efectivo' | 'Tarjeta' | 'Transferencia';
 
 export interface IngresoData {

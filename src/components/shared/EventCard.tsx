@@ -47,7 +47,7 @@ const EventCard: React.FC<EventCardProps> = ({
           {event.tiene_descuento && (
             <span className="bg-kalian-gold text-black text-[9px] font-black uppercase px-4 py-1.5 rounded-full tracking-widest shadow-lg">Descuento Soci@s</span>
           )}
-          <span className="text-kalian-gold kalian-poster-text text-4xl drop-shadow-lg ml-auto">{event.precio_estandar}€/mes</span>
+          <span className="text-kalian-gold kalian-poster-text text-4xl drop-shadow-lg ml-auto">{event.precio_estandar}€</span>
         </div>
       </div>
       

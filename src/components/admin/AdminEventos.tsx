@@ -18,6 +18,7 @@ ENTRADA HASTA LAS 00:00. RESERVAS DISPONIBLES HASTA COMPLETAR AFORO.`;
   const [form, setForm] = useState({ 
     titulo: '', 
     fecha: '', 
+    hora_fin: '',
     precio_estandar: '', 
     categoria: 'musica', 
     aforo_maximo: '50',
@@ -58,6 +59,7 @@ ENTRADA HASTA LAS 00:00. RESERVAS DISPONIBLES HASTA COMPLETAR AFORO.`;
         setForm({
           titulo: ev.titulo || '',
           fecha: ev.fecha || '',
+          hora_fin: ev.hora_fin || '',
           precio_estandar: ev.precio_estandar?.toString() || '',
           categoria: ev.categoria || 'musica',
           aforo_maximo: ev.aforo_maximo?.toString() || '50',
@@ -117,6 +119,7 @@ ENTRADA HASTA LAS 00:00. RESERVAS DISPONIBLES HASTA COMPLETAR AFORO.`;
       setForm({ 
         titulo: '', 
         fecha: '', 
+        hora_fin: '',
         precio_estandar: '', 
         categoria: 'musica', 
         aforo_maximo: '50', 
@@ -193,14 +196,18 @@ ENTRADA HASTA LAS 00:00. RESERVAS DISPONIBLES HASTA COMPLETAR AFORO.`;
             </div>
           </div>
           
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
             <div className="space-y-2">
-              <label className="text-[9px] font-black uppercase text-kalian-gold/40 ml-4 tracking-widest">Fecha y Hora</label>
+              <label className="text-[9px] font-black uppercase text-kalian-gold/40 ml-4 tracking-widest">Fecha e Inicio</label>
               <input type="datetime-local" className="w-full p-5 bg-kalian-gold/5 rounded-2xl outline-none border border-kalian-gold/10 focus:border-kalian-gold transition-all text-kalian-cream font-bold" value={form.fecha} onChange={e => setForm({...form, fecha: e.target.value})} required />
             </div>
             <div className="space-y-2">
-              <label className="text-[9px] font-black uppercase text-kalian-gold/80 ml-4 tracking-widest">Aportación Estándar (€/mes)</label>
-              <input type="number" placeholder="APORTACIÓN (€/mes)" className="w-full p-5 bg-kalian-gold/5 rounded-2xl outline-none border border-kalian-gold/10 focus:border-kalian-gold transition-all text-kalian-gold font-black text-xl" value={form.precio_estandar} onChange={e => setForm({...form, precio_estandar: e.target.value})} required />
+              <label className="text-[9px] font-black uppercase text-kalian-gold/40 ml-4 tracking-widest">Hora de Fin</label>
+              <input type="time" className="w-full p-5 bg-kalian-gold/5 rounded-2xl outline-none border border-kalian-gold/10 focus:border-kalian-gold transition-all text-kalian-cream font-bold" value={form.hora_fin} onChange={e => setForm({...form, hora_fin: e.target.value})} required />
+            </div>
+            <div className="space-y-2">
+              <label className="text-[9px] font-black uppercase text-kalian-gold/80 ml-4 tracking-widest">Aportación Estándar (€)</label>
+              <input type="number" placeholder="APORTACIÓN (€)" className="w-full p-5 bg-kalian-gold/5 rounded-2xl outline-none border border-kalian-gold/10 focus:border-kalian-gold transition-all text-kalian-gold font-black text-xl" value={form.precio_estandar} onChange={e => setForm({...form, precio_estandar: e.target.value})} required />
             </div>
           </div>
 
@@ -217,8 +224,8 @@ ENTRADA HASTA LAS 00:00. RESERVAS DISPONIBLES HASTA COMPLETAR AFORO.`;
             </div>
             {form.tiene_descuento && (
               <div className="space-y-2">
-                <label className="text-[9px] font-black uppercase text-kalian-gold/80 ml-4 tracking-widest">Aportación Soci@s (€/mes)</label>
-                <input type="number" placeholder="APORTACIÓN SOCI@S (€/mes)" className="w-full p-5 bg-kalian-gold/5 rounded-2xl outline-none border border-kalian-gold/10 focus:border-kalian-gold transition-all text-kalian-gold font-black text-xl" value={form.precio_descuento} onChange={e => setForm({...form, precio_descuento: e.target.value})} required />
+                <label className="text-[9px] font-black uppercase text-kalian-gold/80 ml-4 tracking-widest">Aportación Soci@s (€)</label>
+                <input type="number" placeholder="APORTACIÓN SOCI@S (€)" className="w-full p-5 bg-kalian-gold/5 rounded-2xl outline-none border border-kalian-gold/10 focus:border-kalian-gold transition-all text-kalian-gold font-black text-xl" value={form.precio_descuento} onChange={e => setForm({...form, precio_descuento: e.target.value})} required />
               </div>
             )}
           </div>
@@ -231,8 +238,8 @@ ENTRADA HASTA LAS 00:00. RESERVAS DISPONIBLES HASTA COMPLETAR AFORO.`;
             </div>
             {form.clave_descuento && (
               <div className="space-y-2">
-                <label className="text-[9px] font-black uppercase text-kalian-gold/80 ml-4 tracking-widest">Aportación con Clave (€/mes)</label>
-                <input type="number" placeholder="APORTACIÓN CLAVE (€/mes)" className="w-full p-5 bg-black/40 rounded-2xl outline-none border border-kalian-gold/10 focus:border-kalian-gold transition-all text-kalian-gold font-black text-xl" value={form.precio_clave} onChange={e => setForm({...form, precio_clave: e.target.value})} required />
+                <label className="text-[9px] font-black uppercase text-kalian-gold/80 ml-4 tracking-widest">Aportación con Clave (€)</label>
+                <input type="number" placeholder="APORTACIÓN CLAVE (€)" className="w-full p-5 bg-black/40 rounded-2xl outline-none border border-kalian-gold/10 focus:border-kalian-gold transition-all text-kalian-gold font-black text-xl" value={form.precio_clave} onChange={e => setForm({...form, precio_clave: e.target.value})} required />
               </div>
             )}
           </div>
@@ -311,6 +318,7 @@ ENTRADA HASTA LAS 00:00. RESERVAS DISPONIBLES HASTA COMPLETAR AFORO.`;
                   setForm({ 
                     titulo: '', 
                     fecha: '', 
+                    hora_fin: '',
                     precio_estandar: '', 
                     categoria: 'musica', 
                     aforo_max: '50', 
@@ -332,98 +340,182 @@ ENTRADA HASTA LAS 00:00. RESERVAS DISPONIBLES HASTA COMPLETAR AFORO.`;
           </div>
         </form>
 
-        <div className="space-y-4">
-          <h2 className="text-2xl kalian-poster-text text-kalian-gold/80 uppercase mb-6 ml-4 tracking-widest">Eventos Programados</h2>
-          {eventos.map(ev => (
-            <div key={ev.id} className="bg-black/40 p-8 rounded-[2rem] flex flex-col md:flex-row justify-between items-center gap-6 shadow-sm border border-kalian-gold/10 group hover:border-kalian-gold/40 transition-all overflow-hidden">
-              <div className="flex flex-col md:flex-row items-center gap-6 text-center md:text-left">
-                {ev.imagenUrl && (
-                  <div className="w-24 h-24 rounded-2xl overflow-hidden border border-kalian-gold/10 flex-shrink-0">
-                    <img src={ev.imagenUrl} alt={ev.titulo} className="w-full h-full object-cover" />
+        <div className="space-y-12">
+          {/* EVENTOS PROGRAMADOS */}
+          <div className="space-y-4">
+            <h2 className="text-2xl kalian-poster-text text-kalian-gold/80 uppercase mb-6 ml-4 tracking-widest">Eventos Programados</h2>
+            {eventos.filter(ev => new Date(ev.fecha) >= new Date()).length === 0 ? (
+              <p className="text-center py-10 text-kalian-gold/20 font-black uppercase tracking-widest italic">No hay eventos programados</p>
+            ) : (
+              eventos
+                .filter(ev => new Date(ev.fecha) >= new Date())
+                .map(ev => (
+                  <div key={ev.id} className="bg-black/40 p-8 rounded-[2rem] flex flex-col md:flex-row justify-between items-center gap-6 shadow-sm border border-kalian-gold/10 group hover:border-kalian-gold/40 transition-all overflow-hidden">
+                    <div className="flex flex-col md:flex-row items-center gap-6 text-center md:text-left">
+                      {ev.imagenUrl && (
+                        <div className="w-24 h-24 rounded-2xl overflow-hidden border border-kalian-gold/10 flex-shrink-0">
+                          <img src={ev.imagenUrl} alt={ev.titulo} className="w-full h-full object-cover" />
+                        </div>
+                      )}
+                      <div>
+                        <h3 className="text-3xl kalian-poster-text text-kalian-cream group-hover:text-kalian-gold transition-colors uppercase italic">{ev.titulo}</h3>
+                        <p className="text-[10px] text-kalian-gold/80 font-black uppercase tracking-[0.3em] mt-2">
+                          {new Date(ev.fecha).toLocaleString('es-ES', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })} | {ev.categoria.toUpperCase()} | {ev.precio_estandar}€ {ev.tiene_descuento ? `(Soci@s: ${ev.precio_descuento}€)` : '(Sin dto)'} | RESERVADO: {ev.aforo_reservado || 0}/{ev.aforo_maximo} | CHECK-IN: {ev.aforo_actual || 0} | MÁX ACOMP: {ev.max_acompanantes || 4} | {ev.es_publico !== false ? '🟢 PÚBLICO' : '🔴 PRIVADO'}
+                        </p>
+                      </div>
+                    </div>
+                    <div className="flex flex-wrap gap-2">
+                      <button 
+                        onClick={() => {
+                          setEditando(ev.id);
+                          setForm({
+                            titulo: ev.titulo || '',
+                            fecha: ev.fecha || '',
+                            hora_fin: ev.hora_fin || '',
+                            precio_estandar: ev.precio_estandar?.toString() || '',
+                            categoria: ev.categoria || 'musica',
+                            aforo_maximo: ev.aforo_maximo?.toString() || '50',
+                            aforo_reservado: ev.aforo_reservado || 0,
+                            aforo_actual: ev.aforo_actual || 0,
+                            tiene_descuento: ev.tiene_descuento || false,
+                            precio_descuento: ev.precio_descuento?.toString() || '',
+                            clave_descuento: ev.clave_descuento || '',
+                            precio_clave: ev.precio_clave?.toString() || '',
+                            apertura_socios: ev.apertura_socios || '',
+                            apertura_general: ev.apertura_general || '',
+                            imagenUrl: ev.imagenUrl || '',
+                            reglas: ev.reglas || defaultReglas,
+                            descripcion: ev.descripcion || '',
+                            max_acompanantes: ev.max_acompanantes?.toString() || '4',
+                            es_publico: ev.es_publico !== false
+                          });
+                          window.scrollTo({ top: 0, behavior: 'smooth' });
+                        }}
+                        className="bg-kalian-gold/10 text-kalian-gold hover:bg-kalian-gold hover:text-black px-6 py-3 rounded-xl font-black text-[10px] uppercase tracking-widest transition-all"
+                      >
+                        EDITAR
+                      </button>
+                      <button 
+                        onClick={() => {
+                          setEditando(null);
+                          setForm({
+                            titulo: `${ev.titulo} (COPIA)`,
+                            fecha: ev.fecha || '',
+                            hora_fin: ev.hora_fin || '',
+                            precio_estandar: ev.precio_estandar?.toString() || '',
+                            categoria: ev.categoria || 'musica',
+                            aforo_maximo: ev.aforo_maximo?.toString() || '50',
+                            aforo_reservado: 0,
+                            aforo_actual: 0,
+                            tiene_descuento: ev.tiene_descuento || false,
+                            precio_descuento: ev.precio_descuento?.toString() || '',
+                            clave_descuento: ev.clave_descuento || '',
+                            precio_clave: ev.precio_clave?.toString() || '',
+                            apertura_socios: ev.apertura_socios || '',
+                            apertura_general: ev.apertura_general || '',
+                            imagenUrl: ev.imagenUrl || '',
+                            reglas: ev.reglas || defaultReglas,
+                            descripcion: ev.descripcion || '',
+                            max_acompanantes: ev.max_acompanantes?.toString() || '4',
+                            es_publico: ev.es_publico !== false
+                          });
+                          window.scrollTo({ top: 0, behavior: 'smooth' });
+                          setMsg("📋 Datos copiados. Ajusta la fecha y guarda para duplicar.");
+                          setTimeout(() => setMsg(''), 3000);
+                        }}
+                        className="bg-blue-500/10 text-blue-500 hover:bg-blue-500 hover:text-white px-6 py-3 rounded-xl font-black text-[10px] uppercase tracking-widest transition-all"
+                      >
+                        DUPLICAR
+                      </button>
+                      <button 
+                        onClick={async () => { 
+                          if (window.confirm("¿Seguro que quieres borrar este evento?")) {
+                            await deleteDoc(doc(db, "eventos", ev.id)); 
+                            fetchEventos(); 
+                          }
+                        }} 
+                        className="bg-red-500/10 text-red-500 hover:bg-red-500 hover:text-white px-6 py-3 rounded-xl font-black text-[10px] uppercase tracking-widest transition-all"
+                      >
+                        BORRAR
+                      </button>
+                    </div>
                   </div>
-                )}
-                <div>
-                  <h3 className="text-3xl kalian-poster-text text-kalian-cream group-hover:text-kalian-gold transition-colors uppercase italic">{ev.titulo}</h3>
-                  <p className="text-[10px] text-kalian-gold/80 font-black uppercase tracking-[0.3em] mt-2">
-                    {new Date(ev.fecha).toLocaleString('es-ES', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })} | {ev.categoria.toUpperCase()} | {ev.precio_estandar}€/mes {ev.tiene_descuento ? `(Soci@s: ${ev.precio_descuento}€/mes)` : '(Sin dto)'} | RESERVADO: {ev.aforo_reservado || 0}/{ev.aforo_maximo} | CHECK-IN: {ev.aforo_actual || 0} | MÁX ACOMP: {ev.max_acompanantes || 4} | {ev.es_publico !== false ? '🟢 PÚBLICO' : '🔴 PRIVADO'}
-                  </p>
-                </div>
-              </div>
-              <div className="flex flex-wrap gap-2">
-                <button 
-                  onClick={() => {
-                    setEditando(ev.id);
-                    setForm({
-                      titulo: ev.titulo || '',
-                      fecha: ev.fecha || '',
-                      precio_estandar: ev.precio_estandar?.toString() || '',
-                      categoria: ev.categoria || 'musica',
-                      aforo_maximo: ev.aforo_maximo?.toString() || '50',
-                      aforo_reservado: ev.aforo_reservado || 0,
-                      aforo_actual: ev.aforo_actual || 0,
-                      tiene_descuento: ev.tiene_descuento || false,
-                      precio_descuento: ev.precio_descuento?.toString() || '',
-                      clave_descuento: ev.clave_descuento || '',
-                      precio_clave: ev.precio_clave?.toString() || '',
-                      apertura_socios: ev.apertura_socios || '',
-                      apertura_general: ev.apertura_general || '',
-                      imagenUrl: ev.imagenUrl || '',
-                      reglas: ev.reglas || defaultReglas,
-                      descripcion: ev.descripcion || '',
-                      max_acompanantes: ev.max_acompanantes?.toString() || '4',
-                      es_publico: ev.es_publico !== false
-                    });
-                    window.scrollTo({ top: 0, behavior: 'smooth' });
-                  }}
-                  className="bg-kalian-gold/10 text-kalian-gold hover:bg-kalian-gold hover:text-black px-6 py-3 rounded-xl font-black text-[10px] uppercase tracking-widest transition-all"
-                >
-                  EDITAR
-                </button>
-                <button 
-                  onClick={() => {
-                    setEditando(null);
-                    setForm({
-                      titulo: `${ev.titulo} (COPIA)`,
-                      fecha: ev.fecha || '',
-                      precio_estandar: ev.precio_estandar?.toString() || '',
-                      categoria: ev.categoria || 'musica',
-                      aforo_maximo: ev.aforo_maximo?.toString() || '50',
-                      aforo_reservado: 0,
-                      aforo_actual: 0,
-                      tiene_descuento: ev.tiene_descuento || false,
-                      precio_descuento: ev.precio_descuento?.toString() || '',
-                      clave_descuento: ev.clave_descuento || '',
-                      precio_clave: ev.precio_clave?.toString() || '',
-                      apertura_socios: ev.apertura_socios || '',
-                      apertura_general: ev.apertura_general || '',
-                      imagenUrl: ev.imagenUrl || '',
-                      reglas: ev.reglas || defaultReglas,
-                      descripcion: ev.descripcion || '',
-                      max_acompanantes: ev.max_acompanantes?.toString() || '4',
-                      es_publico: ev.es_publico !== false
-                    });
-                    window.scrollTo({ top: 0, behavior: 'smooth' });
-                    setMsg("📋 Datos copiados. Ajusta la fecha y guarda para duplicar.");
-                    setTimeout(() => setMsg(''), 3000);
-                  }}
-                  className="bg-blue-500/10 text-blue-500 hover:bg-blue-500 hover:text-white px-6 py-3 rounded-xl font-black text-[10px] uppercase tracking-widest transition-all"
-                >
-                  DUPLICAR
-                </button>
-                <button 
-                  onClick={async () => { 
-                    if (window.confirm("¿Seguro que quieres borrar este evento?")) {
-                      await deleteDoc(doc(db, "eventos", ev.id)); 
-                      fetchEventos(); 
-                    }
-                  }} 
-                  className="bg-red-500/10 text-red-500 hover:bg-red-500 hover:text-white px-6 py-3 rounded-xl font-black text-[10px] uppercase tracking-widest transition-all"
-                >
-                  BORRAR
-                </button>
-              </div>
-            </div>
-          ))}
+                ))
+            )}
+          </div>
+
+          {/* HISTÓRICO DE EVENTOS */}
+          <div className="space-y-4 pt-12 border-t border-kalian-gold/10">
+            <h2 className="text-2xl kalian-poster-text text-kalian-gold/40 uppercase mb-6 ml-4 tracking-widest italic">Histórico de Eventos</h2>
+            {eventos.filter(ev => new Date(ev.fecha) < new Date()).length === 0 ? (
+              <p className="text-center py-10 text-kalian-gold/10 font-black uppercase tracking-widest italic">No hay eventos pasados</p>
+            ) : (
+              eventos
+                .filter(ev => new Date(ev.fecha) < new Date())
+                .sort((a, b) => new Date(b.fecha).getTime() - new Date(a.fecha).getTime())
+                .map(ev => (
+                  <div key={ev.id} className="bg-black/20 p-6 rounded-[2rem] flex flex-col md:flex-row justify-between items-center gap-6 shadow-sm border border-kalian-gold/5 opacity-60 hover:opacity-100 transition-all">
+                    <div className="flex flex-col md:flex-row items-center gap-6 text-center md:text-left">
+                      {ev.imagenUrl && (
+                        <div className="w-16 h-16 rounded-xl overflow-hidden border border-kalian-gold/5 grayscale">
+                          <img src={ev.imagenUrl} alt={ev.titulo} className="w-full h-full object-cover" />
+                        </div>
+                      )}
+                      <div>
+                        <h3 className="text-xl kalian-poster-text text-kalian-cream/60 uppercase italic">{ev.titulo}</h3>
+                        <p className="text-[8px] text-kalian-gold/40 font-black uppercase tracking-[0.3em] mt-1">
+                          {new Date(ev.fecha).toLocaleString('es-ES', { day: 'numeric', month: 'short', year: 'numeric' })} | {ev.categoria.toUpperCase()} | {ev.precio_estandar}€ | ASISTENCIA: {ev.aforo_actual || 0}/{ev.aforo_maximo}
+                        </p>
+                      </div>
+                    </div>
+                    <div className="flex gap-2">
+                      <button 
+                        onClick={() => {
+                          setEditando(null);
+                          setForm({
+                            titulo: `${ev.titulo} (REPETIR)`,
+                            fecha: '',
+                            hora_fin: '',
+                            precio_estandar: ev.precio_estandar?.toString() || '',
+                            categoria: ev.categoria || 'musica',
+                            aforo_maximo: ev.aforo_maximo?.toString() || '50',
+                            aforo_reservado: 0,
+                            aforo_actual: 0,
+                            tiene_descuento: ev.tiene_descuento || false,
+                            precio_descuento: ev.precio_descuento?.toString() || '',
+                            clave_descuento: ev.clave_descuento || '',
+                            precio_clave: ev.precio_clave?.toString() || '',
+                            apertura_socios: '',
+                            apertura_general: '',
+                            imagenUrl: ev.imagenUrl || '',
+                            reglas: ev.reglas || defaultReglas,
+                            descripcion: ev.descripcion || '',
+                            max_acompanantes: ev.max_acompanantes?.toString() || '4',
+                            es_publico: ev.es_publico !== false
+                          });
+                          window.scrollTo({ top: 0, behavior: 'smooth' });
+                          setMsg("📋 Datos recuperados del histórico. Pon una nueva fecha.");
+                        }}
+                        className="bg-kalian-gold/5 text-kalian-gold/40 hover:text-kalian-gold px-4 py-2 rounded-lg font-black text-[8px] uppercase tracking-widest transition-all"
+                      >
+                        REPETIR
+                      </button>
+                      <button 
+                        onClick={async () => { 
+                          if (window.confirm("¿Seguro que quieres borrar este evento del histórico?")) {
+                            await deleteDoc(doc(db, "eventos", ev.id)); 
+                            fetchEventos(); 
+                          }
+                        }} 
+                        className="bg-red-500/5 text-red-500/40 hover:text-red-500 px-4 py-2 rounded-lg font-black text-[8px] uppercase tracking-widest transition-all"
+                      >
+                        BORRAR
+                      </button>
+                    </div>
+                  </div>
+                ))
+            )}
+          </div>
         </div>
       </div>
     </div>

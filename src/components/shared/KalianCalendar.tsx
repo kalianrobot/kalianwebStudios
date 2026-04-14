@@ -78,10 +78,14 @@ const KalianCalendar: React.FC<KalianCalendarProps> = ({ teacherMode = false }) 
         snapE.docs.forEach(doc => {
           const data = doc.data();
           const isEditable = userRole === 'admin';
+          const start = data.fecha;
+          const end = data.hora_fin ? `${data.fecha.substring(0, 11)}${data.hora_fin}` : undefined;
+
           allEvents.push({
             id: doc.id,
             title: `[EVENTO] ${data.titulo}`,
-            start: data.fecha,
+            start,
+            end,
             backgroundColor: data.es_publico !== false ? '#10b981' : '#f59e0b',
             borderColor: 'transparent',
             textColor: '#ffffff',
@@ -89,7 +93,9 @@ const KalianCalendar: React.FC<KalianCalendarProps> = ({ teacherMode = false }) 
             extendedProps: { 
               type: 'evento', 
               data,
-              path: doc.ref.path 
+              path: doc.ref.path,
+              hora_inicio: start.split('T')[1]?.substring(0, 5) || "00:00",
+              hora_fin: data.hora_fin || "23:59"
             }
           });
         });
@@ -142,14 +148,20 @@ const KalianCalendar: React.FC<KalianCalendarProps> = ({ teacherMode = false }) 
   // 3. LÓGICA DE COLISIÓN CORREGIDA
   const checkConflictos = useCallback(async (newStart: string, newEnd: string, sala: string, excludeId: string, fecha: string) => {
     // Obtenemos todas las sesiones y eventos para ese día
-    const qE = query(collection(db, "eventos"), where("fecha", "==", fecha));
+    // Para eventos, como la fecha incluye hora, traemos los del día
+    const qE = query(collection(db, "eventos"), where("fecha", ">=", fecha), where("fecha", "<=", fecha + "T23:59"));
     const qS = query(collectionGroup(db, "sesiones"), where("fecha", "==", fecha));
     
     const [snapE, snapS] = await Promise.all([getDocs(qE), getDocs(qS)]);
     
-    // Los eventos suelen ocupar todo el día o no tienen hora_fin clara en este esquema, 
-    // pero si tienen hora, se validan. Si no, bloquean el día.
-    const conflictoEvento = snapE.docs.some(doc => doc.id !== excludeId);
+    const conflictoEvento = snapE.docs.some(doc => {
+      if (doc.id === excludeId) return false;
+      const ev = doc.data();
+      const evStart = ev.fecha.split('T')[1]?.substring(0, 5) || "00:00";
+      const evEnd = ev.hora_fin || "23:59";
+      // Los eventos bloquean la sala si hay solape
+      return (newStart < evEnd) && (newEnd > evStart);
+    });
     
     const conflictoSesion = snapS.docs.some(doc => {
       if (doc.id === excludeId) return false;

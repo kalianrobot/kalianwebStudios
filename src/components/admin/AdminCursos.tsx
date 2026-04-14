@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { db } from '../../firebase';
 import { collection, setDoc, doc, getDocs, deleteDoc, query, orderBy, DocumentData, updateDoc, getDoc, arrayUnion, increment, where, writeBatch, arrayRemove, collectionGroup } from 'firebase/firestore';
 import { Link, useSearchParams } from 'react-router-dom';
+import { Trash2 } from 'lucide-react';
 
 import { createSocioAuth } from '../../lib/adminAuth';
 import { sendWelcomeEmail, sendMembershipUpdateEmail } from '../../lib/brevoService';
@@ -116,16 +117,18 @@ const AdminCursos = () => {
       const sesionesExistentes = snapS.docs.map(d => ({ ...d.data(), cursoId: d.ref.parent.parent?.id }));
 
       for (const f of fechasAComprobar) {
-        const hasEvento = eventosExistentes.some(ev => ev.fecha.startsWith(f));
+        const hasEvento = eventosExistentes.some(ev => {
+          if (!ev.fecha.startsWith(f)) return false;
+          const evStart = ev.fecha.split('T')[1]?.substring(0, 5) || "00:00";
+          const evEnd = ev.hora_fin || "23:59";
+          return (form.horaInicio < evEnd) && (form.horaFin > evStart);
+        });
+
         const hasSesion = sesionesExistentes.some((s: any) => 
           s.fecha === f && 
           s.sala === form.sala && 
           s.cursoId !== editando &&
-          (
-            (form.horaInicio >= s.hora_inicio && form.horaInicio < s.hora_fin) ||
-            (form.horaFin > s.hora_inicio && form.horaFin <= s.hora_fin) ||
-            (s.hora_inicio >= form.horaInicio && s.hora_inicio < form.horaFin)
-          )
+          (form.horaInicio < s.hora_fin) && (form.horaFin > s.hora_inicio)
         );
 
         if (hasEvento || hasSesion) {
@@ -195,14 +198,17 @@ const AdminCursos = () => {
       const sesionesExistentes = snapS.docs.map(d => ({ ...d.data(), cursoId: d.ref.parent.parent?.id }));
 
       for (const f of fechasAComprobar) {
-        const hasEvento = eventosExistentes.some(ev => ev.fecha.startsWith(f));
+        const hasEvento = eventosExistentes.some(ev => {
+          if (!ev.fecha.startsWith(f)) return false;
+          const evStart = ev.fecha.split('T')[1]?.substring(0, 5) || "00:00";
+          const evEnd = ev.hora_fin || "23:59";
+          return (nuevaSesion.hora_inicio < evEnd) && (nuevaSesion.hora_fin > evStart);
+        });
+        
         const hasSesion = sesionesExistentes.some((s: any) => 
           s.fecha === f && 
           s.sala === nuevaSesion.sala && 
-          (
-            (nuevaSesion.hora_inicio >= s.hora_inicio && nuevaSesion.hora_inicio < s.hora_fin) ||
-            (nuevaSesion.hora_fin > s.hora_inicio && nuevaSesion.hora_fin <= s.hora_fin)
-          )
+          (nuevaSesion.hora_inicio < s.hora_fin) && (nuevaSesion.hora_fin > s.hora_inicio)
         );
 
         if (hasEvento || hasSesion) {
@@ -239,6 +245,27 @@ const AdminCursos = () => {
     if (window.confirm("¿Eliminar esta sesión?")) {
       await deleteDoc(doc(db, "cursos", gestionandoSesiones, "sesiones", sesionId));
       fetchSesiones(gestionandoSesiones);
+    }
+  };
+
+  const eliminarTodasLasSesiones = async () => {
+    if (!gestionandoSesiones) return;
+    if (window.confirm("⚠️ ¿ESTÁS SEGURO? Se eliminarán TODAS las sesiones de este curso. Esta acción no se puede deshacer.")) {
+      try {
+        const q = query(collection(db, "cursos", gestionandoSesiones, "sesiones"));
+        const snap = await getDocs(q);
+        if (snap.empty) return;
+
+        const batch = writeBatch(db);
+        snap.docs.forEach(d => batch.delete(d.ref));
+        await batch.commit();
+        
+        fetchSesiones(gestionandoSesiones);
+        alert("✅ Todas las sesiones han sido eliminadas.");
+      } catch (err) {
+        console.error(err);
+        alert("Error al eliminar las sesiones.");
+      }
     }
   };
 
@@ -357,15 +384,19 @@ const AdminCursos = () => {
 
           while (current <= end) {
             const dateStr = current.toISOString().split('T')[0];
-            const sesionId = `${dateStr}_${form.horaInicio.replace(':', '')}`;
-            const sesionRef = doc(db, "cursos", finalId!, "sesiones", sesionId);
-            batch.set(sesionRef, {
-              fecha: dateStr,
-              hora_inicio: form.horaInicio,
-              hora_fin: form.horaFin,
-              sala: form.sala,
-              esRecurrente: true
-            });
+            // Validación estricta de rango de fechas
+            if (dateStr >= form.fechaInicio && dateStr <= form.fechaFin) {
+              const sesionId = `${dateStr}_${form.horaInicio.replace(':', '')}`;
+              const sesionRef = doc(db, "cursos", finalId!, "sesiones", sesionId);
+              batch.set(sesionRef, {
+                fecha: dateStr,
+                hora_inicio: form.horaInicio,
+                hora_fin: form.horaFin,
+                sala: form.sala,
+                esRecurrente: true,
+                cursoId: finalId // Aseguramos que tenga el ID del curso
+              });
+            }
             current.setDate(current.getDate() + 7);
           }
         });
@@ -994,20 +1025,26 @@ const AdminCursos = () => {
                             const sociosQuery = query(collection(db, "socios"), where("cursos", "array-contains", c.id));
                             const sociosSnap = await getDocs(sociosQuery);
                             
+                            const batch = writeBatch(db);
+                            
                             if (!sociosSnap.empty) {
-                              const batch = writeBatch(db);
                               sociosSnap.docs.forEach(socioDoc => {
                                 batch.update(socioDoc.ref, {
                                   cursos: arrayRemove(c.id)
                                 });
                               });
-                              await batch.commit();
                             }
 
-                            // 2. Borrar el curso
-                            await deleteDoc(doc(db, "cursos", c.id)); 
+                            // 2. Borrar sesiones del curso
+                            const sesionesSnap = await getDocs(collection(db, "cursos", c.id, "sesiones"));
+                            sesionesSnap.docs.forEach(d => batch.delete(d.ref));
+
+                            // 3. Borrar el curso
+                            batch.delete(doc(db, "cursos", c.id)); 
+
+                            await batch.commit();
                             fetchCursos(); 
-                            setMsg("✅ Curso eliminado y socios actualizados");
+                            setMsg("✅ Curso y sus sesiones eliminados correctamente");
                             setTimeout(() => setMsg(''), 3000);
                           } catch (err) {
                             console.error(err);
@@ -1131,7 +1168,17 @@ const AdminCursos = () => {
 
                 {/* Listado de Sesiones */}
                 <div className="space-y-3">
-                  <h4 className="text-[10px] font-black uppercase text-slate-500 tracking-widest ml-2">Sesiones Programadas</h4>
+                  <div className="flex justify-between items-center px-2">
+                    <h4 className="text-[10px] font-black uppercase text-slate-500 tracking-widest">Sesiones Programadas</h4>
+                    {sesiones.length > 0 && (
+                      <button 
+                        onClick={eliminarTodasLasSesiones}
+                        className="flex items-center gap-1 text-[9px] font-black text-red-500 uppercase hover:bg-red-50 px-3 py-1 rounded-lg transition-all border border-red-100"
+                      >
+                        <Trash2 size={12} /> Eliminar todas las sesiones
+                      </button>
+                    )}
+                  </div>
                   {sesiones.length === 0 ? (
                     <p className="text-center py-8 text-slate-400 italic text-sm">No hay sesiones programadas aún.</p>
                   ) : (

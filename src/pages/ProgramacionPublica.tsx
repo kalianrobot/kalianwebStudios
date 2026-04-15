@@ -19,6 +19,7 @@ const ProgramacionPublica = () => {
   const [cursos, setCursos] = useState<DocumentData[]>([]);
   const [locales, setLocales] = useState<DocumentData[]>([]);
   const [academias, setAcademias] = useState<DocumentData[]>([]);
+  const [exposiciones, setExposiciones] = useState<DocumentData[]>([]);
   const [config, setConfig] = useState<any>(null);
   const [cursoDetalle, setCursoDetalle] = useState<any | null>(null);
   const [itemSeleccionado, setItemSeleccionado] = useState<any | null>(null);
@@ -70,6 +71,12 @@ const ProgramacionPublica = () => {
       setAcademias(snap.docs.map(d => ({ id: d.id, ...d.data() } as any)).filter(a => a.activo));
     });
 
+    // Listen to exhibitions
+    const qExpo = query(collection(db, "exposiciones"), orderBy("fechaInicio", "desc"));
+    const unsubExpo = onSnapshot(qExpo, (snap) => {
+      setExposiciones(snap.docs.map(d => ({ id: d.id, ...d.data() })));
+    });
+
     // Fetch static data
     const fetchStatic = async () => {
       const qL = collection(db, "locales");
@@ -86,6 +93,7 @@ const ProgramacionPublica = () => {
       unsubE();
       unsubC();
       unsubA();
+      unsubExpo();
     };
   }, []);
 
@@ -133,6 +141,10 @@ const ProgramacionPublica = () => {
   };
 
   const hayLocalesLibres = locales.some(l => l.estado === 'libre');
+
+  const hoy = new Date().toISOString().split('T')[0];
+  const expoActual = exposiciones.find(e => e.fechaInicio <= hoy && (e.fechaFin ? e.fechaFin >= hoy : true));
+  const exposProximas = exposiciones.filter(e => e.fechaInicio > hoy).sort((a, b) => a.fechaInicio.localeCompare(b.fechaInicio));
 
   const esReservaAbierta = (ev: any) => {
     const hoy = new Date();
@@ -360,32 +372,85 @@ const ProgramacionPublica = () => {
         <section className="space-y-12">
           <SectionTitle title="KALIAN" subtitle="GALLERY" color={config?.titleColor} />
           
-          <motion.div 
-            whileHover={{ scale: 1.01 }}
-            className="bg-kalian-gold/5 border border-kalian-gold/10 border-dashed rounded-[3rem] p-16 text-center space-y-8 shadow-lg relative overflow-hidden group"
-          >
-            <div className="absolute inset-0 bg-kalian-gold/5 opacity-0 group-hover:opacity-100 transition-opacity duration-700"></div>
-            <div className="relative z-10">
-              <div className="mb-6 group-hover:scale-110 transition-transform duration-500">
-                {config?.galleryImageUrl ? (
-                  <img src={config.galleryImageUrl} alt="Gallery" className="w-32 h-32 mx-auto object-cover rounded-2xl shadow-2xl border border-kalian-gold/20" />
-                ) : (
-                  <div className="text-6xl opacity-40">🖼️</div>
-                )}
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+            {/* EXPOSICIÓN ACTUAL (DESTACADA) */}
+            <motion.div 
+              whileHover={{ scale: 1.01 }}
+              className="lg:col-span-2 bg-black/40 border border-kalian-gold/20 rounded-[3rem] overflow-hidden group relative shadow-2xl min-h-[400px]"
+            >
+              {expoActual ? (
+                <Link to="/galeria" className="block h-full">
+                  <div className="absolute inset-0">
+                    <img 
+                      src={expoActual.imagenUrl} 
+                      alt={expoActual.titulo} 
+                      className="w-full h-full object-cover opacity-40 group-hover:opacity-60 transition-all duration-700 group-hover:scale-105" 
+                      referrerPolicy="no-referrer"
+                    />
+                    <div className="absolute inset-0 bg-gradient-to-t from-black via-black/40 to-transparent"></div>
+                  </div>
+                  <div className="relative z-10 p-12 h-full flex flex-col justify-end space-y-4">
+                    <span className="text-[10px] font-black text-kalian-gold uppercase tracking-[0.6em] animate-pulse">EXPOSICIÓN ACTUAL</span>
+                    <h3 className="text-5xl md:text-7xl kalian-poster-text text-kalian-gold uppercase italic leading-none tracking-tighter">{expoActual.titulo}</h3>
+                    <p className="text-xl font-black text-kalian-cream/80 uppercase tracking-widest italic">Autor/a: {expoActual.autor}</p>
+                    <div className="pt-6">
+                      <span className="inline-block bg-kalian-gold text-black px-8 py-3 rounded-xl kalian-poster-text text-sm tracking-widest hover:bg-white transition-all">
+                        VER EXPOSICIÓN →
+                      </span>
+                    </div>
+                  </div>
+                </Link>
+              ) : (
+                <div className="h-full flex flex-col items-center justify-center p-20 text-center space-y-6">
+                  <div className="text-6xl opacity-20">🖼️</div>
+                  <h3 className="text-3xl kalian-poster-text text-kalian-gold/40 uppercase italic">Próximamente nueva exposición</h3>
+                  <Link to="/galeria" className="text-kalian-gold font-black uppercase text-[10px] tracking-[0.4em] hover:text-white transition-colors">EXPLORAR ARCHIVO →</Link>
+                </div>
+              )}
+            </motion.div>
+
+            {/* PRÓXIMAS EXPOSICIONES (LISTA) */}
+            <div className="space-y-6">
+              <div className="flex items-center justify-between px-4">
+                <h4 className="text-[10px] font-black text-kalian-gold uppercase tracking-[0.4em]">Próximamente</h4>
+                <Link to="/galeria" className="text-[8px] font-black text-kalian-cream/40 uppercase tracking-widest hover:text-kalian-gold transition-colors">Ver todas</Link>
               </div>
-              <h3 className="text-4xl kalian-poster-text text-kalian-gold uppercase italic mb-4">Explora nuestras exposiciones</h3>
-              <p className="text-kalian-cream/60 text-sm max-w-lg mx-auto leading-relaxed mb-10">
-                Descubre las obras de artistas locales y residentes en nuestro espacio expositivo. 
-                Desde fotografía hasta arte digital, la galería de Kalian es un lienzo vivo.
-              </p>
-              <Link 
-                to="/galeria"
-                className="inline-block bg-kalian-gold text-black px-12 py-5 rounded-2xl kalian-poster-text text-xl tracking-[0.1em] hover:bg-white transition-all shadow-xl shadow-kalian-gold/20"
-              >
-                VER GALERÍA COMPLETA →
-              </Link>
+              
+              <div className="space-y-4">
+                {exposProximas.length > 0 ? (
+                  exposProximas.slice(0, 3).map(expo => (
+                    <motion.div 
+                      key={expo.id}
+                      whileHover={{ x: 10 }}
+                      className="bg-kalian-gold/5 border border-kalian-gold/10 rounded-3xl p-6 flex items-center gap-6 group cursor-pointer"
+                    >
+                      <div className="w-16 h-20 flex-shrink-0 rounded-xl overflow-hidden border border-kalian-gold/20">
+                        <img src={expo.imagenUrl} alt={expo.titulo} className="w-full h-full object-cover" referrerPolicy="no-referrer" />
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <p className="text-[8px] font-black text-kalian-gold/60 uppercase tracking-widest mb-1">
+                          {new Date(expo.fechaInicio).toLocaleDateString('es-ES', { day: 'numeric', month: 'short' })}
+                        </p>
+                        <h5 className="text-lg kalian-poster-text text-kalian-cream uppercase italic truncate">{expo.titulo}</h5>
+                        <p className="text-[9px] font-black text-kalian-cream/40 uppercase tracking-widest truncate">{expo.autor}</p>
+                      </div>
+                    </motion.div>
+                  ))
+                ) : (
+                  <div className="bg-kalian-gold/5 border border-kalian-gold/10 border-dashed rounded-3xl p-10 text-center">
+                    <p className="text-[9px] font-black text-kalian-gold/20 uppercase tracking-widest">No hay exposiciones programadas</p>
+                  </div>
+                )}
+                
+                <Link 
+                  to="/galeria"
+                  className="block w-full py-5 bg-kalian-gold/10 border border-kalian-gold/20 rounded-2xl text-center kalian-poster-text text-kalian-gold text-sm tracking-widest hover:bg-kalian-gold hover:text-black transition-all"
+                >
+                  VER GALERÍA COMPLETA
+                </Link>
+              </div>
             </div>
-          </motion.div>
+          </div>
         </section>
 
         {/* KALIAN HUB */}

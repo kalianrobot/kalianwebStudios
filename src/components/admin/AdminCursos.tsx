@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { db } from '../../firebase';
-import { collection, setDoc, doc, getDocs, deleteDoc, query, orderBy, DocumentData, updateDoc, getDoc, arrayUnion, increment, where, writeBatch, arrayRemove, collectionGroup } from 'firebase/firestore';
+import { collection, setDoc, doc, getDocs, deleteDoc, query, orderBy, DocumentData, updateDoc, getDoc, arrayUnion, increment, where, writeBatch, arrayRemove, collectionGroup, serverTimestamp } from 'firebase/firestore';
 import { Link, useSearchParams } from 'react-router-dom';
 import { Trash2 } from 'lucide-react';
 
@@ -36,7 +36,7 @@ const AdminCursos = () => {
     programacionAutomatica: false
   });
 
-  const [conflictosRealTime, setConflictosRealTime] = useState<string[]>([]);
+  const [conflictosRealTime, setConflictosRealTime] = useState<{fecha: string, motivo: string}[]>([]);
   const [isCheckingConflictos, setIsCheckingConflictos] = useState(false);
 
   const getVentajasText = (cat: string) => {
@@ -49,13 +49,14 @@ const AdminCursos = () => {
   const [gestionandoSesiones, setGestionandoSesiones] = useState<string | null>(null);
   const [sesiones, setSesiones] = useState<DocumentData[]>([]);
   const [nuevaSesion, setNuevaSesion] = useState({ fecha: '', hora_inicio: '', hora_fin: '', sala: 'Sala Grande', esRecurrente: false });
-  const [conflictos, setConflictos] = useState<string[]>([]);
+  const [conflictos, setConflictos] = useState<{fecha: string, motivo: string}[]>([]);
   const [solicitudes, setSolicitudes] = useState<DocumentData[]>([]);
   const [manualAlumno, setManualAlumno] = useState({ dni: '', nombre: '', email: '' });
   const [tabActiva, setTabActiva] = useState<'activos' | 'proximos' | 'historico'>('activos');
 
   const fetchCursos = async () => {
-    const snap = await getDocs(query(collection(db, "cursos"), orderBy("categoria", "asc")));
+    const q = query(collection(db, "cursos"), where("deletedAt", "==", null), orderBy("categoria", "asc"));
+    const snap = await getDocs(q);
     setCursos(snap.docs.map(d => ({ id: d.id, ...d.data() })));
 
     // Fetch academias for categories
@@ -96,11 +97,14 @@ const AdminCursos = () => {
     if (!form.diasSemana.length || !form.horaInicio || !form.horaFin || !form.fechaInicio || !form.fechaFin) return;
     
     setIsCheckingConflictos(true);
-    const conflicts: string[] = [];
+    const conflicts: {fecha: string, motivo: string}[] = [];
     
     try {
       const fechasAComprobar: string[] = [];
       const end = new Date(form.fechaFin);
+
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
 
       form.diasSemana.forEach(targetDay => {
         let current = new Date(form.fechaInicio);
@@ -111,7 +115,10 @@ const AdminCursos = () => {
         }
 
         while (current <= end) {
-          fechasAComprobar.push(current.toISOString().split('T')[0]);
+          // Solo comprobar si la fecha es hoy o en el futuro
+          if (current >= today) {
+            fechasAComprobar.push(current.toISOString().split('T')[0]);
+          }
           current.setDate(current.getDate() + 7);
         }
       });
@@ -124,29 +131,53 @@ const AdminCursos = () => {
 
       // 1. Comprobar contra Eventos
       const snapE = await getDocs(query(collection(db, "eventos"), where("fecha", ">=", fechasAComprobar[0])));
-      const eventosExistentes = snapE.docs.map(d => d.data());
+      const eventosExistentes = snapE.docs.map(d => ({ id: d.id, ...d.data() } as any));
       
       // 2. Comprobar contra todas las Sesiones
       const snapS = await getDocs(collectionGroup(db, "sesiones"));
-      const sesionesExistentes = snapS.docs.map(d => ({ ...d.data(), cursoId: d.ref.parent.parent?.id }));
+      
+      // Fetch all courses to get their titles for the conflict message
+      const snapC = await getDocs(collection(db, "cursos"));
+      const cursosMap: Record<string, string> = {};
+      snapC.docs.forEach(d => {
+        cursosMap[d.id] = d.data().titulo;
+      });
+
+      // Solo considerar sesiones de cursos que existen
+      const sesionesExistentes = snapS.docs
+        .map(d => ({ ...d.data(), cursoId: d.ref.parent.parent?.id }))
+        .filter(s => s.cursoId && cursosMap[s.cursoId]);
 
       for (const f of fechasAComprobar) {
-        const hasEvento = eventosExistentes.some(ev => {
-          if (!ev.fecha.startsWith(f)) return false;
-          const evStart = ev.fecha.split('T')[1]?.substring(0, 5) || "00:00";
-          const evEnd = ev.hora_fin || "23:59";
-          return (form.horaInicio < evEnd) && (form.horaFin > evStart);
+        const conflictingEvento = eventosExistentes.find(ev => {
+          // Si el evento tiene sala y no es "Toda la Sala", solo choca si es la misma sala
+          const compartenSala = !ev.sala || ev.sala === 'Toda la Sala' || ev.sala === form.sala;
+          if (!compartenSala) return false;
+
+          const startDateTime = new Date(`${f}T${form.horaInicio}`);
+          const endDateTime = new Date(`${f}T${form.horaFin}`);
+          
+          const evStart = new Date(ev.fecha);
+          const evEnd = new Date(ev.fecha_fin || `${ev.fecha.substring(0, 11)}${ev.hora_fin || '23:59'}`);
+
+          return (startDateTime < evEnd) && (endDateTime > evStart);
         });
 
-        const hasSesion = sesionesExistentes.some((s: any) => 
+        if (conflictingEvento) {
+          conflicts.push({ fecha: f, motivo: `Evento: ${conflictingEvento.titulo}${conflictingEvento.sala ? ` (${conflictingEvento.sala})` : ''}` });
+          continue;
+        }
+
+        const conflictingSesion = sesionesExistentes.find((s: any) => 
           s.fecha === f && 
           s.sala === form.sala && 
           s.cursoId !== editando &&
           (form.horaInicio < s.hora_fin) && (form.horaFin > s.hora_inicio)
         );
 
-        if (hasEvento || hasSesion) {
-          conflicts.push(f);
+        if (conflictingSesion) {
+          const cursoTitulo = cursosMap[conflictingSesion.cursoId] || "Otro Curso";
+          conflicts.push({ fecha: f, motivo: `Curso: ${cursoTitulo}` });
         }
       }
       setConflictosRealTime(conflicts);
@@ -201,32 +232,55 @@ const AdminCursos = () => {
       }
 
       // Validación de Conflictos
-      const conflicts: string[] = [];
+      const conflicts: {fecha: string, motivo: string}[] = [];
       
       // 1. Comprobar contra Eventos
       const snapE = await getDocs(query(collection(db, "eventos"), where("fecha", ">=", fechasAComprobar[0])));
-      const eventosExistentes = snapE.docs.map(d => d.data());
+      const eventosExistentes = snapE.docs.map(d => ({ id: d.id, ...d.data() } as any));
       
       // 2. Comprobar contra todas las Sesiones (collectionGroup)
       const snapS = await getDocs(collectionGroup(db, "sesiones"));
-      const sesionesExistentes = snapS.docs.map(d => ({ ...d.data(), cursoId: d.ref.parent.parent?.id }));
+
+      // Fetch all courses for titles
+      const snapC = await getDocs(collection(db, "cursos"));
+      const cursosMap: Record<string, string> = {};
+      snapC.docs.forEach(d => {
+        cursosMap[d.id] = d.data().titulo;
+      });
+
+      // Solo considerar sesiones de cursos que existen
+      const sesionesExistentes = snapS.docs
+        .map(d => ({ ...d.data(), cursoId: d.ref.parent.parent?.id }))
+        .filter(s => s.cursoId && cursosMap[s.cursoId]);
 
       for (const f of fechasAComprobar) {
-        const hasEvento = eventosExistentes.some(ev => {
-          if (!ev.fecha.startsWith(f)) return false;
-          const evStart = ev.fecha.split('T')[1]?.substring(0, 5) || "00:00";
-          const evEnd = ev.hora_fin || "23:59";
-          return (nuevaSesion.hora_inicio < evEnd) && (nuevaSesion.hora_fin > evStart);
+        const conflictingEvento = eventosExistentes.find(ev => {
+          const compartenSala = !ev.sala || ev.sala === 'Toda la Sala' || ev.sala === nuevaSesion.sala;
+          if (!compartenSala) return false;
+
+          const startDateTime = new Date(`${f}T${nuevaSesion.hora_inicio}`);
+          const endDateTime = new Date(`${f}T${nuevaSesion.hora_fin}`);
+          
+          const evStart = new Date(ev.fecha);
+          const evEnd = new Date(ev.fecha_fin || `${ev.fecha.substring(0, 11)}${ev.hora_fin || '23:59'}`);
+
+          return (startDateTime < evEnd) && (endDateTime > evStart);
         });
         
-        const hasSesion = sesionesExistentes.some((s: any) => 
+        if (conflictingEvento) {
+          conflicts.push({ fecha: f, motivo: `Evento: ${conflictingEvento.titulo}${conflictingEvento.sala ? ` (${conflictingEvento.sala})` : ''}` });
+          continue;
+        }
+
+        const conflictingSesion = sesionesExistentes.find((s: any) => 
           s.fecha === f && 
           s.sala === nuevaSesion.sala && 
           (nuevaSesion.hora_inicio < s.hora_fin) && (nuevaSesion.hora_fin > s.hora_inicio)
         );
 
-        if (hasEvento || hasSesion) {
-          conflicts.push(f);
+        if (conflictingSesion) {
+          const cursoTitulo = cursosMap[conflictingSesion.cursoId] || "Otro Curso";
+          conflicts.push({ fecha: f, motivo: `Curso: ${cursoTitulo}` });
         }
       }
 
@@ -279,6 +333,22 @@ const AdminCursos = () => {
       } catch (err) {
         console.error(err);
         alert("Error al eliminar las sesiones.");
+      }
+    }
+  };
+
+  const eliminarCurso = async (cursoId: string) => {
+    if (window.confirm("¿Seguro que quieres eliminar este curso? Se moverá a la papelera de reciclaje.")) {
+      try {
+        await updateDoc(doc(db, "cursos", cursoId), {
+          deletedAt: serverTimestamp()
+        });
+        setMsg("✅ Curso movido a la papelera");
+        setTimeout(() => setMsg(''), 3000);
+        fetchCursos();
+      } catch (err) {
+        console.error(err);
+        alert("Error al eliminar");
       }
     }
   };
@@ -392,6 +462,7 @@ const AdminCursos = () => {
         ventajas: getVentajasText(form.categoria),
         aforo_actual: editando ? (cursos.find(c => c.id === editando)?.aforo_actual || 0) : 0,
         alumnos: editando ? (cursos.find(c => c.id === editando)?.alumnos || []) : [],
+        deletedAt: null
       };
 
       const batch = writeBatch(db);
@@ -798,12 +869,14 @@ const AdminCursos = () => {
                     </p>
                   </div>
                   {conflictosRealTime.length > 0 && (
-                    <div className="flex flex-wrap gap-1">
-                      {conflictosRealTime.slice(0, 5).map(f => (
-                        <span key={f} className="text-[7px] bg-red-500/30 text-red-200 px-1.5 py-0.5 rounded font-mono">{f}</span>
-                      ))}
-                      {conflictosRealTime.length > 5 && <span className="text-[7px] text-red-300">+{conflictosRealTime.length - 5} más</span>}
-                    </div>
+                  <div className="flex flex-wrap gap-1">
+                    {conflictosRealTime.slice(0, 5).map((c, idx) => (
+                      <span key={idx} className="text-[7px] bg-red-500/30 text-red-200 px-1.5 py-0.5 rounded font-mono">
+                        {c.fecha} ({c.motivo})
+                      </span>
+                    ))}
+                    {conflictosRealTime.length > 5 && <span className="text-[7px] text-red-300">+{conflictosRealTime.length - 5} más</span>}
+                  </div>
                   )}
                 </div>
               )}
@@ -1084,40 +1157,7 @@ const AdminCursos = () => {
                           >📋 Duplicar</button>
                         </div>
                         <button 
-                          onClick={async () => { 
-                            if (window.confirm("¿Seguro que quieres eliminar este curso?")) {
-                              try {
-                                // 1. Limpiar referencias en socios
-                                const sociosQuery = query(collection(db, "socios"), where("cursos", "array-contains", c.id));
-                                const sociosSnap = await getDocs(sociosQuery);
-                                
-                                const batch = writeBatch(db);
-                                
-                                if (!sociosSnap.empty) {
-                                  sociosSnap.docs.forEach(socioDoc => {
-                                    batch.update(socioDoc.ref, {
-                                      cursos: arrayRemove(c.id)
-                                    });
-                                  });
-                                }
-
-                                // 2. Borrar sesiones del curso
-                                const sesionesSnap = await getDocs(collection(db, "cursos", c.id, "sesiones"));
-                                sesionesSnap.docs.forEach(d => batch.delete(d.ref));
-
-                                // 3. Borrar el curso
-                                batch.delete(doc(db, "cursos", c.id)); 
-
-                                await batch.commit();
-                                fetchCursos(); 
-                                setMsg("✅ Curso y sus sesiones eliminados correctamente");
-                                setTimeout(() => setMsg(''), 3000);
-                              } catch (err) {
-                                console.error(err);
-                                alert("Error al eliminar el curso");
-                              }
-                            }
-                          }} 
+                          onClick={() => eliminarCurso(c.id)} 
                           className="text-red-300 hover:text-red-500 font-bold text-[10px] uppercase"
                         >
                           Eliminar
@@ -1221,8 +1261,10 @@ const AdminCursos = () => {
                     <div className="bg-red-50 p-4 rounded-2xl border border-red-200">
                       <p className="text-[9px] font-black text-red-600 uppercase mb-2">⚠️ Conflictos detectados en:</p>
                       <div className="flex flex-wrap gap-2">
-                        {conflictos.map(f => (
-                          <span key={f} className="bg-red-100 text-red-700 px-2 py-1 rounded-lg text-[8px] font-mono">{f}</span>
+                        {conflictos.map((c, idx) => (
+                          <span key={idx} className="bg-red-100 text-red-700 px-2 py-1 rounded-lg text-[8px] font-mono">
+                            {c.fecha} ({c.motivo})
+                          </span>
                         ))}
                       </div>
                       <p className="text-[8px] text-red-400 mt-2 italic">No se puede crear la serie si hay choques de horario o sala.</p>

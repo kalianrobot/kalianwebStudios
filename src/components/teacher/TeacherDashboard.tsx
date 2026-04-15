@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { db, storage } from '../../firebase';
-import { collection, getDocs, updateDoc, doc, query, orderBy, DocumentData, where, setDoc, getDoc, getDocsFromServer, arrayUnion, arrayRemove, increment, writeBatch, collectionGroup, deleteDoc } from 'firebase/firestore';
+import { collection, getDocs, updateDoc, doc, query, orderBy, DocumentData, where, setDoc, getDoc, getDocsFromServer, arrayUnion, arrayRemove, increment, writeBatch, collectionGroup, deleteDoc, serverTimestamp } from 'firebase/firestore';
 import { ref, uploadBytes, getDownloadURL, deleteObject } from 'firebase/storage';
 import { useAuth } from '../../context/AuthContext';
 import { Link } from 'react-router-dom';
@@ -24,6 +24,8 @@ const TeacherDashboard = () => {
   const [nuevaSesion, setNuevaSesion] = useState({ fecha: '', hora_inicio: '', hora_fin: '', sala: 'Sala Grande', esRecurrente: false, diasSemana: [] as number[] });
   const [conflictos, setConflictos] = useState<string[]>([]);
   const [msg, setMsg] = useState('');
+  const [showConfirmModal, setShowConfirmModal] = useState(false);
+  const [confirmingPago, setConfirmingPago] = useState<{ socioId: string, nombre: string } | null>(null);
   const [notificaciones, setNotificaciones] = useState<DocumentData[]>([]);
   const [showNotifs, setShowNotifs] = useState(false);
   const { user, socioData, logoutTeacher } = useAuth();
@@ -141,41 +143,48 @@ const TeacherDashboard = () => {
     } catch (err) { console.error(err); }
   };
 
-  const togglePago = async (socioId: string, tipo: 'mensual' | 'inscripcion', valorActual: boolean, cursoId?: string) => {
+  const togglePago = async (socioId: string, tipo: 'mensual' | 'inscripcion', valorActual: boolean, cursoId?: string, nombreSocio?: string) => {
     try {
       const nuevoEstado = !valorActual;
       
       if (tipo === 'mensual') {
+        if (nuevoEstado) {
+          // Mostrar modal de confirmación antes de marcar como pagado
+          setConfirmingPago({ socioId, nombre: nombreSocio || 'Alumno' });
+          setShowConfirmModal(true);
+          return;
+        }
+
+        // Si es para desmarcar (solo si no está bloqueado, aunque el botón debería estar deshabilitado)
         const pagoId = `${anioActual}_${mesActual}_${socioId}`;
         const pagoRef = doc(db, "pagos_mensuales", pagoId);
         const snap = await getDoc(pagoRef);
         
         if (snap.exists()) {
-          await updateDoc(pagoRef, {
-            pagado: nuevoEstado,
-            actualizadoPor: user?.uid,
-            fechaActualizacion: new Date().toISOString()
-          });
-        } else {
-          await setDoc(pagoRef, {
-            socioId,
-            mes: mesActual,
-            anio: anioActual,
-            pagado: nuevoEstado,
-            actualizadoPor: user?.uid,
-            fechaActualizacion: new Date().toISOString()
-          });
-        }
+          if (snap.data().bloqueado && socioData?.role !== 'admin') {
+            alert("⚠️ Este pago está bloqueado. Solo un administrador puede revertirlo.");
+            return;
+          }
 
-        // Registrar en Finanzas si se marca como pagado
-        if (nuevoEstado) {
-          await registrarIngreso({
-            monto: 15, // Cuota estándar de socio
-            concepto: `Cuota Soci@ ${meses[mesActual-1]} ${anioActual}`,
-            categoria: 'Socio',
-            metodo: metodoPago,
-            socio_id: socioId
+          const batch = writeBatch(db);
+          
+          // 1. Actualizar estado de pago
+          batch.update(pagoRef, {
+            pagado: false,
+            bloqueado: false, // Desbloqueamos si se revierte
+            actualizadoPor: user?.uid,
+            fechaActualizacion: new Date().toISOString()
           });
+
+          // 2. Soft delete transacción de finanzas (ID determinista)
+          const finanzaId = `CUOTA_${anioActual}_${mesActual}_${socioId}`;
+          batch.update(doc(db, "finanzas", finanzaId), {
+            deletedAt: serverTimestamp()
+          });
+
+          await batch.commit();
+          setMsg("⚠️ Pago revertido (movido a papelera)");
+          setTimeout(() => setMsg(''), 3000);
         }
       } else if (tipo === 'inscripcion' && cursoId) {
         const pagoId = `${socioId}_${cursoId}`;
@@ -213,6 +222,45 @@ const TeacherDashboard = () => {
       }
       fetchPagos();
     } catch (err) { console.error(err); }
+  };
+
+  const ejecutarPagoConfirmado = async () => {
+    if (!confirmingPago) return;
+    const { socioId } = confirmingPago;
+    
+    try {
+      const pagoId = `${anioActual}_${mesActual}_${socioId}`;
+      const pagoRef = doc(db, "pagos_mensuales", pagoId);
+      
+      await setDoc(pagoRef, {
+        socioId,
+        mes: mesActual,
+        anio: anioActual,
+        pagado: true,
+        bloqueado: true, // Bloqueo anti-error
+        actualizadoPor: user?.uid,
+        fechaActualizacion: new Date().toISOString()
+      }, { merge: true });
+
+      await registrarIngreso({
+        monto: 15,
+        concepto: `Cuota Soci@ ${meses[mesActual-1]} ${anioActual}`,
+        categoria: 'Socio',
+        metodo: metodoPago,
+        socio_id: socioId,
+        mes: mesActual,
+        anio: anioActual
+      });
+
+      setShowConfirmModal(false);
+      setConfirmingPago(null);
+      fetchPagos();
+      setMsg("✅ Pago registrado y bloqueado");
+      setTimeout(() => setMsg(''), 3000);
+    } catch (err) {
+      console.error(err);
+      alert("Error al procesar el pago");
+    }
   };
 
   const subirDocumento = async (cursoId: string) => {
@@ -640,19 +688,29 @@ const TeacherDashboard = () => {
                       {alumnosDetalles.map((alumno: any, idx: number) => {
                         const pagoM = pagosMensuales[alumno.dni] || {};
                         const pagoI = pagosInscripciones[alumno.dni] || {};
+                        const cubiertoPorLocal = !!pagoM.localId;
+                        const bloqueado = !!pagoM.bloqueado || cubiertoPorLocal;
+
                         return (
                           <div key={idx} className="grid grid-cols-12 gap-4 px-6 py-5 bg-kalian-gold/5 rounded-2xl items-center hover:bg-kalian-gold/10 transition-all group">
                             <div className="col-span-6">
                               <p className="font-black text-kalian-cream uppercase italic group-hover:text-kalian-gold transition-colors">{alumno.nombre}</p>
                               <p className="text-[8px] text-kalian-gold/60 font-bold tracking-widest mt-1">{alumno.dni}</p>
+                              {cubiertoPorLocal && (
+                                <p className="text-[7px] font-black text-emerald-500 uppercase tracking-widest mt-1">Cuota cubierta por Local</p>
+                              )}
                             </div>
-                            <div className="col-span-3 flex justify-center">
+                            <div className="col-span-3 flex flex-col items-center gap-1">
                               <button 
-                                onClick={() => togglePago(alumno.dni, 'mensual', !!pagoM.pagado)}
-                                className={`w-10 h-10 rounded-xl border flex items-center justify-center transition-all ${pagoM.pagado ? 'bg-emerald-500 border-emerald-400 text-white shadow-lg shadow-emerald-500/20' : 'bg-black/40 border-kalian-gold/20 text-transparent hover:border-kalian-gold/40'}`}
+                                onClick={() => togglePago(alumno.dni, 'mensual', !!pagoM.pagado, undefined, alumno.nombre)}
+                                disabled={bloqueado}
+                                className={`w-10 h-10 rounded-xl border flex items-center justify-center transition-all ${pagoM.pagado ? 'bg-emerald-500 border-emerald-400 text-white shadow-lg shadow-emerald-500/20' : 'bg-black/40 border-kalian-gold/20 text-transparent hover:border-kalian-gold/40'} ${bloqueado ? 'opacity-100 cursor-default' : ''}`}
                               >
                                 {pagoM.pagado ? '✓' : ''}
                               </button>
+                              {bloqueado && pagoM.pagado && (
+                                <span className="text-[7px] font-black text-emerald-500/60 uppercase tracking-tighter">Saldado</span>
+                              )}
                             </div>
                             <div className="col-span-3 flex justify-center">
                               <button 
@@ -682,6 +740,40 @@ const TeacherDashboard = () => {
                   </p>
                 </div>
               )}
+            </div>
+          </div>
+        )}
+
+        {/* MODAL CONFIRMACIÓN PAGO (ANTI-ERROR) */}
+        {showConfirmModal && confirmingPago && (
+          <div className="fixed inset-0 bg-black/90 backdrop-blur-md z-[100] flex items-center justify-center p-4">
+            <div className="bg-kalian-dark w-full max-w-md rounded-[3rem] shadow-2xl border border-kalian-gold/20 p-10 text-center space-y-8 animate-in zoom-in-95 duration-300">
+              <div className="w-20 h-20 bg-kalian-gold/10 rounded-full flex items-center justify-center text-4xl mx-auto border border-kalian-gold/20">
+                💰
+              </div>
+              <div className="space-y-4">
+                <h3 className="text-2xl kalian-poster-text text-kalian-gold uppercase italic">Confirmar Aportación</h3>
+                <p className="text-sm text-kalian-cream/70 leading-relaxed">
+                  El alumno <span className="text-kalian-gold font-black">{confirmingPago.nombre}</span> ha realizado la aportación a Kalian.
+                </p>
+                <p className="text-[10px] font-black text-kalian-gold/40 uppercase tracking-widest">
+                  ¿Quieres bloquear este campo para el mes en curso y evitar errores accidentales?
+                </p>
+              </div>
+              <div className="flex flex-col gap-3">
+                <button 
+                  onClick={ejecutarPagoConfirmado}
+                  className="w-full bg-kalian-gold text-black py-5 rounded-2xl kalian-poster-text text-lg tracking-widest hover:bg-white transition-all shadow-xl shadow-kalian-gold/20"
+                >
+                  SÍ, BLOQUÉALO
+                </button>
+                <button 
+                  onClick={() => { setShowConfirmModal(false); setConfirmingPago(null); }}
+                  className="w-full py-5 text-kalian-gold/40 font-black uppercase text-[10px] tracking-widest hover:text-white transition-colors"
+                >
+                  CANCELAR
+                </button>
+              </div>
             </div>
           </div>
         )}

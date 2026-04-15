@@ -2,8 +2,10 @@ import React, { useState, useEffect } from 'react';
 import { db } from '../firebase';
 import { collection, getDocs, query, orderBy, DocumentData } from 'firebase/firestore';
 import { motion, AnimatePresence } from 'motion/react';
+import { useNavigate } from 'react-router-dom';
 
 const GaleriaPublica = () => {
+  const navigate = useNavigate();
   const [exposiciones, setExposiciones] = useState<DocumentData[]>([]);
   const [loading, setLoading] = useState(true);
   const [expoSeleccionada, setExpoSeleccionada] = useState<DocumentData | null>(null);
@@ -21,8 +23,19 @@ const GaleriaPublica = () => {
     fetchExposiciones();
   }, []);
 
-  const activas = exposiciones.filter(e => e.es_activa);
-  const pasadas = exposiciones.filter(e => !e.es_activa);
+  const hoy = new Date().toISOString().split('T')[0];
+
+  const actual = exposiciones.find(e => 
+    e.fechaInicio <= hoy && (e.fechaFin ? e.fechaFin >= hoy : true)
+  );
+
+  const proximas = exposiciones
+    .filter(e => e.fechaInicio > hoy)
+    .sort((a, b) => a.fechaInicio.localeCompare(b.fechaInicio));
+
+  const historico = exposiciones.filter(e => 
+    e.fechaFin ? e.fechaFin < hoy : false
+  );
 
   return (
     <div className="min-h-screen bg-kalian-dark text-kalian-cream font-sans pb-24">
@@ -31,6 +44,14 @@ const GaleriaPublica = () => {
         <div className="absolute inset-0 bg-[url('https://picsum.photos/seed/gallery/1920/1080?blur=10')] bg-cover bg-center opacity-20"></div>
         <div className="absolute inset-0 bg-gradient-to-t from-kalian-dark via-transparent to-kalian-dark/80"></div>
         
+        {/* BOTÓN VOLVER A HOME */}
+        <button 
+          onClick={() => navigate(-1)}
+          className="absolute top-10 left-10 z-20 flex items-center gap-3 text-kalian-gold font-black uppercase text-[10px] tracking-[0.4em] hover:text-white transition-all group"
+        >
+          <span className="text-xl group-hover:-translate-x-2 transition-transform">←</span> VOLVER
+        </button>
+
         <motion.div 
           initial={{ y: 30, opacity: 0 }}
           animate={{ y: 0, opacity: 1 }}
@@ -48,10 +69,10 @@ const GaleriaPublica = () => {
       </div>
 
       <div className="max-w-7xl mx-auto px-6 mt-24">
-        {/* EXPOSICIONES ACTUALES */}
+        {/* EXPOSICIÓN ACTUAL */}
         <section className="mb-32">
           <div className="flex items-center gap-6 mb-16">
-            <h2 className="text-4xl kalian-poster-text text-kalian-gold uppercase italic tracking-tight">Exposiciones Actuales</h2>
+            <h2 className="text-4xl kalian-poster-text text-kalian-gold uppercase italic tracking-tight">Exposición Actual</h2>
             <div className="h-[1px] flex-1 bg-gradient-to-r from-kalian-gold/40 to-transparent"></div>
           </div>
 
@@ -59,9 +80,62 @@ const GaleriaPublica = () => {
             <div className="flex justify-center py-20">
               <div className="w-12 h-12 border-4 border-kalian-gold/20 border-t-kalian-gold rounded-full animate-spin"></div>
             </div>
-          ) : activas.length > 0 ? (
+          ) : actual ? (
+            <motion.div 
+              initial={{ opacity: 0, scale: 0.95 }}
+              animate={{ opacity: 1, scale: 1 }}
+              onClick={() => setExpoSeleccionada(actual)}
+              className="relative group cursor-pointer max-w-5xl mx-auto"
+            >
+              <div className="relative aspect-[21/9] rounded-[3rem] overflow-hidden border border-kalian-gold/20 shadow-2xl transition-all duration-700 group-hover:border-kalian-gold/50">
+                {actual.imagenUrl ? (
+                  <img 
+                    src={actual.imagenUrl} 
+                    alt={actual.titulo} 
+                    className="w-full h-full object-cover transition-transform duration-1000 group-hover:scale-105" 
+                    referrerPolicy="no-referrer"
+                  />
+                ) : (
+                  <div className="w-full h-full bg-kalian-gold/5 flex items-center justify-center text-8xl kalian-poster-text text-kalian-gold/10 uppercase italic">
+                    {actual.titulo.charAt(0)}
+                  </div>
+                )}
+                <div className="absolute inset-0 bg-gradient-to-t from-black via-black/20 to-transparent opacity-80 group-hover:opacity-90 transition-opacity"></div>
+                
+                <div className="absolute bottom-12 left-12 right-12 flex flex-col md:flex-row justify-between items-end gap-8">
+                  <div className="space-y-4">
+                    <span className="text-[10px] font-black text-kalian-gold uppercase tracking-[0.6em] block">
+                      EN CURSO • {new Date(actual.fechaInicio).toLocaleDateString('es-ES', { day: 'numeric', month: 'short' })} AL {new Date(actual.fechaFin).toLocaleDateString('es-ES', { day: 'numeric', month: 'short', year: 'numeric' })}
+                    </span>
+                    <h3 className="text-5xl md:text-7xl kalian-poster-text text-kalian-gold uppercase italic leading-none tracking-tighter">{actual.titulo}</h3>
+                    <p className="text-xl font-black text-kalian-cream/80 uppercase tracking-widest">Autor/a: {actual.autor}</p>
+                  </div>
+                  
+                  <button 
+                    className="px-12 py-5 bg-kalian-gold text-black rounded-2xl font-black uppercase text-xs tracking-[0.4em] hover:bg-white transition-all shadow-xl shadow-kalian-gold/20"
+                  >
+                    Ver exposición
+                  </button>
+                </div>
+              </div>
+            </motion.div>
+          ) : (
+            <div className="bg-kalian-gold/5 border border-kalian-gold/10 p-20 rounded-[3rem] text-center">
+              <p className="text-kalian-gold/40 font-black uppercase tracking-[0.4em] text-xs italic">Próximamente nuevas exposiciones...</p>
+            </div>
+          )}
+        </section>
+
+        {/* PRÓXIMAS EXPOSICIONES */}
+        {proximas.length > 0 && (
+          <section className="mb-32">
+            <div className="flex items-center gap-6 mb-16">
+              <h2 className="text-4xl kalian-poster-text text-kalian-gold uppercase italic tracking-tight">Próximas Exposiciones</h2>
+              <div className="h-[1px] flex-1 bg-gradient-to-r from-kalian-gold/40 to-transparent"></div>
+            </div>
+
             <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-12">
-              {activas.map((expo, idx) => (
+              {proximas.map((expo, idx) => (
                 <motion.div 
                   key={expo.id}
                   initial={{ opacity: 0, y: 20 }}
@@ -87,42 +161,34 @@ const GaleriaPublica = () => {
                     
                     <div className="absolute bottom-10 left-10 right-10">
                       <span className="text-[9px] font-black text-kalian-gold uppercase tracking-[0.4em] mb-3 block">
-                        {new Date(expo.fechaInicio).toLocaleDateString('es-ES', { day: 'numeric', month: 'short', year: 'numeric' })}
+                        PRÓXIMAMENTE • {new Date(expo.fechaInicio).toLocaleDateString('es-ES', { day: 'numeric', month: 'short' })}
                       </span>
                       <h3 className="text-3xl kalian-poster-text text-kalian-gold uppercase italic leading-none mb-2">{expo.titulo}</h3>
                       <p className="text-[10px] font-black text-kalian-cream/60 uppercase tracking-widest mb-6">Autor/a: {expo.autor}</p>
                       
                       <button 
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          setExpoSeleccionada(expo);
-                        }}
-                        className="w-full py-4 bg-kalian-gold text-black rounded-xl font-black uppercase text-[10px] tracking-[0.3em] hover:bg-white transition-all"
+                        className="w-full py-4 bg-kalian-gold/10 text-kalian-gold border border-kalian-gold/20 rounded-xl font-black uppercase text-[10px] tracking-[0.3em] hover:bg-kalian-gold hover:text-black transition-all"
                       >
-                        Ver cartel
+                        Ver detalles
                       </button>
                     </div>
                   </div>
                 </motion.div>
               ))}
             </div>
-          ) : (
-            <div className="bg-kalian-gold/5 border border-kalian-gold/10 p-20 rounded-[3rem] text-center">
-              <p className="text-kalian-gold/40 font-black uppercase tracking-[0.4em] text-xs italic">Próximamente nuevas exposiciones...</p>
-            </div>
-          )}
-        </section>
+          </section>
+        )}
 
         {/* ARCHIVO / PASADAS */}
-        {pasadas.length > 0 && (
+        {historico.length > 0 && (
           <section>
             <div className="flex items-center gap-6 mb-16">
-              <h2 className="text-4xl kalian-poster-text text-kalian-gold/40 uppercase italic tracking-tight">Archivo de la Galería</h2>
+              <h2 className="text-4xl kalian-poster-text text-kalian-gold/40 uppercase italic tracking-tight">Histórico de la Galería</h2>
               <div className="h-[1px] flex-1 bg-gradient-to-r from-kalian-gold/20 to-transparent"></div>
             </div>
 
             <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-6">
-              {pasadas.map(expo => (
+              {historico.map(expo => (
                 <div 
                   key={expo.id} 
                   onClick={() => setExpoSeleccionada(expo)}
@@ -133,12 +199,8 @@ const GaleriaPublica = () => {
                   </div>
                   <h4 className="text-[10px] kalian-poster-text text-kalian-gold uppercase italic truncate">{expo.titulo}</h4>
                   <p className="text-[8px] font-black text-kalian-cream/40 uppercase tracking-widest mb-2">{expo.autor}</p>
-                  <p className="text-[7px] font-black text-kalian-gold/30 uppercase tracking-widest mb-3">{expo.fechaInicio}</p>
+                  <p className="text-[7px] font-black text-kalian-gold/30 uppercase tracking-widest mb-3">{expo.fechaInicio} - {expo.fechaFin}</p>
                   <button 
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      setExpoSeleccionada(expo);
-                    }}
                     className="w-full py-2 bg-kalian-gold/10 text-kalian-gold border border-kalian-gold/20 rounded-lg font-black uppercase text-[7px] tracking-widest hover:bg-kalian-gold hover:text-black transition-all"
                   >
                     Ver cartel
@@ -165,6 +227,14 @@ const GaleriaPublica = () => {
               exit={{ scale: 0.9, opacity: 0, y: 40 }}
               className="w-full max-w-5xl bg-black border border-kalian-gold/20 rounded-[3rem] shadow-2xl overflow-hidden flex flex-col md:flex-row relative my-auto"
             >
+              {/* BOTÓN VOLVER (MODAL) */}
+              <button 
+                onClick={() => setExpoSeleccionada(null)}
+                className="absolute top-8 left-8 z-20 flex items-center gap-2 bg-black/40 backdrop-blur-md text-kalian-gold px-4 py-2 rounded-full font-black uppercase text-[8px] tracking-[0.3em] hover:bg-kalian-gold hover:text-black transition-all"
+              >
+                ← VOLVER
+              </button>
+
               <button 
                 onClick={() => setExpoSeleccionada(null)}
                 className="absolute top-8 right-8 w-12 h-12 bg-black/40 backdrop-blur-md text-kalian-gold rounded-full flex items-center justify-center font-black text-2xl hover:bg-kalian-gold hover:text-black transition-all z-20"
@@ -203,7 +273,7 @@ const GaleriaPublica = () => {
 
                 <div className="pt-8">
                   <p className="text-[9px] font-black text-kalian-gold/20 uppercase tracking-[0.4em]">
-                    Inaugurada el {new Date(expoSeleccionada.fechaInicio).toLocaleDateString('es-ES', { day: 'numeric', month: 'long', year: 'numeric' })}
+                    Del {new Date(expoSeleccionada.fechaInicio).toLocaleDateString('es-ES', { day: 'numeric', month: 'long', year: 'numeric' })} al {new Date(expoSeleccionada.fechaFin).toLocaleDateString('es-ES', { day: 'numeric', month: 'long', year: 'numeric' })}
                   </p>
                 </div>
               </div>

@@ -12,6 +12,7 @@ const AdminExposiciones = () => {
     descripcion: '',
     imagenUrl: '',
     fechaInicio: new Date().toISOString().split('T')[0],
+    fechaFin: '',
     es_activa: true
   });
   const [archivo, setArchivo] = useState<File | null>(null);
@@ -54,7 +55,7 @@ const AdminExposiciones = () => {
         setMsg("✅ Exposición creada");
       }
 
-      setForm({ titulo: '', autor: '', descripcion: '', imagenUrl: '', fechaInicio: new Date().toISOString().split('T')[0], es_activa: true });
+      setForm({ titulo: '', autor: '', descripcion: '', imagenUrl: '', fechaInicio: new Date().toISOString().split('T')[0], fechaFin: '', es_activa: true });
       setArchivo(null);
       setEditando(null);
       fetchExposiciones();
@@ -80,6 +81,7 @@ const AdminExposiciones = () => {
       descripcion: expo.descripcion || '',
       imagenUrl: expo.imagenUrl || '',
       fechaInicio: expo.fechaInicio || '',
+      fechaFin: expo.fechaFin || '',
       es_activa: expo.es_activa !== false
     });
     window.scrollTo({ top: 0, behavior: 'smooth' });
@@ -137,15 +139,24 @@ const AdminExposiciones = () => {
                   />
                 </div>
                 <div className="space-y-2">
-                  <p className="text-[9px] font-black text-kalian-gold/40 uppercase tracking-[0.3em] ml-4">Estado</p>
-                  <select 
+                  <p className="text-[9px] font-black text-kalian-gold/40 uppercase tracking-[0.3em] ml-4">Fecha Fin</p>
+                  <input 
+                    type="date" 
                     className="w-full p-4 bg-kalian-gold/5 rounded-xl border border-kalian-gold/10 outline-none focus:border-kalian-gold text-kalian-gold"
-                    value={form.es_activa ? 'true' : 'false'} onChange={e => setForm({...form, es_activa: e.target.value === 'true'})}
-                  >
-                    <option value="true">ACTIVA</option>
-                    <option value="false">PASADA</option>
-                  </select>
+                    value={form.fechaFin} onChange={e => setForm({...form, fechaFin: e.target.value})} required 
+                  />
                 </div>
+              </div>
+
+              <div className="space-y-2">
+                <p className="text-[9px] font-black text-kalian-gold/40 uppercase tracking-[0.3em] ml-4">Estado Manual (Opcional)</p>
+                <select 
+                  className="w-full p-4 bg-kalian-gold/5 rounded-xl border border-kalian-gold/10 outline-none focus:border-kalian-gold text-kalian-gold"
+                  value={form.es_activa ? 'true' : 'false'} onChange={e => setForm({...form, es_activa: e.target.value === 'true'})}
+                >
+                  <option value="true">ACTIVA</option>
+                  <option value="false">PASADA</option>
+                </select>
               </div>
 
               <div className="space-y-2">
@@ -166,7 +177,7 @@ const AdminExposiciones = () => {
               </button>
               {editando && (
                 <button 
-                  type="button" onClick={() => { setEditando(null); setForm({ titulo: '', autor: '', descripcion: '', imagenUrl: '', fechaInicio: new Date().toISOString().split('T')[0], es_activa: true }); }}
+                  type="button" onClick={() => { setEditando(null); setForm({ titulo: '', autor: '', descripcion: '', imagenUrl: '', fechaInicio: new Date().toISOString().split('T')[0], fechaFin: '', es_activa: true }); }}
                   className="w-full bg-transparent text-kalian-gold/40 p-4 rounded-2xl text-[10px] font-black uppercase tracking-widest hover:text-kalian-gold transition-all"
                 >
                   Cancelar Edición
@@ -193,7 +204,7 @@ const AdminExposiciones = () => {
                       <span className={`text-[8px] font-black px-3 py-1 rounded-full border uppercase tracking-widest ${expo.es_activa ? 'bg-emerald-500/10 border-emerald-500/20 text-emerald-500' : 'bg-kalian-gold/5 border-kalian-gold/10 text-kalian-gold/40'}`}>
                         {expo.es_activa ? 'ACTIVA' : 'PASADA'}
                       </span>
-                      <span className="text-[10px] font-mono text-kalian-gold/40">{expo.fechaInicio}</span>
+                      <span className="text-[10px] font-mono text-kalian-gold/40">{expo.fechaInicio} al {expo.fechaFin}</span>
                     </div>
                     <h3 className="text-2xl kalian-poster-text text-kalian-gold uppercase italic leading-tight mb-1">{expo.titulo}</h3>
                     <p className="text-[10px] font-black text-kalian-cream/60 uppercase tracking-widest mb-4">Autor: {expo.autor}</p>

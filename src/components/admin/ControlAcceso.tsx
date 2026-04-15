@@ -4,8 +4,10 @@ import { collection, query, where, getDocs, doc, updateDoc, increment, onSnapsho
 import { useAuth } from '../../context/AuthContext';
 import { useNavigate } from 'react-router-dom';
 import { Html5Qrcode } from 'html5-qrcode';
-import { Camera, X, Users, Ticket, UserPlus, LogOut, CreditCard, Banknote, Landmark, Calculator } from 'lucide-react';
+import { Camera, X, Users, Ticket, UserPlus, LogOut, CreditCard, Banknote, Landmark, Calculator, FileDown } from 'lucide-react';
 import { registrarIngreso, MetodoPago } from '../../lib/finanzas';
+import { jsPDF } from 'jspdf';
+import autoTable from 'jspdf-autotable';
 
 const ControlAcceso = ({ isPuertaMode = false }: { isPuertaMode?: boolean }) => {
   const { role, isAdmin, isPortero, user } = useAuth();
@@ -380,6 +382,75 @@ const ControlAcceso = ({ isPuertaMode = false }: { isPuertaMode?: boolean }) => 
     setCargando(false);
   };
 
+  const descargarListadoEmergencia = async () => {
+    if (!eventoSeleccionado) return;
+    setCargando(true);
+    try {
+      // 1. Obtener todas las reservas del evento
+      const q = query(collection(db, "reservas"), where("eventoId", "==", eventoSeleccionado.id));
+      const snap = await getDocs(q);
+      const reservas = snap.docs.map(d => d.data());
+
+      // 2. Crear PDF
+      const doc = new jsPDF();
+      const pageWidth = doc.internal.pageSize.getWidth();
+
+      // Cabecera
+      doc.setFontSize(22);
+      doc.setTextColor(212, 175, 55); // Kalian Gold
+      doc.text("LISTADO DE EMERGENCIA - KALIAN", 14, 20);
+      
+      doc.setFontSize(16);
+      doc.setTextColor(0, 0, 0);
+      doc.text(eventoSeleccionado.titulo.toUpperCase(), 14, 30);
+      
+      doc.setFontSize(10);
+      doc.text(`Fecha: ${new Date(eventoSeleccionado.fecha).toLocaleString()}`, 14, 38);
+      doc.text(`Ubicación: ${eventoSeleccionado.sala || 'Kalian Hub'}`, 14, 43);
+      doc.text(`Aforo Máx: ${eventoSeleccionado.aforo_maximo}`, 14, 48);
+
+      // Tabla de Asistentes
+      const tableData = reservas.map((r: any) => [
+        r.nombreTitular || 'N/A',
+        r.dniTitular || 'N/A',
+        r.esSocio ? 'SOCIO' : 'NO SOCIO',
+        `${r.montoPagado || 0}€ (${r.estado === 'validado' ? 'PAGADO' : 'PENDIENTE'})`,
+        r.ticketID || '',
+        '' // Check Manual
+      ]);
+
+      autoTable(doc, {
+        startY: 55,
+        head: [['Nombre Completo', 'DNI', 'Categoría', 'Estado Pago', 'Ticket ID', 'Check Manual']],
+        body: tableData,
+        theme: 'grid',
+        headStyles: { fillColor: [0, 0, 0], textColor: [212, 175, 55] },
+        styles: { fontSize: 8 },
+        columnStyles: { 5: { cellWidth: 30 } }
+      });
+
+      // Filas de Registro Manual
+      const finalY = (doc as any).lastAutoTable.finalY + 10;
+      doc.setFontSize(12);
+      doc.text("REGISTRO MANUAL (Acompañantes / Venta en Puerta)", 14, finalY);
+
+      const manualRows = Array.from({ length: 15 }, () => ['', '', '', '', '', '']);
+      autoTable(doc, {
+        startY: finalY + 5,
+        head: [['Nombre Completo', 'DNI', 'Categoría', 'Monto', 'Método', 'Check']],
+        body: manualRows,
+        theme: 'grid',
+        styles: { fontSize: 8, minCellHeight: 10 }
+      });
+
+      doc.save(`EMERGENCIA_${eventoSeleccionado.titulo.replace(/\s+/g, '_')}.pdf`);
+    } catch (err) {
+      console.error(err);
+      alert("Error al generar PDF");
+    }
+    setCargando(false);
+  };
+
   return (
     <div className="min-h-screen bg-kalian-dark p-4 md:p-8 text-kalian-cream font-sans">
       <header className="max-w-7xl mx-auto mb-8 flex justify-between items-center">
@@ -449,6 +520,16 @@ const ControlAcceso = ({ isPuertaMode = false }: { isPuertaMode?: boolean }) => 
                   {eventoSeleccionado.aforo_reservado || 0}
                 </h2>
               </div>
+
+              {/* Botón de Emergencia PDF */}
+              <button 
+                onClick={descargarListadoEmergencia}
+                disabled={cargando}
+                className="w-full bg-red-600/10 hover:bg-red-600 text-red-500 hover:text-white border border-red-500/20 p-6 rounded-[2.5rem] flex flex-col items-center gap-2 transition-all group"
+              >
+                <FileDown size={32} className="group-hover:scale-110 transition-transform" />
+                <span className="text-[10px] font-black uppercase tracking-widest">Listado de Emergencia (PDF)</span>
+              </button>
 
               {/* Selector de Método de Pago */}
               <div className="bg-kalian-gold/5 border border-kalian-gold/20 rounded-[2.5rem] p-6">

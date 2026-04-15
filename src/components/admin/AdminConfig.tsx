@@ -1,8 +1,9 @@
 import React, { useState, useEffect } from 'react';
 import { db, storage } from '../../firebase';
-import { doc, getDoc, setDoc } from 'firebase/firestore';
+import { doc, getDoc, setDoc, getDocs, collection } from 'firebase/firestore';
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 import { Link } from 'react-router-dom';
+import { Database, Download, ShieldCheck } from 'lucide-react';
 
 const AdminConfig = () => {
   const [config, setConfig] = useState({
@@ -58,6 +59,26 @@ const AdminConfig = () => {
     } catch (err) {
       console.error(err);
       alert("Error al guardar");
+    }
+    setSaving(false);
+  };
+
+  const exportCollection = async (collName: string) => {
+    setSaving(true);
+    try {
+      const snap = await getDocs(collection(db, collName));
+      const data = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+      const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = `backup_${collName}_${new Date().toISOString().split('T')[0]}.json`;
+      link.click();
+      setMsg(`✅ Backup de ${collName} completado`);
+      setTimeout(() => setMsg(''), 3000);
+    } catch (err) {
+      console.error(err);
+      alert(`Error al exportar ${collName}`);
     }
     setSaving(false);
   };
@@ -162,6 +183,39 @@ const AdminConfig = () => {
           >
             {saving ? 'GUARDANDO...' : 'GUARDAR CAMBIOS'}
           </button>
+        </div>
+
+        {/* SECCIÓN DE BACKUPS Y SEGURIDAD */}
+        <div className="mt-12 bg-black/40 p-10 rounded-[3rem] border border-red-500/20 space-y-8">
+          <div className="flex items-center gap-4 mb-4">
+            <ShieldCheck className="text-red-500" size={32} />
+            <h2 className="text-3xl kalian-poster-text text-red-500 italic uppercase">Seguridad y Backups</h2>
+          </div>
+
+          <p className="text-xs font-bold text-kalian-cream/60 leading-relaxed italic">
+            "Realiza copias de seguridad periódicas de los datos críticos de la asociación. Los archivos se descargarán en formato JSON para su posterior recuperación si fuera necesario."
+          </p>
+
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            {[
+              { id: 'socios', label: 'Soci@s', icon: <Database size={16} /> },
+              { id: 'finanzas', label: 'Finanzas', icon: <Database size={16} /> },
+              { id: 'cursos', label: 'Cursos', icon: <Database size={16} /> }
+            ].map(item => (
+              <button
+                key={item.id}
+                onClick={() => exportCollection(item.id)}
+                disabled={saving}
+                className="flex items-center justify-between p-6 bg-white/5 border border-white/10 rounded-2xl hover:border-kalian-gold/40 transition-all group"
+              >
+                <div className="flex items-center gap-3">
+                  {item.icon}
+                  <span className="text-[10px] font-black uppercase tracking-widest">{item.label}</span>
+                </div>
+                <Download size={16} className="text-kalian-gold group-hover:scale-125 transition-transform" />
+              </button>
+            ))}
+          </div>
         </div>
       </div>
     </div>

@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { db } from '../../firebase';
-import { collection, getDocs, doc, setDoc, getDoc, query, orderBy, DocumentData, deleteDoc, where, onSnapshot } from 'firebase/firestore';
+import { collection, getDocs, doc, setDoc, getDoc, query, orderBy, DocumentData, deleteDoc, where, onSnapshot, writeBatch, serverTimestamp } from 'firebase/firestore';
 import { Link } from 'react-router-dom';
 import { createSocioAuth } from '../../lib/adminAuth';
 import { sendWelcomeEmail, sendMembershipUpdateEmail } from '../../lib/brevoService';
@@ -32,7 +32,11 @@ const AdminSocios = () => {
     fetchConfig().then(conf => setCuotaGlobal(conf.cuotaMensualSocio));
 
     // Real-time socios
-    const qSocios = query(collection(db, "socios"), orderBy("nombre", "asc"));
+    const qSocios = query(
+      collection(db, "socios"), 
+      where("deletedAt", "==", null),
+      orderBy("nombre", "asc")
+    );
     const unsubSocios = onSnapshot(qSocios, (snap) => {
       setSocios(snap.docs.map(d => ({ id: d.id, ...d.data() })));
     });
@@ -96,10 +100,12 @@ const AdminSocios = () => {
   };
 
   const handleDelete = async (id: string) => {
-    if (!window.confirm("¿Seguro que quieres eliminar este socio? Esta acción no se puede deshacer.")) return;
+    if (!window.confirm("¿Seguro que quieres eliminar este socio? Se moverá a la papelera de reciclaje.")) return;
     try {
-      await deleteDoc(doc(db, "socios", id));
-      setMsg("✅ Soci@s eliminado");
+      await updateDoc(doc(db, "socios", id), {
+        deletedAt: serverTimestamp()
+      });
+      setMsg("✅ Soci@s movido a la papelera");
       setTimeout(() => setMsg(''), 3000);
     } catch (err) {
       console.error(err);
@@ -118,7 +124,7 @@ const AdminSocios = () => {
       const socioRef = doc(db, "socios", dniUpper);
       const socioSnap = await getDoc(socioRef);
 
-      if (socioSnap.exists()) {
+      if (socioSnap.exists() && !socioSnap.data().deletedAt) {
         alert("Este DNI ya está registrado como soci@s.");
         setLoading(false);
         return;
@@ -146,7 +152,8 @@ const AdminSocios = () => {
         estado: 'inactivo',
         cursos: [],
         verificado: true,
-        fechaAlta: new Date().toISOString()
+        fechaAlta: new Date().toISOString(),
+        deletedAt: null
       });
 
       setMsg("✅ Soci@s creado y email enviado");
@@ -179,41 +186,64 @@ const AdminSocios = () => {
   const togglePago = async (socio: any, valorActual: boolean) => {
     try {
       const socioId = socio.dni;
-      const nuevoEstado = !valorActual;
       const pagoId = `${anioActual}_${mesActual}_${socioId}`;
       const pagoRef = doc(db, "pagos_mensuales", pagoId);
       const snap = await getDoc(pagoRef);
-      
-      const monto = calcularMontoAportacion(socio);
 
-      if (snap.exists()) {
-        await updateDoc(pagoRef, {
-          pagado: nuevoEstado,
-          monto: nuevoEstado ? monto : 0,
-          actualizadoPor: 'admin',
-          fechaActualizacion: new Date().toISOString()
-        });
-      } else {
-        await setDoc(pagoRef, {
+      if (snap.exists() && snap.data().bloqueado && valorActual) {
+        if (!window.confirm("⚠️ Este pago está BLOQUEADO. ¿Estás seguro de que quieres desbloquearlo y marcarlo como pendiente?")) return;
+      }
+
+      const nuevoEstado = !valorActual;
+      const monto = calcularMontoAportacion(socio);
+      const batch = writeBatch(db);
+
+      if (nuevoEstado) {
+        // MARCAR COMO PAGADO
+        batch.set(pagoRef, {
           socioId,
           mes: mesActual,
           anio: anioActual,
-          pagado: nuevoEstado,
-          monto: nuevoEstado ? monto : 0,
+          pagado: true,
+          bloqueado: true,
+          monto: monto,
           actualizadoPor: 'admin',
           fechaActualizacion: new Date().toISOString()
-        });
-      }
+        }, { merge: true });
 
-      // Registrar en Finanzas si se marca como pagado
-      if (nuevoEstado) {
+        // El registro en finanzas se hace vía registrarIngreso (que usa setDoc con ID determinista)
+        // Pero para que sea atómico con el batch, deberíamos hacerlo manual aquí o asegurar que registrarIngreso sea llamado después.
+        // Dado que registrarIngreso es async y usa setDoc, no podemos meterlo fácilmente en el batch sin duplicar lógica.
+        // Sin embargo, el requisito dice "Usa un writeBatch para asegurar que tanto la eliminación de la transacción como la actualización del socio ocurran juntas".
+        // Esto aplica sobre todo a la ELIMINACIÓN (reversión).
+        
+        await batch.commit();
+
         await registrarIngreso({
           monto: monto,
           concepto: `Cuota Soci@ ${meses[mesActual-1]} ${anioActual}`,
           categoria: 'Socio',
           metodo: metodoPago,
-          socio_id: socioId
+          socio_id: socioId,
+          mes: mesActual,
+          anio: anioActual
         });
+      } else {
+        // REVERSIÓN
+        batch.update(pagoRef, {
+          pagado: false,
+          bloqueado: false,
+          monto: 0,
+          actualizadoPor: 'admin',
+          fechaActualizacion: new Date().toISOString()
+        });
+
+        const finanzaId = `CUOTA_${anioActual}_${mesActual}_${socioId}`;
+        batch.update(doc(db, "finanzas", finanzaId), {
+          deletedAt: serverTimestamp()
+        });
+
+        await batch.commit();
       }
     } catch (err) {
       console.error(err);
@@ -367,13 +397,19 @@ const AdminSocios = () => {
                       {/* Estado de Pago Mensual */}
                       <button 
                         onClick={() => togglePago(s, !!pagosMensuales[s.dni]?.pagado)}
-                        className="flex flex-col items-center bg-black/20 p-3 rounded-2xl border border-kalian-gold/5 min-w-[120px] hover:bg-kalian-gold/5 transition-all"
+                        className="flex flex-col items-center bg-black/20 p-3 rounded-2xl border border-kalian-gold/5 min-w-[120px] hover:bg-kalian-gold/5 transition-all relative"
                       >
                         <p className="text-[7px] font-black text-kalian-gold/80 uppercase tracking-widest mb-2">Aportación {meses[mesActual-1]}</p>
                         {pagosMensuales[s.dni]?.pagado ? (
                           <div className="flex flex-col items-center">
                             <span className="text-emerald-500 text-xs font-black">✅ PAGADO</span>
                             <span className="text-[8px] text-emerald-500/60 font-bold">{pagosMensuales[s.dni]?.monto || cuotaGlobal}€</span>
+                            {pagosMensuales[s.dni]?.bloqueado && (
+                              <span className="absolute -top-1 -right-1 text-[8px]">🔒</span>
+                            )}
+                            {pagosMensuales[s.dni]?.localId && (
+                              <span className="text-[6px] text-emerald-500/40 font-black uppercase mt-1">Local: {pagosMensuales[s.dni].localId}</span>
+                            )}
                           </div>
                         ) : (
                           <div className="flex flex-col items-center">

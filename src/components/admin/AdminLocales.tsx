@@ -87,6 +87,7 @@ const AdminLocales = () => {
           mes: mesActual,
           anio: anioActual,
           pagado: nuevoEstado,
+          bloqueado: nuevoEstado, // Bloqueo anti-error
           monto: nuevoEstado ? cuotaGlobal : 0,
           actualizadoPor: 'admin_bulk_local',
           fechaActualizacion: new Date().toISOString(),
@@ -103,7 +104,9 @@ const AdminLocales = () => {
           : `REVERSIÓN: Aportación Local ${local.nombre} - ${meses[mesActual-1]}`,
         categoria: 'Aportación Socio Local',
         metodo: metodoPago,
-        local_id: local.id
+        local_id: local.id,
+        mes: mesActual,
+        anio: anioActual
       });
       
       await batch.commit();
@@ -160,6 +163,7 @@ const AdminLocales = () => {
             mes: mesActual,
             anio: anioActual,
             pagado: ahoraPagado,
+            bloqueado: ahoraPagado, // Bloqueo anti-error
             monto: ahoraPagado ? cuotaGlobal : 0,
             actualizadoPor: 'admin_modal_local',
             fechaActualizacion: new Date().toISOString(),
@@ -178,7 +182,9 @@ const AdminLocales = () => {
               : `REVERSIÓN: Aportación Local ${editando.nombre} - ${meses[mesActual-1]}`,
             categoria: 'Aportación Socio Local',
             metodo: metodoPago,
-            local_id: editando.id
+            local_id: editando.id,
+            mes: mesActual,
+            anio: anioActual
           });
         }
       }

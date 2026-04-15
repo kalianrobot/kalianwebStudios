@@ -18,7 +18,8 @@ ENTRADA HASTA LAS 00:00. RESERVAS DISPONIBLES HASTA COMPLETAR AFORO.`;
   const [form, setForm] = useState({ 
     titulo: '', 
     fecha: '', 
-    hora_fin: '',
+    fecha_fin: '',
+    sala: 'Toda la Sala',
     precio_estandar: '', 
     categoria: 'musica', 
     aforo_maximo: '50',
@@ -40,6 +41,8 @@ ENTRADA HASTA LAS 00:00. RESERVAS DISPONIBLES HASTA COMPLETAR AFORO.`;
   const [subiendo, setSubiendo] = useState(false);
   const [editando, setEditando] = useState<string | null>(null);
   const [msg, setMsg] = useState('');
+  const [conflictos, setConflictos] = useState<{fecha: string, motivo: string}[]>([]);
+  const [isCheckingConflictos, setIsCheckingConflictos] = useState(false);
 
   const fetchEventos = async () => {
     try {
@@ -56,10 +59,17 @@ ENTRADA HASTA LAS 00:00. RESERVAS DISPONIBLES HASTA COMPLETAR AFORO.`;
       const ev = eventos.find(e => e.id === editId);
       if (ev) {
         setEditando(ev.id);
+        // Handle backward compatibility for fecha_fin
+        let fechaFin = ev.fecha_fin || '';
+        if (!fechaFin && ev.hora_fin && ev.fecha) {
+          fechaFin = `${ev.fecha.substring(0, 11)}${ev.hora_fin}`;
+        }
+        
         setForm({
           titulo: ev.titulo || '',
           fecha: ev.fecha || '',
-          hora_fin: ev.hora_fin || '',
+          fecha_fin: fechaFin,
+          sala: ev.sala || 'Toda la Sala',
           precio_estandar: ev.precio_estandar?.toString() || '',
           categoria: ev.categoria || 'musica',
           aforo_maximo: ev.aforo_maximo?.toString() || '50',
@@ -82,8 +92,78 @@ ENTRADA HASTA LAS 00:00. RESERVAS DISPONIBLES HASTA COMPLETAR AFORO.`;
     }
   }, [searchParams, eventos]);
 
+  const checkConflictos = async () => {
+    if (!form.fecha || !form.fecha_fin) return;
+    setIsCheckingConflictos(true);
+    const conflicts: {fecha: string, motivo: string}[] = [];
+    
+    try {
+      const start = new Date(form.fecha);
+      const end = new Date(form.fecha_fin);
+      const dateStr = form.fecha.substring(0, 10);
+
+      // 1. Comprobar contra otros Eventos
+      const snapE = await getDocs(query(collection(db, "eventos")));
+      snapE.docs.forEach(d => {
+        if (d.id === editando) return;
+        const ev = d.data();
+        const evStart = new Date(ev.fecha);
+        const evEnd = new Date(ev.fecha_fin || `${ev.fecha.substring(0, 11)}${ev.hora_fin || '23:59'}`);
+        
+        // Si comparten sala o uno es "Toda la Sala"
+        const compartenSala = form.sala === 'Toda la Sala' || ev.sala === 'Toda la Sala' || form.sala === ev.sala;
+        
+        if (compartenSala && (start < evEnd) && (end > evStart)) {
+          conflicts.push({ fecha: dateStr, motivo: `Evento: ${ev.titulo}` });
+        }
+      });
+
+      // 2. Comprobar contra Sesiones de Cursos
+      const { collectionGroup } = await import('firebase/firestore');
+      const snapS = await getDocs(collectionGroup(db, "sesiones"));
+      
+      // Fetch all courses for titles
+      const snapC = await getDocs(collection(db, "cursos"));
+      const cursosMap: Record<string, string> = {};
+      snapC.docs.forEach(d => {
+        cursosMap[d.id] = d.data().titulo;
+      });
+
+      snapS.docs.forEach(d => {
+        const s = d.data();
+        const cursoId = d.ref.parent.parent?.id;
+        const sStart = new Date(`${s.fecha}T${s.hora_inicio}`);
+        const sEnd = new Date(`${s.fecha}T${s.hora_fin}`);
+        
+        const compartenSala = form.sala === 'Toda la Sala' || form.sala === s.sala;
+
+        if (compartenSala && (start < sEnd) && (end > sStart)) {
+          const cursoTitulo = cursosMap[cursoId || ''] || "Otro Curso";
+          conflicts.push({ fecha: dateStr, motivo: `Curso: ${cursoTitulo} (${s.sala})` });
+        }
+      });
+
+      setConflictos(conflicts);
+    } catch (err) {
+      console.error(err);
+    }
+    setIsCheckingConflictos(false);
+  };
+
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      checkConflictos();
+    }, 500);
+    return () => clearTimeout(timer);
+  }, [form.fecha, form.fecha_fin, form.sala, editando]);
+
   const guardar = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (conflictos.length > 0) {
+      if (!window.confirm("⚠️ Hay conflictos de horario detectados. ¿Quieres guardar de todas formas?")) {
+        return;
+      }
+    }
     setSubiendo(true);
     try {
       let finalImagenUrl = form.imagenUrl;
@@ -103,7 +183,9 @@ ENTRADA HASTA LAS 00:00. RESERVAS DISPONIBLES HASTA COMPLETAR AFORO.`;
         aforo_maximo: Number(form.aforo_maximo),
         max_acompanantes: Number(form.max_acompanantes),
         aforo_reservado: editando ? (eventos.find(ev => ev.id === editando)?.aforo_reservado || 0) : 0,
-        aforo_actual: editando ? (eventos.find(ev => ev.id === editando)?.aforo_actual || 0) : 0
+        aforo_actual: editando ? (eventos.find(ev => ev.id === editando)?.aforo_actual || 0) : 0,
+        // Mantener hora_fin para compatibilidad con web pública si es necesario
+        hora_fin: form.fecha_fin.split('T')[1]?.substring(0, 5) || ''
       };
 
       if (editando) {
@@ -119,7 +201,8 @@ ENTRADA HASTA LAS 00:00. RESERVAS DISPONIBLES HASTA COMPLETAR AFORO.`;
       setForm({ 
         titulo: '', 
         fecha: '', 
-        hora_fin: '',
+        fecha_fin: '',
+        sala: 'Toda la Sala',
         precio_estandar: '', 
         categoria: 'musica', 
         aforo_maximo: '50', 
@@ -202,12 +285,49 @@ ENTRADA HASTA LAS 00:00. RESERVAS DISPONIBLES HASTA COMPLETAR AFORO.`;
               <input type="datetime-local" className="w-full p-5 bg-kalian-gold/5 rounded-2xl outline-none border border-kalian-gold/10 focus:border-kalian-gold transition-all text-kalian-cream font-bold" value={form.fecha} onChange={e => setForm({...form, fecha: e.target.value})} required />
             </div>
             <div className="space-y-2">
-              <label className="text-[9px] font-black uppercase text-kalian-gold/40 ml-4 tracking-widest">Hora de Fin</label>
-              <input type="time" className="w-full p-5 bg-kalian-gold/5 rounded-2xl outline-none border border-kalian-gold/10 focus:border-kalian-gold transition-all text-kalian-cream font-bold" value={form.hora_fin} onChange={e => setForm({...form, hora_fin: e.target.value})} required />
+              <label className="text-[9px] font-black uppercase text-kalian-gold/40 ml-4 tracking-widest">Fecha y Hora Fin</label>
+              <input type="datetime-local" className="w-full p-5 bg-kalian-gold/5 rounded-2xl outline-none border border-kalian-gold/10 focus:border-kalian-gold transition-all text-kalian-cream font-bold" value={form.fecha_fin} onChange={e => setForm({...form, fecha_fin: e.target.value})} required />
             </div>
             <div className="space-y-2">
               <label className="text-[9px] font-black uppercase text-kalian-gold/80 ml-4 tracking-widest">Aportación Estándar (€)</label>
               <input type="number" placeholder="APORTACIÓN (€)" className="w-full p-5 bg-kalian-gold/5 rounded-2xl outline-none border border-kalian-gold/10 focus:border-kalian-gold transition-all text-kalian-gold font-black text-xl" value={form.precio_estandar} onChange={e => setForm({...form, precio_estandar: e.target.value})} required />
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            <div className="space-y-2">
+              <label className="text-[9px] font-black uppercase text-kalian-gold/40 ml-4 tracking-widest">Sala / Espacio</label>
+              <select 
+                className="w-full p-5 bg-kalian-gold/5 rounded-2xl font-black uppercase border border-kalian-gold/10 focus:border-kalian-gold transition-all text-kalian-gold"
+                value={form.sala}
+                onChange={e => setForm({...form, sala: e.target.value})}
+              >
+                <option value="Toda la Sala">Toda la Sala (Evento Grande)</option>
+                <option value="Sala Grande">Sala Grande</option>
+                <option value="Sala Pequeña">Sala Pequeña</option>
+                <option value="Estudio">Estudio</option>
+              </select>
+            </div>
+            <div className="space-y-2">
+              <label className="text-[9px] font-black uppercase text-kalian-gold/40 ml-4 tracking-widest">Estado de Disponibilidad</label>
+              <div className={`p-4 rounded-2xl border transition-all ${conflictos.length > 0 ? 'bg-red-500/20 border-red-500/50' : 'bg-emerald-500/20 border-emerald-500/50'}`}>
+                <div className="flex items-center gap-2 mb-2">
+                  <div className={`w-2 h-2 rounded-full ${conflictos.length > 0 ? 'bg-red-500 animate-pulse' : 'bg-emerald-500'}`}></div>
+                  <p className={`text-[9px] font-black uppercase tracking-widest ${conflictos.length > 0 ? 'text-red-400' : 'text-emerald-400'}`}>
+                    {isCheckingConflictos ? 'Verificando...' : conflictos.length > 0 ? 'Conflictos Detectados' : 'Horario Disponible'}
+                  </p>
+                </div>
+                {conflictos.length > 0 && (
+                  <div className="flex flex-wrap gap-1">
+                    {conflictos.slice(0, 3).map((c, idx) => (
+                      <span key={idx} className="text-[7px] bg-red-500/30 text-red-200 px-1.5 py-0.5 rounded font-mono">
+                        {c.motivo}
+                      </span>
+                    ))}
+                    {conflictos.length > 3 && <span className="text-[7px] text-red-300">+{conflictos.length - 3} más</span>}
+                  </div>
+                )}
+              </div>
             </div>
           </div>
 
@@ -368,10 +488,17 @@ ENTRADA HASTA LAS 00:00. RESERVAS DISPONIBLES HASTA COMPLETAR AFORO.`;
                       <button 
                         onClick={() => {
                           setEditando(ev.id);
+                          // Handle backward compatibility for fecha_fin
+                          let fechaFin = ev.fecha_fin || '';
+                          if (!fechaFin && ev.hora_fin && ev.fecha) {
+                            fechaFin = `${ev.fecha.substring(0, 11)}${ev.hora_fin}`;
+                          }
+
                           setForm({
                             titulo: ev.titulo || '',
                             fecha: ev.fecha || '',
-                            hora_fin: ev.hora_fin || '',
+                            fecha_fin: fechaFin,
+                            sala: ev.sala || 'Toda la Sala',
                             precio_estandar: ev.precio_estandar?.toString() || '',
                             categoria: ev.categoria || 'musica',
                             aforo_maximo: ev.aforo_maximo?.toString() || '50',
@@ -398,10 +525,17 @@ ENTRADA HASTA LAS 00:00. RESERVAS DISPONIBLES HASTA COMPLETAR AFORO.`;
                       <button 
                         onClick={() => {
                           setEditando(null);
+                          // Handle backward compatibility for fecha_fin
+                          let fechaFin = ev.fecha_fin || '';
+                          if (!fechaFin && ev.hora_fin && ev.fecha) {
+                            fechaFin = `${ev.fecha.substring(0, 11)}${ev.hora_fin}`;
+                          }
+
                           setForm({
                             titulo: `${ev.titulo} (COPIA)`,
                             fecha: ev.fecha || '',
-                            hora_fin: ev.hora_fin || '',
+                            fecha_fin: fechaFin,
+                            sala: ev.sala || 'Toda la Sala',
                             precio_estandar: ev.precio_estandar?.toString() || '',
                             categoria: ev.categoria || 'musica',
                             aforo_maximo: ev.aforo_maximo?.toString() || '50',
@@ -472,10 +606,17 @@ ENTRADA HASTA LAS 00:00. RESERVAS DISPONIBLES HASTA COMPLETAR AFORO.`;
                       <button 
                         onClick={() => {
                           setEditando(null);
+                          // Handle backward compatibility for fecha_fin
+                          let fechaFin = ev.fecha_fin || '';
+                          if (!fechaFin && ev.hora_fin && ev.fecha) {
+                            fechaFin = `${ev.fecha.substring(0, 11)}${ev.hora_fin}`;
+                          }
+
                           setForm({
                             titulo: `${ev.titulo} (REPETIR)`,
                             fecha: '',
-                            hora_fin: '',
+                            fecha_fin: '',
+                            sala: ev.sala || 'Toda la Sala',
                             precio_estandar: ev.precio_estandar?.toString() || '',
                             categoria: ev.categoria || 'musica',
                             aforo_maximo: ev.aforo_maximo?.toString() || '50',

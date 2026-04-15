@@ -49,9 +49,11 @@ function AppContent() {
   const isPuerta = location.pathname === '/puerta';
   const isLogin = ['/login', '/profesor/login', '/staff/login'].includes(location.pathname);
 
-  // Bloqueo de Panel para socios inactivos
+  // Bloqueo de Panel para socios inactivos (solo aplica a usuarios con rol socio o invitado_registrado)
   const isSocioArea = ['/home', '/perfil'].includes(location.pathname);
-  if (user && socioData?.estado === 'inactivo' && isSocioArea) {
+  const needsActiveCheck = role === 'socio' || role === 'invitado_registrado';
+  
+  if (user && needsActiveCheck && socioData?.estado === 'inactivo' && isSocioArea) {
     return <Navigate to="/" state={{ msg: "Tu suscripción de socio no está activa. Apúntate a un curso para recuperar el acceso a las ventajas de socio." }} replace />;
   }
 

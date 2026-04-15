@@ -41,7 +41,7 @@ const AdminCursos = () => {
   const [isCheckingConflictos, setIsCheckingConflictos] = useState(false);
 
   const getVentajasText = (cat: string) => {
-    const aca = academias.find(a => a.id === cat);
+    const aca = academias.find(a => a.id === cat || a.nombre === cat);
     const catName = aca ? aca.nombre.toUpperCase() : 'KALIAN CLUB';
     return `Este curso incluye el alta como soci@ de ${catName} y acceso a descuentos en actividades de la misma categoría.`;
   };
@@ -56,18 +56,29 @@ const AdminCursos = () => {
   const [tabActiva, setTabActiva] = useState<'activos' | 'proximos' | 'historico'>('activos');
 
   const fetchCursos = async () => {
-    const q = query(collection(db, "cursos"), where("deletedAt", "==", null), orderBy("categoria", "asc"));
+    // Fetch all courses and filter/sort in memory to avoid issues with missing fields in old documents
+    const q = query(collection(db, "cursos"));
     const snap = await getDocs(q);
-    setCursos(snap.docs.map(d => ({ id: d.id, ...d.data() })));
+    const allCursos = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+    const filtered = allCursos.filter((c: any) => !c.deletedAt);
+    
+    // Sort by category name (handling missing categories)
+    filtered.sort((a: any, b: any) => {
+      const catA = a.categoria || '';
+      const catB = b.categoria || '';
+      return catA.localeCompare(catB);
+    });
+    
+    setCursos(filtered);
 
     // Fetch academias for categories
     const snapAca = await getDocs(query(collection(db, "academias"), orderBy("orden", "asc")));
-    const acas = snapAca.docs.map(d => ({ id: d.id, ...d.data() }));
+    const acas = snapAca.docs.map(d => ({ id: d.id, ...d.data() } as any));
     setAcademias(acas);
 
     // Set default category if not set
     if (!form.categoria && acas.length > 0) {
-      setForm(prev => ({ ...prev, categoria: acas[0].id }));
+      setForm(prev => ({ ...prev, categoria: acas[0].nombre }));
     }
 
     // Fetch solicitudes (reservas de cursos)
@@ -81,13 +92,14 @@ const AdminCursos = () => {
 
   const hoy = new Date().toISOString().split('T')[0];
 
-  const cursosActivos = cursos.filter(c => c.fechaInicio <= hoy && c.fechaFin >= hoy)
+  const cursosActivos = cursos.filter(c => 
+    (!c.fechaInicio || !c.fechaFin) || (c.fechaInicio <= hoy && c.fechaFin >= hoy)
+  ).sort((a, b) => (a.fechaInicio || '').localeCompare(b.fechaInicio || ''));
+    
+  const cursosProximos = cursos.filter(c => c.fechaInicio && c.fechaInicio > hoy)
     .sort((a, b) => a.fechaInicio.localeCompare(b.fechaInicio));
     
-  const cursosProximos = cursos.filter(c => c.fechaInicio > hoy)
-    .sort((a, b) => a.fechaInicio.localeCompare(b.fechaInicio));
-    
-  const cursosHistorico = cursos.filter(c => c.fechaFin < hoy)
+  const cursosHistorico = cursos.filter(c => c.fechaFin && c.fechaFin < hoy)
     .sort((a, b) => b.fechaFin.localeCompare(a.fechaFin));
 
   const cursosAMostrar = tabActiva === 'activos' ? cursosActivos : tabActiva === 'proximos' ? cursosProximos : cursosHistorico;
@@ -423,8 +435,9 @@ const AdminCursos = () => {
     if (!val || !form.categoria) return;
     
     try {
-      const academia = academias.find(a => a.id === form.categoria);
-      const existingSubs = academia?.subcategorias || [];
+      const academia = academias.find(a => a.id === form.categoria || a.nombre === form.categoria);
+      if (!academia) return;
+      const existingSubs = academia.subcategorias || [];
       
       // Evitar duplicados exactos o por mayúsculas/minúsculas si se desea, 
       // pero arrayUnion ya se encarga en DB. Aquí solo protegemos el estado local.
@@ -459,6 +472,76 @@ const AdminCursos = () => {
     }
   };
 
+  const [migrando, setMigrando] = useState(false);
+
+  const migrarCursos = async () => {
+    if (!window.confirm("¿Deseas migrar los cursos con ID aleatorio al nuevo formato legible? Esto también moverá sus sesiones.")) return;
+    setMigrando(true);
+    try {
+      const cursosAMigrar = cursos.filter(c => c.id.length !== 15 && !c.id.includes('-')); // Filtro simple para detectar IDs aleatorios
+      let migradosCount = 0;
+
+      for (const curso of cursosAMigrar) {
+        const academia = academias.find(a => a.id === curso.categoria || a.nombre === curso.categoria);
+        const academiaNombre = academia ? academia.nombre.toUpperCase().replace(/\s+/g, '-') : 'GENERAL';
+        const anioMes = curso.fechaInicio.substring(0, 7);
+        const slug = curso.titulo.trim().replace(/\s+/g, '-').toUpperCase();
+        const nuevoId = `${anioMes}-${academiaNombre}-${slug}`;
+
+        if (nuevoId === curso.id) continue;
+
+        const batch = writeBatch(db);
+        
+        // 1. Crear nuevo documento de curso
+        const { id, ...cursoData } = curso;
+        // Normalizar categoría al nombre oficial
+        if (academia) {
+          cursoData.categoria = academia.nombre; 
+        }
+        
+        batch.set(doc(db, "cursos", nuevoId), {
+          ...cursoData,
+          migradoDesde: id,
+          updatedAt: serverTimestamp()
+        });
+
+        // 2. Mover sesiones
+        const sesionesSnap = await getDocs(collection(db, "cursos", id, "sesiones"));
+        sesionesSnap.docs.forEach(sDoc => {
+          const sData = sDoc.data();
+          const nuevaSesionId = sDoc.id; // Mantenemos el ID de la sesión (fecha_hora)
+          batch.set(doc(db, "cursos", nuevoId, "sesiones", nuevaSesionId), {
+            ...sData,
+            cursoId: nuevoId
+          });
+          // Borrar sesión antigua
+          batch.delete(sDoc.ref);
+        });
+
+        // 3. Actualizar socios que tienen este curso
+        const sociosSnap = await getDocs(query(collection(db, "socios"), where("cursos", "array-contains", id)));
+        sociosSnap.docs.forEach(socioDoc => {
+          const socioData = socioDoc.data();
+          const nuevosCursos = socioData.cursos.map((cId: string) => cId === id ? nuevoId : cId);
+          batch.update(socioDoc.ref, { cursos: nuevosCursos });
+        });
+
+        // 4. Borrar curso antiguo
+        batch.delete(doc(db, "cursos", id));
+
+        await batch.commit();
+        migradosCount++;
+      }
+
+      setMsg(`✅ Migración completada: ${migradosCount} cursos movidos.`);
+      fetchCursos();
+    } catch (err) {
+      console.error("Error en migración:", err);
+      alert("Error durante la migración de IDs.");
+    }
+    setMigrando(false);
+  };
+
   const guardar = async (e: React.FormEvent) => {
     e.preventDefault();
     if (form.programacionAutomatica && conflictosRealTime.length > 0) {
@@ -468,14 +551,21 @@ const AdminCursos = () => {
 
     try {
       const prof = profesores.find(p => p.id === form.profesorId);
+      const academia = academias.find(a => a.id === form.categoria || a.nombre === form.categoria);
+      
+      // Normalización de nombres de academia para el ID
+      const academiaSlug = academia ? academia.nombre.toUpperCase().replace(/\s+/g, '-') : 'GENERAL';
+
       const cursoData = { 
         ...form, 
+        categoria: academia ? academia.nombre : form.categoria, // Normalización al nombre oficial
         profesorNombre: prof ? prof.nombre : '',
         modalidades: form.modalidades.map(m => ({ ...m, precio: Number(m.precio) })),
         ventajas: getVentajasText(form.categoria),
         aforo_actual: editando ? (cursos.find(c => c.id === editando)?.aforo_actual || 0) : 0,
         alumnos: editando ? (cursos.find(c => c.id === editando)?.alumnos || []) : [],
-        deletedAt: null
+        deletedAt: null,
+        updatedAt: serverTimestamp()
       };
 
       const batch = writeBatch(db);
@@ -486,7 +576,7 @@ const AdminCursos = () => {
       } else {
         const anioMes = form.fechaInicio.substring(0, 7); 
         const slug = form.titulo.trim().replace(/\s+/g, '-').toUpperCase();
-        finalId = `${anioMes}-${slug}`;
+        finalId = `${anioMes}-${academiaSlug}-${slug}`;
         batch.set(doc(db, "cursos", finalId), cursoData);
       }
 
@@ -649,7 +739,18 @@ const AdminCursos = () => {
     <div className="min-h-screen bg-slate-100 p-6 font-sans text-slate-900">
       <div className="max-w-6xl mx-auto">
         <Link to="/staff" className="text-indigo-600 font-bold text-xs uppercase tracking-widest">← Volver</Link>
-        <h1 className="text-4xl font-black italic uppercase mb-8 mt-2 tracking-tighter">KALIAN <span className="text-indigo-600">CLUB</span></h1>
+        <div className="flex justify-between items-center mb-8 mt-2">
+          <h1 className="text-4xl font-black italic uppercase tracking-tighter">KALIAN <span className="text-indigo-600">CLUB</span></h1>
+          {cursos.some(c => c.id.length > 15 && !c.id.includes('-')) && (
+            <button 
+              onClick={migrarCursos}
+              disabled={migrando}
+              className="bg-amber-100 text-amber-700 px-4 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest hover:bg-amber-200 transition-all flex items-center gap-2"
+            >
+              {migrando ? 'Migrando...' : '⚠️ Migrar IDs Antiguos'}
+            </button>
+          )}
+        </div>
 
         {msg && <div className="bg-emerald-500 text-white p-5 rounded-3xl mb-8 font-bold text-center shadow-xl animate-bounce">{msg}</div>}
 
@@ -717,7 +818,7 @@ const AdminCursos = () => {
                 >
                   <option value="">Seleccionar...</option>
                   {academias.map(aca => (
-                    <option key={aca.id} value={aca.id}>{aca.nombre}</option>
+                    <option key={aca.id} value={aca.nombre}>{aca.nombre}</option>
                   ))}
                 </select>
               </div>
@@ -737,7 +838,7 @@ const AdminCursos = () => {
                     required
                   >
                     <option value="">Seleccionar...</option>
-                    {academias.find(a => a.id === form.categoria)?.subcategorias?.map((sub: string) => (
+                    {academias.find(a => a.id === form.categoria || a.nombre === form.categoria)?.subcategorias?.map((sub: string) => (
                       <option key={sub} value={sub}>{sub}</option>
                     ))}
                     <option value="NEW" className="text-indigo-600 font-bold">+ CREAR NUEVA...</option>
@@ -1071,7 +1172,7 @@ const AdminCursos = () => {
                     <div className="flex justify-between items-start mb-4">
                       <div>
                         <span className="text-[9px] font-black uppercase bg-indigo-100 text-indigo-600 px-3 py-1 rounded-full mb-2 inline-block">
-                          {academias.find(a => a.id === c.categoria)?.nombre || c.categoria}
+                          {academias.find(a => a.id === c.categoria || a.nombre === c.categoria)?.nombre || c.categoria}
                         </span>
                         <h3 className="font-black text-2xl uppercase italic leading-none">{c.titulo}</h3>
                         <p className="text-[10px] text-indigo-500 font-black mt-1 uppercase tracking-widest">{c.horario} | {c.profesorNombre || c.profesor || 'Pendiente de asignar'}</p>

@@ -33,13 +33,12 @@ const AdminSocios = () => {
     fetchConfig().then(conf => setCuotaGlobal(conf.cuotaMensualSocio));
 
     // Real-time socios
-    const qSocios = query(
-      collection(db, "socios"), 
-      where("deletedAt", "==", null),
-      orderBy("nombre", "asc")
-    );
+    const qSocios = query(collection(db, "socios"));
     const unsubSocios = onSnapshot(qSocios, (snap) => {
-      setSocios(snap.docs.map(d => ({ id: d.id, ...d.data() })));
+      const allSocios = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+      const filtered = allSocios.filter((s: any) => !s.deletedAt);
+      filtered.sort((a: any, b: any) => (a.nombre || '').localeCompare(b.nombre || ''));
+      setSocios(filtered);
     });
 
     // Real-time payments

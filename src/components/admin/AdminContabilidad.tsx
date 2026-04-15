@@ -51,26 +51,24 @@ const AdminContabilidad = () => {
       const finMes = new Date(selectedYear, selectedMonth + 1, 0, 23, 59, 59);
       q = query(
         collection(db, "finanzas"), 
-        where("deletedAt", "==", null),
         where("fecha", ">=", Timestamp.fromDate(inicioMes)),
-        where("fecha", "<=", Timestamp.fromDate(finMes)),
-        orderBy("fecha", "desc")
+        where("fecha", "<=", Timestamp.fromDate(finMes))
       );
     } else {
       const inicioAnio = new Date(selectedYear, 0, 1);
       const finAnio = new Date(selectedYear, 11, 31, 23, 59, 59);
       q = query(
         collection(db, "finanzas"), 
-        where("deletedAt", "==", null),
         where("fecha", ">=", Timestamp.fromDate(inicioAnio)),
-        where("fecha", "<=", Timestamp.fromDate(finAnio)),
-        orderBy("fecha", "desc")
+        where("fecha", "<=", Timestamp.fromDate(finAnio))
       );
     }
 
     const unsubscribe = onSnapshot(q, (snap) => {
       const data = snap.docs.map(d => ({ id: d.id, ...d.data() })) as Transaccion[];
-      setTransacciones(data);
+      const filtered = data.filter((t: any) => !t.deletedAt);
+      filtered.sort((a, b) => b.fecha.toMillis() - a.fecha.toMillis());
+      setTransacciones(filtered);
       setLoading(false);
     });
 

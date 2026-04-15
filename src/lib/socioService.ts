@@ -23,14 +23,15 @@ export const syncSocioStatus = async (socioId: string) => {
     // 1. Comprobar cursos activos
     let hasActiveCourse = false;
     if (socio.cursos && socio.cursos.length > 0) {
-      // Firestore 'in' query limit is 10/30 depending on version, but usually socios don't have many courses
-      // We'll fetch them and filter
-      const cursosSnap = await getDocs(query(collection(db, "cursos"), where("deletedAt", "==", null)));
-      const cursosActivosIds = cursosSnap.docs
-        .filter(d => d.data().fechaFin >= hoy)
-        .map(d => d.id);
+      // Fetch only the courses the socio is enrolled in
+      const cursosPromises = socio.cursos.map((cId: string) => getDoc(doc(db, "cursos", cId)));
+      const cursosSnaps = await Promise.all(cursosPromises);
       
-      hasActiveCourse = socio.cursos.some((cId: string) => cursosActivosIds.includes(cId));
+      hasActiveCourse = cursosSnaps.some(snap => {
+        if (!snap.exists()) return false;
+        const data = snap.data();
+        return !data.deletedAt && data.fechaFin >= hoy;
+      });
     }
 
     // 2. Comprobar local activo

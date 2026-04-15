@@ -15,7 +15,7 @@ const LandingPage = () => {
       // Limpiar el estado para que no vuelva a salir al recargar
       window.history.replaceState({}, document.title);
       
-      const timer = setTimeout(() => setInactivoMsg(null), 8000);
+      const timer = setTimeout(() => setInactivoMsg(null), 15000);
       return () => clearTimeout(timer);
     }
   }, [location]);
@@ -52,8 +52,23 @@ const LandingPage = () => {
         </div>
 
         {inactivoMsg && (
-          <div className="bg-amber-500/20 border border-amber-500/50 text-amber-200 p-4 rounded-2xl mb-8 animate-in fade-in zoom-in duration-300">
-            <p className="text-sm font-bold uppercase tracking-widest">{inactivoMsg}</p>
+          <div className="relative bg-amber-500/20 border border-amber-500/50 text-amber-200 p-6 rounded-2xl mb-8 animate-in fade-in zoom-in duration-300 max-w-2xl mx-auto">
+            <button 
+              onClick={() => setInactivoMsg(null)}
+              className="absolute top-2 right-2 p-2 text-amber-500/50 hover:text-white transition-colors"
+            >
+              ✕
+            </button>
+            <p className="text-sm font-bold uppercase tracking-widest mb-4">{inactivoMsg}</p>
+            <div className="pt-2 border-t border-amber-500/30">
+              <Link 
+                to="/programacion" 
+                className="text-xs font-black uppercase tracking-[0.3em] text-kalian-gold hover:text-white transition-colors flex items-center justify-center gap-2"
+              >
+                <span>Acceder a la web pública aquí</span>
+                <span className="text-lg">→</span>
+              </Link>
+            </div>
           </div>
         )}
 

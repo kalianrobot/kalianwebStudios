@@ -46,8 +46,10 @@ ENTRADA HASTA LAS 00:00. RESERVAS DISPONIBLES HASTA COMPLETAR AFORO.`;
 
   const fetchEventos = async () => {
     try {
-      const snap = await getDocs(query(collection(db, "eventos"), orderBy("fecha", "asc")));
-      setEventos(snap.docs.map(d => ({ id: d.id, ...d.data() })));
+      const snap = await getDocs(collection(db, "eventos"));
+      const data = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+      data.sort((a: any, b: any) => (a.fecha || '').localeCompare(b.fecha || ''));
+      setEventos(data);
     } catch (err) { console.error(err); }
   };
 

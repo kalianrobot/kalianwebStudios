@@ -32,11 +32,20 @@ export default defineConfig(({mode}) => {
               if (id.includes('jspdf')) {
                 return 'jspdf';
               }
+              if (id.includes('fullcalendar')) {
+                return 'calendar';
+              }
+              if (id.includes('motion')) {
+                return 'motion';
+              }
               if (id.includes('recharts') || id.includes('d3')) {
                 return 'charts';
               }
               if (id.includes('lucide-react')) {
                 return 'icons';
+              }
+              if (id.includes('qr') || id.includes('qrcode')) {
+                return 'qr-utils';
               }
               return 'vendor';
             }

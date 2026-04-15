@@ -18,8 +18,10 @@ const AdminProfesores = () => {
 
   const fetchProfesores = async () => {
     try {
-      const snap = await getDocs(query(collection(db, "profesores"), orderBy("nombre", "asc")));
-      setProfesores(snap.docs.map(d => ({ id: d.id, ...d.data() })));
+      const snap = await getDocs(collection(db, "profesores"));
+      const data = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+      data.sort((a: any, b: any) => (a.nombre || '').localeCompare(b.nombre || ''));
+      setProfesores(data);
     } catch (err) {
       console.error("Error al obtener profesores:", err);
     }

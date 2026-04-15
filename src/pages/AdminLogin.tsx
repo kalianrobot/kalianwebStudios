@@ -28,7 +28,16 @@ const AdminLogin = () => {
       await loginAdmin(ADMIN_EMAIL, pass);
       // No navegamos manualmente, dejamos que el useEffect de role lo haga
     } catch (err: any) {
-      setError('Clave de Staff incorrecta');
+      console.error("Error de login admin:", err);
+      if (err.code === 'auth/wrong-password' || err.code === 'auth/invalid-credential') {
+        setError('Clave de Staff incorrecta');
+      } else if (err.code === 'auth/user-not-found') {
+        setError('El usuario administrador no existe en el sistema');
+      } else if (err.code === 'auth/too-many-requests') {
+        setError('Demasiados intentos fallidos. Inténtalo más tarde.');
+      } else {
+        setError('Error de conexión: ' + (err.message || 'Desconocido'));
+      }
       setPass('');
     } finally {
       setLoading(false);

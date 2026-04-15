@@ -14,8 +14,10 @@ const AdminStaff = () => {
   const fetchStaff = async () => {
     setLoading(true);
     try {
-      const snap = await getDocs(query(collection(db, "users"), orderBy("role", "asc")));
-      setStaff(snap.docs.map(d => ({ id: d.id, ...d.data() })));
+      const snap = await getDocs(collection(db, "users"));
+      const data = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+      data.sort((a: any, b: any) => (a.role || '').localeCompare(b.role || ''));
+      setStaff(data);
 
       const configSnap = await getDoc(doc(db, "configuracion", "seguridad"));
       if (configSnap.exists()) {

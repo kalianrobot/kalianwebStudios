@@ -1,7 +1,7 @@
 import React, { createContext, useContext, useEffect, useState, ReactNode } from 'react';
 import { auth, db } from '../firebase';
 import { onAuthStateChanged, signOut, User, signInWithEmailAndPassword, sendPasswordResetEmail } from 'firebase/auth';
-import { collection, query, where, getDocs, DocumentData, updateDoc, doc, getDoc, setDoc, getDocFromServer } from 'firebase/firestore';
+import { collection, query, where, getDocs, DocumentData, updateDoc, doc, getDoc, setDoc } from 'firebase/firestore';
 import { syncSocioStatus } from '../lib/socioService';
 
 interface AuthContextType {
@@ -76,27 +76,20 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
       setLoading(true);
       if (firebaseUser) {
+        console.log("Auth: Usuario detectado:", firebaseUser.email);
         setUser(firebaseUser);
         try {
           // 1. Obtener datos de rol (Admin/Teacher)
           const userRef = doc(db, "users", firebaseUser.uid);
-          let userSnap;
-          try {
-            userSnap = await getDoc(userRef);
-          } catch (e: any) {
-            if (e.code === 'unavailable' || e.message?.includes('offline')) {
-              console.warn("Firestore offline, intentando obtener desde el servidor...");
-              userSnap = await getDocFromServer(userRef);
-            } else {
-              throw e;
-            }
-          }
+          const userSnap = await getDoc(userRef);
 
           if (userSnap.exists()) {
             const data = userSnap.data();
+            console.log("Auth: Documento de usuario encontrado:", data.role);
             setUserData(data);
             // Prioridad absoluta al email maestro
             if (firebaseUser.email === "kalianrobot@gmail.com") {
+              console.log("Auth: Admin maestro detectado por email");
               setIsAdmin(true);
               setIsTeacher(false);
               setIsPortero(false);
@@ -106,18 +99,24 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
               setIsPortero(data.role === 'portero');
             }
           } else {
+            console.log("Auth: Documento de usuario NO existe");
             // Si no existe en users, comprobamos si es el admin por defecto
             if (firebaseUser.email === "kalianrobot@gmail.com") {
+              console.log("Auth: Creando admin maestro por defecto");
               setIsAdmin(true);
               setIsTeacher(false);
               setIsPortero(false);
-              // Crear el documento de admin si no existe para asegurar que la colección existe
-              await setDoc(userRef, {
-                uid: firebaseUser.uid,
-                email: firebaseUser.email,
-                nombre: "Administrador",
-                role: 'admin'
-              });
+              // Crear el documento de admin si no existe
+              try {
+                await setDoc(userRef, {
+                  uid: firebaseUser.uid,
+                  email: firebaseUser.email,
+                  nombre: "Administrador",
+                  role: 'admin'
+                });
+              } catch (e) {
+                console.error("Error creating admin doc:", e);
+              }
             } else {
               setIsAdmin(false);
               setIsTeacher(false);
@@ -130,20 +129,33 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
           const snap = await getDocs(q);
           if (!snap.empty) {
             const sId = snap.docs[0].id;
-            // Sincronizar estado antes de cargar
-            await syncSocioStatus(sId);
-            const updatedSnap = await getDoc(doc(db, "socios", sId));
-            setSocioData(updatedSnap.data() || null);
+            const sData = snap.docs[0].data();
+            setSocioData(sData);
+            
+            // Sincronizar estado en segundo plano para no bloquear el login
+            syncSocioStatus(sId).then(async () => {
+              const updatedSnap = await getDoc(doc(db, "socios", sId));
+              if (updatedSnap.exists()) {
+                setSocioData(updatedSnap.data());
+              }
+            }).catch(err => console.error("Error sync status:", err));
+
           } else if (firebaseUser.email) {
             const qEmail = query(collection(db, "socios"), where("email", "==", firebaseUser.email));
             const snapEmail = await getDocs(qEmail);
             if (!snapEmail.empty) {
               const docRef = snapEmail.docs[0].ref;
+              const sId = docRef.id;
               await updateDoc(docRef, { uid: firebaseUser.uid });
-              // Sincronizar estado
-              await syncSocioStatus(docRef.id);
-              const updatedSnap = await getDoc(docRef);
-              setSocioData(updatedSnap.data() || null);
+              setSocioData(snapEmail.docs[0].data());
+
+              // Sincronizar estado en segundo plano
+              syncSocioStatus(sId).then(async () => {
+                const updatedSnap = await getDoc(doc(db, "socios", sId));
+                if (updatedSnap.exists()) {
+                  setSocioData(updatedSnap.data());
+                }
+              }).catch(err => console.error("Error sync status:", err));
             }
           }
         } catch (error) {

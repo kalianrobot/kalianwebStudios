@@ -1,11 +1,24 @@
-import React from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import React, { useEffect, useState } from 'react';
+import { Link, useNavigate, useLocation } from 'react-router-dom';
 import { KalianLogo } from '../components/public/KalianLogo';
 import { useAuth } from '../context/AuthContext';
 
 const LandingPage = () => {
   const { user, role, isAdmin, isTeacher, socioData, logoutSocio } = useAuth();
   const navigate = useNavigate();
+  const location = useLocation();
+  const [inactivoMsg, setInactivoMsg] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (location.state?.msg) {
+      setInactivoMsg(location.state.msg);
+      // Limpiar el estado para que no vuelva a salir al recargar
+      window.history.replaceState({}, document.title);
+      
+      const timer = setTimeout(() => setInactivoMsg(null), 8000);
+      return () => clearTimeout(timer);
+    }
+  }, [location]);
 
   const getDashboardPath = () => {
     if (role === 'admin') return '/staff';
@@ -37,6 +50,12 @@ const LandingPage = () => {
         <div className="flex justify-center mb-8">
           <KalianLogo size="lg" />
         </div>
+
+        {inactivoMsg && (
+          <div className="bg-amber-500/20 border border-amber-500/50 text-amber-200 p-4 rounded-2xl mb-8 animate-in fade-in zoom-in duration-300">
+            <p className="text-sm font-bold uppercase tracking-widest">{inactivoMsg}</p>
+          </div>
+        )}
 
         <div className="space-y-2">
           <h1 className="text-7xl md:text-9xl kalian-poster-text text-kalian-gold tracking-[-0.05em]">

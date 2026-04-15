@@ -1,52 +1,67 @@
+import React, { Suspense, lazy } from 'react';
 import { BrowserRouter as Router, Routes, Route, Navigate, useLocation } from 'react-router-dom';
 import { AuthProvider, useAuth } from './context/AuthContext';
 import { LanguageProvider } from './context/LanguageContext';
 
 // Componentes Públicos
-import LandingPage from './pages/LandingPage';
-import NewsletterPage from './pages/NewsletterPage';
-import HomeSocio from './components/socio/HomeSocio';
+const LandingPage = lazy(() => import('./pages/LandingPage'));
+const NewsletterPage = lazy(() => import('./pages/NewsletterPage'));
+const HomeSocio = lazy(() => import('./components/socio/HomeSocio'));
 import Navbar from './components/public/Navbar';
-import LoginSocio from './components/auth/LoginSocio';
-import PerfilSocio from './components/socio/PerfilSocio';
+const LoginSocio = lazy(() => import('./components/auth/LoginSocio'));
+const PerfilSocio = lazy(() => import('./components/socio/PerfilSocio'));
 
 // Componentes Admin
-import AdminDashboard from './components/admin/AdminDashboard';
-import AdminEventos from './components/admin/AdminEventos';
-import AdminCursos from './components/admin/AdminCursos';
-import AdminSocios from './components/admin/AdminSocios';
-import AdminLocales from './components/admin/AdminLocales';
-import AdminProfesores from './components/admin/AdminProfesores';
-import AdminAcademias from './components/admin/AdminAcademias';
-import AdminStaff from './components/admin/AdminStaff';
-import AdminContabilidad from './components/admin/AdminContabilidad';
-import AdminExposiciones from './components/admin/AdminExposiciones';
-import AdminConfig from './components/admin/AdminConfig';
-import AdminLogin from './pages/AdminLogin';
+const AdminDashboard = lazy(() => import('./components/admin/AdminDashboard'));
+const AdminEventos = lazy(() => import('./components/admin/AdminEventos'));
+const AdminCursos = lazy(() => import('./components/admin/AdminCursos'));
+const AdminSocios = lazy(() => import('./components/admin/AdminSocios'));
+const AdminLocales = lazy(() => import('./components/admin/AdminLocales'));
+const AdminProfesores = lazy(() => import('./components/admin/AdminProfesores'));
+const AdminAcademias = lazy(() => import('./components/admin/AdminAcademias'));
+const AdminStaff = lazy(() => import('./components/admin/AdminStaff'));
+const AdminContabilidad = lazy(() => import('./components/admin/AdminContabilidad'));
+const AdminExposiciones = lazy(() => import('./components/admin/AdminExposiciones'));
+const AdminConfig = lazy(() => import('./components/admin/AdminConfig'));
+const AdminLogin = lazy(() => import('./pages/AdminLogin'));
 
 // Componentes Teacher
-import TeacherDashboard from './components/teacher/TeacherDashboard';
-import TeacherLogin from './pages/TeacherLogin';
+const TeacherDashboard = lazy(() => import('./components/teacher/TeacherDashboard'));
+const TeacherLogin = lazy(() => import('./pages/TeacherLogin'));
 
-import ProgramacionPublica from './pages/ProgramacionPublica';
-import GaleriaPublica from './pages/GaleriaPublica';
-import AdminSolicitudes from './components/admin/AdminSolicitudes';
-import ControlAcceso from './components/admin/ControlAcceso';
-import PuertaAccess from './components/admin/PuertaAccess';
+const ProgramacionPublica = lazy(() => import('./pages/ProgramacionPublica'));
+const GaleriaPublica = lazy(() => import('./pages/GaleriaPublica'));
+const AdminSolicitudes = lazy(() => import('./components/admin/AdminSolicitudes'));
+const ControlAcceso = lazy(() => import('./components/admin/ControlAcceso'));
+const PuertaAccess = lazy(() => import('./components/admin/PuertaAccess'));
+
+// Loading component
+const PageLoader = () => (
+  <div className="min-h-screen flex items-center justify-center bg-black">
+    <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-gold"></div>
+  </div>
+);
 
 function AppContent() {
-  const { user, role, logoutAdmin } = useAuth();
+  const { user, role, socioData } = useAuth();
   const location = useLocation();
   const isLanding = location.pathname === '/';
   const isPuerta = location.pathname === '/puerta';
   const isLogin = ['/login', '/profesor/login', '/staff/login'].includes(location.pathname);
 
+  // Bloqueo de Panel para socios inactivos
+  const isSocioArea = ['/home', '/perfil'].includes(location.pathname);
+  if (user && socioData?.estado === 'inactivo' && isSocioArea) {
+    return <Navigate to="/" state={{ msg: "Tu suscripción de socio no está activa. Apúntate a un curso para recuperar el acceso a las ventajas de socio." }} replace />;
+  }
+
   return (
     <>
       {!isLanding && !isLogin && !isPuerta && <Navbar />}
 
-      <Routes>
-        {/* LANDING PAGE */}
+      <Suspense fallback={<PageLoader />}>
+        <Routes>
+          {/* LANDING PAGE */}
         <Route path="/" element={<LandingPage />} />
         
         {/* RUTAS PÚBLICAS */}
@@ -112,8 +127,9 @@ function AppContent() {
         {/* REDIRECCIÓN POR DEFECTO */}
         <Route path="*" element={<Navigate to="/" />} />
       </Routes>
-    </>
-  );
+    </Suspense>
+  </>
+);
 }
 
 export default function App() {

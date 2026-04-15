@@ -4,6 +4,7 @@ import { collection, getDocs, updateDoc, doc, DocumentData, setDoc, getDoc, quer
 import { Link } from 'react-router-dom';
 import { registrarIngreso, MetodoPago } from '../../lib/finanzas';
 import { fetchConfig } from '../../lib/configService';
+import { syncMultipleSocios } from '../../lib/socioService';
 
 const AdminLocales = () => {
   const [locales, setLocales] = useState<DocumentData[]>([]);
@@ -110,6 +111,11 @@ const AdminLocales = () => {
       });
       
       await batch.commit();
+      
+      const socioIds = snap.docs.map(d => d.id);
+      if (socioIds.length > 0) {
+        await syncMultipleSocios(socioIds);
+      }
       
       if (nuevoEstado) {
         setMsg(`✅ Aportación de ${local.nombre} procesada (${montoTransaccion}€)`);

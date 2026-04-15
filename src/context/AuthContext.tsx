@@ -2,6 +2,7 @@ import React, { createContext, useContext, useEffect, useState, ReactNode } from
 import { auth, db } from '../firebase';
 import { onAuthStateChanged, signOut, User, signInWithEmailAndPassword, sendPasswordResetEmail } from 'firebase/auth';
 import { collection, query, where, getDocs, DocumentData, updateDoc, doc, getDoc, setDoc, getDocFromServer } from 'firebase/firestore';
+import { syncSocioStatus } from '../lib/socioService';
 
 interface AuthContextType {
   user: User | null;
@@ -128,14 +129,21 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
           const q = query(collection(db, "socios"), where("uid", "==", firebaseUser.uid));
           const snap = await getDocs(q);
           if (!snap.empty) {
-            setSocioData(snap.docs[0].data());
+            const sId = snap.docs[0].id;
+            // Sincronizar estado antes de cargar
+            await syncSocioStatus(sId);
+            const updatedSnap = await getDoc(doc(db, "socios", sId));
+            setSocioData(updatedSnap.data() || null);
           } else if (firebaseUser.email) {
             const qEmail = query(collection(db, "socios"), where("email", "==", firebaseUser.email));
             const snapEmail = await getDocs(qEmail);
             if (!snapEmail.empty) {
               const docRef = snapEmail.docs[0].ref;
               await updateDoc(docRef, { uid: firebaseUser.uid });
-              setSocioData({ ...snapEmail.docs[0].data(), uid: firebaseUser.uid });
+              // Sincronizar estado
+              await syncSocioStatus(docRef.id);
+              const updatedSnap = await getDoc(docRef);
+              setSocioData(updatedSnap.data() || null);
             }
           }
         } catch (error) {

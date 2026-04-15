@@ -5,6 +5,7 @@ import { ref, uploadBytes, getDownloadURL, deleteObject } from 'firebase/storage
 import { useAuth } from '../../context/AuthContext';
 import { Link } from 'react-router-dom';
 import { registrarIngreso, MetodoPago } from '../../lib/finanzas';
+import { syncSocioStatus } from '../../lib/socioService';
 import KalianCalendar from '../shared/KalianCalendar';
 
 const TeacherDashboard = () => {
@@ -183,6 +184,7 @@ const TeacherDashboard = () => {
           });
 
           await batch.commit();
+          await syncSocioStatus(socioId);
           setMsg("⚠️ Pago revertido (movido a papelera)");
           setTimeout(() => setMsg(''), 3000);
         }
@@ -251,6 +253,8 @@ const TeacherDashboard = () => {
         mes: mesActual,
         anio: anioActual
       });
+
+      await syncSocioStatus(socioId);
 
       setShowConfirmModal(false);
       setConfirmingPago(null);

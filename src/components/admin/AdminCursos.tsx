@@ -3,6 +3,7 @@ import { db } from '../../firebase';
 import { collection, setDoc, doc, getDocs, deleteDoc, query, orderBy, DocumentData, updateDoc, getDoc, arrayUnion, increment, where, writeBatch, arrayRemove, collectionGroup, serverTimestamp } from 'firebase/firestore';
 import { Link, useSearchParams } from 'react-router-dom';
 import { Trash2 } from 'lucide-react';
+import { syncMultipleSocios } from '../../lib/socioService';
 
 import { createSocioAuth } from '../../lib/adminAuth';
 import { sendWelcomeEmail, sendMembershipUpdateEmail } from '../../lib/brevoService';
@@ -340,10 +341,22 @@ const AdminCursos = () => {
   const eliminarCurso = async (cursoId: string) => {
     if (window.confirm("¿Seguro que quieres eliminar este curso? Se moverá a la papelera de reciclaje.")) {
       try {
+        // 1. Obtener socios afectados
+        const q = query(collection(db, "socios"), where("cursos", "array-contains", cursoId));
+        const snap = await getDocs(q);
+        const socioIds = snap.docs.map(d => d.id);
+
+        // 2. Soft delete del curso
         await updateDoc(doc(db, "cursos", cursoId), {
           deletedAt: serverTimestamp()
         });
-        setMsg("✅ Curso movido a la papelera");
+
+        // 3. Sincronizar estados de socios
+        if (socioIds.length > 0) {
+          await syncMultipleSocios(socioIds);
+        }
+
+        setMsg("✅ Curso movido a la papelera y estados de socios actualizados");
         setTimeout(() => setMsg(''), 3000);
         fetchCursos();
       } catch (err) {

@@ -7,6 +7,7 @@ import { sendWelcomeEmail, sendMembershipUpdateEmail } from '../../lib/brevoServ
 import { updateDoc, increment } from 'firebase/firestore';
 import { registrarIngreso, MetodoPago } from '../../lib/finanzas';
 import { fetchConfig } from '../../lib/configService';
+import { syncSocioStatus } from '../../lib/socioService';
 
 import { motion, AnimatePresence } from 'motion/react';
 
@@ -172,6 +173,7 @@ const AdminSocios = () => {
     setLoading(true);
     try {
       await updateDoc(doc(db, "socios", editando.id), formEdit);
+      await syncSocioStatus(editando.id);
       await sendMembershipUpdateEmail(formEdit.email, formEdit.nombre, editando.uid, formEdit.membresias || {});
       setMsg("✅ Soci@s actualizado y email enviado");
       setTimeout(() => setMsg(''), 3000);
@@ -228,6 +230,7 @@ const AdminSocios = () => {
           mes: mesActual,
           anio: anioActual
         });
+        await syncSocioStatus(socio.id);
       } else {
         // REVERSIÓN
         batch.update(pagoRef, {
@@ -244,6 +247,7 @@ const AdminSocios = () => {
         });
 
         await batch.commit();
+        await syncSocioStatus(socio.id);
       }
     } catch (err) {
       console.error(err);

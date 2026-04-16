@@ -158,7 +158,7 @@ const AdminCursos = () => {
 
       // Solo considerar sesiones de cursos que existen
       const sesionesExistentes = snapS.docs
-        .map(d => ({ ...d.data(), cursoId: d.ref.parent.parent?.id }))
+        .map(d => ({ ...d.data() as any, cursoId: d.ref.parent.parent?.id }))
         .filter(s => s.cursoId && cursosMap[s.cursoId]);
 
       for (const f of fechasAComprobar) {
@@ -177,7 +177,10 @@ const AdminCursos = () => {
         });
 
         if (conflictingEvento) {
-          conflicts.push({ fecha: f, motivo: `Evento: ${conflictingEvento.titulo}${conflictingEvento.sala ? ` (${conflictingEvento.sala})` : ''}` });
+          const evTimeStr = conflictingEvento.hora_inicio && conflictingEvento.hora_fin 
+            ? `${conflictingEvento.hora_inicio}-${conflictingEvento.hora_fin}`
+            : "Todo el día";
+          conflicts.push({ fecha: f, motivo: `Evento: ${conflictingEvento.titulo} [${evTimeStr}]` });
           continue;
         }
 
@@ -190,7 +193,7 @@ const AdminCursos = () => {
 
         if (conflictingSesion) {
           const cursoTitulo = cursosMap[conflictingSesion.cursoId] || "Otro Curso";
-          conflicts.push({ fecha: f, motivo: `Curso: ${cursoTitulo}` });
+          conflicts.push({ fecha: f, motivo: `Curso: ${cursoTitulo} [${conflictingSesion.hora_inicio}-${conflictingSesion.hora_fin}]` });
         }
       }
       setConflictosRealTime(conflicts);
@@ -263,7 +266,7 @@ const AdminCursos = () => {
 
       // Solo considerar sesiones de cursos que existen
       const sesionesExistentes = snapS.docs
-        .map(d => ({ ...d.data(), cursoId: d.ref.parent.parent?.id }))
+        .map(d => ({ ...d.data() as any, cursoId: d.ref.parent.parent?.id }))
         .filter(s => s.cursoId && cursosMap[s.cursoId]);
 
       for (const f of fechasAComprobar) {
@@ -281,7 +284,10 @@ const AdminCursos = () => {
         });
         
         if (conflictingEvento) {
-          conflicts.push({ fecha: f, motivo: `Evento: ${conflictingEvento.titulo}${conflictingEvento.sala ? ` (${conflictingEvento.sala})` : ''}` });
+          const evTimeStr = conflictingEvento.hora_inicio && conflictingEvento.hora_fin 
+            ? `${conflictingEvento.hora_inicio}-${conflictingEvento.hora_fin}`
+            : "Todo el día";
+          conflicts.push({ fecha: f, motivo: `Evento: ${conflictingEvento.titulo} [${evTimeStr}]` });
           continue;
         }
 
@@ -293,7 +299,7 @@ const AdminCursos = () => {
 
         if (conflictingSesion) {
           const cursoTitulo = cursosMap[conflictingSesion.cursoId] || "Otro Curso";
-          conflicts.push({ fecha: f, motivo: `Curso: ${cursoTitulo}` });
+          conflicts.push({ fecha: f, motivo: `Curso: ${cursoTitulo} [${conflictingSesion.hora_inicio}-${conflictingSesion.hora_fin}]` });
         }
       }
 
@@ -1261,6 +1267,13 @@ const AdminCursos = () => {
                           <button 
                             onClick={() => {
                               setGestionandoSesiones(c.id);
+                              setNuevaSesion({
+                                fecha: '',
+                                hora_inicio: c.horaInicio || '18:00',
+                                hora_fin: c.horaFin || '19:30',
+                                sala: c.sala || 'Sala Grande',
+                                esRecurrente: false
+                              });
                               fetchSesiones(c.id);
                             }}
                             className="bg-amber-100 text-amber-600 px-6 py-3 rounded-xl font-black uppercase text-[10px] tracking-widest hover:bg-amber-200 transition-all"

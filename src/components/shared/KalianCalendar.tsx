@@ -79,13 +79,17 @@ const KalianCalendar: React.FC<KalianCalendarProps> = ({ teacherMode = false }) 
           const data = doc.data();
           const isEditable = userRole === 'admin';
           const start = data.fecha;
-          const end = data.hora_fin ? `${data.fecha.substring(0, 11)}${data.hora_fin}` : undefined;
+          // Si no hay hora_fin, le damos 1 hora de duración para que sea visible en la parrilla si tiene hora de inicio
+          const end = data.hora_fin 
+            ? `${data.fecha.substring(0, 11)}${data.hora_fin}` 
+            : (data.fecha.includes('T') ? undefined : undefined);
 
           allEvents.push({
             id: doc.id,
             title: `[EVENTO] ${data.titulo}`,
             start,
             end,
+            allDay: !data.fecha.includes('T'), // Si no tiene 'T', es todo el día
             backgroundColor: data.es_publico !== false ? '#10b981' : '#f59e0b',
             borderColor: 'transparent',
             textColor: '#ffffff',
@@ -94,7 +98,7 @@ const KalianCalendar: React.FC<KalianCalendarProps> = ({ teacherMode = false }) 
               type: 'evento', 
               data,
               path: doc.ref.path,
-              hora_inicio: start.split('T')[1]?.substring(0, 5) || "00:00",
+              hora_inicio: start.includes('T') ? start.split('T')[1]?.substring(0, 5) : "00:00",
               hora_fin: data.hora_fin || "23:59"
             }
           });
@@ -296,13 +300,16 @@ const KalianCalendar: React.FC<KalianCalendarProps> = ({ teacherMode = false }) 
             selectable={true}
             locale="es"
             firstDay={1}
-            slotMinTime="08:00:00"
-            slotMaxTime="23:00:00"
-            allDaySlot={false}
+            slotMinTime="00:00:00"
+            slotMaxTime="24:00:00"
+            scrollTime="09:00:00"
+            allDaySlot={true}
+            allDayText="Todo el día"
             height="auto"
             nowIndicator={true}
             expandRows={true}
             handleWindowResize={true}
+            defaultTimedEventDuration="01:00"
           />
         </div>
       </div>
@@ -330,6 +337,22 @@ const KalianCalendar: React.FC<KalianCalendarProps> = ({ teacherMode = false }) 
           --fc-button-hover-bg-color: rgba(212, 175, 55, 0.3);
           --fc-button-active-bg-color: rgba(212, 175, 55, 0.4);
           color: #fefce8;
+          font-family: 'Inter', sans-serif;
+        }
+        .fc-theme-standard td, .fc-theme-standard th {
+          border-color: rgba(212, 175, 55, 0.1);
+        }
+        .fc-timegrid-axis-cushion, .fc-timegrid-slot-label-cushion {
+          font-size: 9px;
+          font-weight: 800;
+          color: rgba(212, 175, 55, 0.7) !important;
+          text-transform: uppercase;
+        }
+        .fc-all-day-label {
+          font-size: 8px;
+          font-weight: 900;
+          color: #d4af37;
+          text-transform: uppercase;
         }
         .fc-toolbar-title {
           font-family: 'Kalian Poster', sans-serif;

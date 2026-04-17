@@ -32,205 +32,297 @@ const KalianCalendar: React.FC<KalianCalendarProps> = ({ teacherMode = false }) 
   const [events, setEvents] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [filter, setFilter] = useState<'all' | 'mine' | 'events'>('all');
+  const [toast, setToast] = useState<{ msg: string; type: 'success' | 'error' } | null>(null);
   
   // Estado para el Modal (separado para evitar re-renders del calendario)
   const [selectedEvent, setSelectedEvent] = useState<any>(null);
   const [showAddModal, setShowAddModal] = useState<{ date: string } | null>(null);
   
+  // Estado para Confirmación de Drag/Drop o Resize
+  const [pendingChange, setPendingChange] = useState<{
+    info: any;
+    newDate: string;
+    newStart: string;
+    newEnd: string;
+    type: 'sesion' | 'evento';
+    path: string;
+    courseId?: string;
+    esRecurrente?: boolean;
+    oldEvent?: any;
+  } | null>(null);
+  
   // Datos auxiliares
   const [cursos, setCursos] = useState<any[]>([]);
   const [profesores, setProfesores] = useState<any[]>([]);
+  const [rawEventos, setRawEventos] = useState<any[]>([]);
+  const [rawSesiones, setRawSesiones] = useState<any[]>([]);
 
   const userUID = user?.uid;
   const userRole = isAdmin ? 'admin' : isTeacher ? 'profesor' : 'socio';
 
-  // 1. CARGA ÚNICA DE DATOS
+  // 1. LISTENERS EN TIEMPO REAL
+  useEffect(() => {
+    // Listener para Eventos
+    const unsubEventos = onSnapshot(query(collection(db, "eventos"), orderBy("fecha", "asc")), (snap) => {
+      setRawEventos(snap.docs.map(d => ({ id: d.id, ...d.data(), refPath: d.ref.path })));
+    });
+
+    // Listener para Cursos
+    const unsubCursos = onSnapshot(collection(db, "cursos"), (snap) => {
+      setCursos(snap.docs.map(d => ({ id: d.id, ...d.data() })));
+    });
+
+    // Listener para Sesiones (Collection Group)
+    const unsubSesiones = onSnapshot(collectionGroup(db, "sesiones"), (snap) => {
+      setRawSesiones(snap.docs.map(d => ({ 
+        id: d.id, 
+        ...d.data(), 
+        refPath: d.ref.path,
+        courseId: d.ref.parent.parent?.id 
+      })));
+    });
+
+    // Listener para Profesores
+    // Nota: Intentamos cargar de 'profesores', si no hay datos, 'socios' con rol profesor
+    const unsubProf = onSnapshot(collection(db, "profesores"), (snap) => {
+      if (!snap.empty) {
+        setProfesores(snap.docs.map(d => ({ id: d.id, ...d.data() })));
+      } else {
+        // Fallback a socios con rol profesor si la colección dedicada está vacía
+        const qP = query(collection(db, "socios"), where("rol", "==", "profesor"));
+        const unsubFall = onSnapshot(qP, (snapF) => {
+          setProfesores(snapF.docs.map(df => ({ id: df.id, ...df.data() })));
+        });
+        return unsubFall;
+      }
+    });
+
+    return () => {
+      unsubEventos();
+      unsubCursos();
+      unsubSesiones();
+      unsubProf();
+    };
+  }, []);
+
+  // 2. PROCESAMIENTO DE EVENTOS PARA EL CALENDARIO
   useEffect(() => {
     setLoading(true);
     
-    // Suscripción en tiempo real para Eventos, Cursos y Sesiones
-    const qEventos = query(collection(db, "eventos"), orderBy("fecha", "asc"));
-    const qCursos = query(collection(db, "cursos"), orderBy("fechaInicio", "asc"));
-    const qSesiones = collectionGroup(db, "sesiones");
-    const qProfesores = query(collection(db, "socios"), where("rol", "==", "profesor"));
+    const profMap: Record<string, string> = {};
+    profesores.forEach(p => {
+      profMap[p.id] = p.nombre || p.displayName || p.email || 'Sin Nombre';
+    });
 
-    const unsubEventos = onSnapshot(qEventos, (snapE) => {
-      const snapCursos = getDocs(qCursos);
-      const snapSesiones = getDocs(qSesiones);
-      const snapProf = getDocs(qProfesores);
+    const courseMap: Record<string, any> = {};
+    cursos.forEach(c => {
+      courseMap[c.id] = c;
+    });
 
-      Promise.all([snapCursos, snapSesiones, snapProf]).then(([sC, sS, sP]) => {
-        const profMap: any = {};
-        const profList: any[] = [];
-        sP.docs.forEach(d => {
-          profMap[d.id] = d.data().nombre;
-          profList.push({ id: d.id, ...d.data() });
-        });
-        setProfesores(profList);
+    const allEvents: any[] = [];
 
-        const cursosData = sC.docs.map(d => ({ id: d.id, ...d.data() } as any));
-        setCursos(cursosData);
-        const courseMap: Record<string, any> = Object.fromEntries(cursosData.map(c => [c.id, c]));
+    // Procesar Eventos
+    rawEventos.forEach(ev => {
+      const isEditable = userRole === 'admin';
+      const start = ev.fecha;
+      const end = ev.hora_fin 
+        ? `${ev.fecha.substring(0, 11)}${ev.hora_fin}` 
+        : (ev.fecha.includes('T') ? undefined : undefined);
 
-        const allEvents: any[] = [];
-
-        // Procesar Eventos Públicos/Privados
-        snapE.docs.forEach(doc => {
-          const data = doc.data();
-          const isEditable = userRole === 'admin';
-          const start = data.fecha;
-          // Si no hay hora_fin, le damos 1 hora de duración para que sea visible en la parrilla si tiene hora de inicio
-          const end = data.hora_fin 
-            ? `${data.fecha.substring(0, 11)}${data.hora_fin}` 
-            : (data.fecha.includes('T') ? undefined : undefined);
-
-          allEvents.push({
-            id: doc.id,
-            title: `[EVENTO] ${data.titulo}`,
-            start,
-            end,
-            allDay: !data.fecha.includes('T'), // Si no tiene 'T', es todo el día
-            backgroundColor: data.es_publico !== false ? '#10b981' : '#f59e0b',
-            borderColor: 'transparent',
-            textColor: '#ffffff',
-            editable: isEditable,
-            extendedProps: { 
-              type: 'evento', 
-              data,
-              path: doc.ref.path,
-              hora_inicio: start.includes('T') ? start.split('T')[1]?.substring(0, 5) : "00:00",
-              hora_fin: data.hora_fin || "23:59"
-            }
-          });
-        });
-
-        // Procesar Sesiones (Clases)
-        sS.docs.forEach(doc => {
-          const data = doc.data();
-          const courseId = doc.ref.parent.parent?.id;
-          const curso = courseId ? courseMap[courseId] : null;
-          
-          if (!curso) return;
-
-          const isOwner = curso.profesorId === userUID;
-          const isEditable = userRole === 'admin' || (userRole === 'profesor' && isOwner);
-
-          allEvents.push({
-            id: doc.id,
-            title: `${data.esRecurrente ? '🔁 ' : ''}${curso.titulo}`,
-            start: `${data.fecha}T${data.hora_inicio}`,
-            end: `${data.fecha}T${data.hora_fin}`,
-            backgroundColor: isEditable ? '#3b82f6' : '#94a3b8', // Azul si editable, gris si no
-            borderColor: 'transparent',
-            textColor: '#ffffff',
-            editable: isEditable,
-            className: isEditable ? 'cursor-pointer shadow-lg' : 'opacity-60 grayscale-[0.5] cursor-not-allowed',
-            extendedProps: {
-              type: 'sesion',
-              courseId,
-              courseName: curso.titulo,
-              profesorId: curso.profesorId,
-              profesorNombre: profMap[curso.profesorId] || 'Sin asignar',
-              sala: data.sala || 'Principal',
-              fecha: data.fecha,
-              hora_inicio: data.hora_inicio,
-              hora_fin: data.hora_fin,
-              path: doc.ref.path,
-              esRecurrente: data.esRecurrente
-            }
-          });
-        });
-
-        setEvents(allEvents);
-        setLoading(false);
+      allEvents.push({
+        id: ev.id,
+        title: `[EVENTO] ${ev.titulo}`,
+        start,
+        end,
+        allDay: !ev.fecha.includes('T'),
+        backgroundColor: ev.es_publico !== false ? '#10b981' : '#f59e0b',
+        borderColor: 'transparent',
+        textColor: '#ffffff',
+        editable: isEditable,
+        extendedProps: { 
+          type: 'evento', 
+          data: ev,
+          path: ev.refPath,
+          fecha: ev.fecha.split('T')[0],
+          hora_inicio: start.includes('T') ? start.split('T')[1]?.substring(0, 5) : "00:00",
+          hora_fin: ev.hora_fin || "23:59"
+        }
       });
     });
 
-    return () => unsubEventos();
-  }, [userUID, userRole]);
+    // Procesar Sesiones
+    rawSesiones.forEach(sesion => {
+      const curso = sesion.courseId ? courseMap[sesion.courseId] : null;
+      if (!curso) return;
 
-  // 3. LÓGICA DE COLISIÓN CORREGIDA
-  const checkConflictos = useCallback(async (newStart: string, newEnd: string, sala: string, excludeId: string, fecha: string) => {
-    // Obtenemos todas las sesiones y eventos para ese día
-    // Para eventos, como la fecha incluye hora, traemos los del día
-    const qE = query(collection(db, "eventos"), where("fecha", ">=", fecha), where("fecha", "<=", fecha + "T23:59"));
-    const qS = query(collectionGroup(db, "sesiones"), where("fecha", "==", fecha));
-    
-    const [snapE, snapS] = await Promise.all([getDocs(qE), getDocs(qS)]);
-    
-    const conflictoEvento = snapE.docs.some(doc => {
-      if (doc.id === excludeId) return false;
-      const ev = doc.data();
-      const evStart = ev.fecha.split('T')[1]?.substring(0, 5) || "00:00";
-      const evEnd = ev.hora_fin || "23:59";
-      // Los eventos bloquean la sala si hay solape
-      return (newStart < evEnd) && (newEnd > evStart);
+      const isOwner = curso.profesorId === userUID;
+      const isEditable = userRole === 'admin' || (userRole === 'profesor' && isOwner);
+
+      allEvents.push({
+        id: sesion.id,
+        title: `${sesion.esRecurrente ? '🔁 ' : ''}${curso.titulo}`,
+        start: `${sesion.fecha}T${sesion.hora_inicio}`,
+        end: `${sesion.fecha}T${sesion.hora_fin}`,
+        backgroundColor: isEditable ? '#3b82f6' : '#94a3b8',
+        borderColor: 'transparent',
+        textColor: '#ffffff',
+        editable: isEditable,
+        className: isEditable ? 'cursor-pointer shadow-lg' : 'opacity-60 grayscale-[0.5] cursor-not-allowed',
+        extendedProps: {
+          type: 'sesion',
+          courseId: sesion.courseId,
+          courseName: curso.titulo,
+          profesorId: curso.profesorId,
+          profesorNombre: profMap[curso.profesorId] || 'Sin asignar',
+          sala: sesion.sala || 'Principal',
+          fecha: sesion.fecha,
+          hora_inicio: sesion.hora_inicio,
+          hora_fin: sesion.hora_fin,
+          path: sesion.refPath,
+          esRecurrente: sesion.esRecurrente
+        }
+      });
     });
-    
-    const conflictoSesion = snapS.docs.some(doc => {
-      if (doc.id === excludeId) return false;
-      const s = doc.data();
-      if (s.sala !== sala) return false;
 
-      // Fórmula: (nuevaInicio < eventoExistenteFin) && (nuevaFin > eventoExistenteInicio)
-      return (newStart < s.hora_fin) && (newEnd > s.hora_inicio);
+    setEvents(allEvents);
+    setLoading(false);
+  }, [rawEventos, rawSesiones, cursos, profesores, userRole, userUID]);
+
+  // 3. LÓGICA DE COLISIÓN (USANDO DATOS EN MEMORIA PARA EVITAR ÍNDICES Y LENTITUD)
+  const checkConflictos = useCallback((newStart: string, newEnd: string, sala: string, excludeId: string, fecha: string) => {
+    const conflict = events.find(ev => {
+      if (ev.id === excludeId) return false;
+      const ep = ev.extendedProps;
+      
+      // Debe ser el mismo día y misma sala
+      if (ep.fecha !== fecha || ep.sala !== sala) return false;
+
+      // Comprobar solape: (nuevaInicio < existenteFin) && (nuevaFin > existenteInicio)
+      return (newStart < ep.hora_fin) && (newEnd > ep.hora_inicio);
     });
 
-    return conflictoEvento || conflictoSesion;
-  }, []);
+    if (conflict) {
+      return {
+        title: conflict.title,
+        time: `${conflict.extendedProps.hora_inicio}-${conflict.extendedProps.hora_fin}`
+      };
+    }
+    return null;
+  }, [events]);
+
+  const showToast = (msg: string, type: 'success' | 'error' = 'success') => {
+    setToast({ msg, type });
+    setTimeout(() => setToast(null), 3000);
+  };
 
   // Handlers del Calendario
   const handleEventClick = (info: any) => {
     setSelectedEvent(info.event);
   };
 
-  const handleEventDrop = async (info: any) => {
-    const { event, oldEvent } = info;
-    const { type, path, sala, profesorId } = event.extendedProps;
+  const handleEventChange = async (info: any) => {
+    const { event } = info;
+    const { type, path, sala, profesorId, esRecurrente, courseId } = event.extendedProps;
 
-    // Permisos
+    console.log("Event change detected:", { id: event.id, start: event.start, end: event.end });
+
+    // 1. Permisos
     const isEditable = userRole === 'admin' || (userRole === 'profesor' && profesorId === userUID);
     if (!isEditable) {
-      alert("No tienes permiso para mover esta sesión.");
+      showToast("No tienes permisos para modificar este horario", "error");
       info.revert();
       return;
     }
 
-    const newDate = event.startStr.split('T')[0];
-    const newStart = event.startStr.split('T')[1]?.substring(0, 5) || "00:00";
-    const newEnd = event.endStr?.split('T')[1]?.substring(0, 5) || newStart;
+    // Extraemos fecha y hora robustamente de los objetos Date (en hora local para evitar saltos de zona horaria)
+    const startObj = event.start;
+    const endObj = event.end || new Date(startObj.getTime() + 60 * 60 * 1000);
 
-    const hayConflicto = await checkConflictos(newStart, newEnd, sala, event.id, newDate);
-    if (hayConflicto) {
-      alert("⚠️ CONFLICTO: Ya hay una actividad programada en este horario/sala.");
+    const pad = (n: number) => n.toString().padStart(2, '0');
+    
+    const newDate = `${startObj.getFullYear()}-${pad(startObj.getMonth() + 1)}-${pad(startObj.getDate())}`;
+    const newStart = `${pad(startObj.getHours())}:${pad(startObj.getMinutes())}`;
+    const newEnd = `${pad(endObj.getHours())}:${pad(endObj.getMinutes())}`;
+
+    // 2. Verificación de Conflictos
+    const conflicto = await checkConflictos(newStart, newEnd, sala, event.id, newDate);
+    if (conflicto) {
+      showToast(`⚠️ CONFLICTO: El aula ya está ocupada por "${conflicto.title}" [${conflicto.time}]`, "error");
       info.revert();
       return;
     }
 
+    // 3. Preparar Modal de Confirmación
+    console.log("Opening confirmation modal for:", { newDate, newStart, newEnd });
+    setPendingChange({
+      info,
+      newDate,
+      newStart,
+      newEnd,
+      type,
+      path,
+      courseId,
+      esRecurrente
+    });
+  };
+
+  const confirmPendingChange = async (scope: 'single' | 'series') => {
+    if (!pendingChange) return;
+    setLoading(true);
+    
     try {
-      if (type === 'sesion') {
-        // Preguntar si editar solo esta o la serie
-        if (event.extendedProps.esRecurrente) {
-          const choice = window.confirm("¿Deseas mover SOLO esta clase? (Aceptar para solo esta, Cancelar para volver)");
-          if (!choice) {
-            info.revert();
-            return;
-          }
+      if (pendingChange.type === 'sesion') {
+        if (scope === 'single') {
+          await updateDoc(doc(db, pendingChange.path), {
+            fecha: pendingChange.newDate,
+            hora_inicio: pendingChange.newStart,
+            hora_fin: pendingChange.newEnd
+          });
+        } else if (pendingChange.courseId) {
+          // Actualización de serie - similar a la lógica en EventModal
+          const batch = writeBatch(db);
+          // Actualizar curso
+          batch.update(doc(db, "cursos", pendingChange.courseId), {
+            horaInicio: pendingChange.newStart,
+            horaFin: pendingChange.newEnd
+          });
+          // Actualizar sesiones futuras (por simplicidad aquí actualizamos todas las del curso que coincidan en el mismo día de la semana antiguo si fuera necesario, 
+          // pero el drag-and-drop suele ser una corrección puntual o un cambio de slot fijo)
+          const qS = query(collection(db, "cursos", pendingChange.courseId, "sesiones"), where("fecha", ">=", pendingChange.newDate));
+          const snap = await getDocs(qS);
+          snap.docs.forEach(d => {
+            batch.update(d.ref, {
+              hora_inicio: pendingChange.newStart,
+              hora_fin: pendingChange.newEnd
+            });
+          });
+          await batch.commit();
         }
-        
-        await updateDoc(doc(db, path), {
-          fecha: newDate,
-          hora_inicio: newStart,
-          hora_fin: newEnd
-        });
       } else {
-        await updateDoc(doc(db, path), {
-          fecha: newDate
+        await updateDoc(doc(db, pendingChange.path), {
+          fecha: pendingChange.newDate,
+          // Para eventos, 'fecha' suele ser el campo que contiene T...
+          ...(pendingChange.newDate.includes('T') ? {} : {
+            fecha: `${pendingChange.newDate}T${pendingChange.newStart}`
+          }),
+          hora_fin: pendingChange.newEnd
         });
       }
+      showToast("Horario actualizado correctamente", "success");
     } catch (err) {
       console.error(err);
-      info.revert();
+      showToast("Error al actualizar en la base de datos", "error");
+      pendingChange.info.revert();
+    } finally {
+      setLoading(false);
+      setPendingChange(null);
+    }
+  };
+
+  const cancelPendingChange = () => {
+    if (pendingChange) {
+      pendingChange.info.revert();
+      setPendingChange(null);
     }
   };
 
@@ -282,6 +374,20 @@ const KalianCalendar: React.FC<KalianCalendarProps> = ({ teacherMode = false }) 
             <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-kalian-gold"></div>
           </div>
         )}
+
+        {/* Toast Notification */}
+        <AnimatePresence>
+          {toast && (
+            <motion.div 
+              initial={{ opacity: 0, y: -20 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -20 }}
+              className={`absolute top-10 left-1/2 -translate-x-1/2 z-[100] px-6 py-3 rounded-full font-black uppercase text-[10px] tracking-widest border shadow-xl ${
+                toast.type === 'success' ? 'bg-emerald-500/20 text-emerald-400 border-emerald-500/30' : 'bg-red-500/20 text-red-400 border-red-500/30'
+              }`}
+            >
+              {toast.msg}
+            </motion.div>
+          )}
+        </AnimatePresence>
         
         <div className="calendar-wrapper">
           <FullCalendar
@@ -294,8 +400,8 @@ const KalianCalendar: React.FC<KalianCalendarProps> = ({ teacherMode = false }) 
             }}
             events={filteredEvents}
             eventClick={handleEventClick}
-            eventDrop={handleEventDrop}
-            eventResize={handleEventDrop}
+            eventDrop={handleEventChange}
+            eventResize={handleEventChange}
             editable={true}
             selectable={true}
             locale="es"
@@ -325,6 +431,60 @@ const KalianCalendar: React.FC<KalianCalendarProps> = ({ teacherMode = false }) 
             cursos={cursos}
             checkConflictos={checkConflictos}
           />
+        )}
+      </AnimatePresence>
+
+      {/* MODAL DE CONFIRMACIÓN DE CAMBIO */}
+      <AnimatePresence>
+        {pendingChange && (
+          <div className="fixed inset-0 bg-black/80 backdrop-blur-md z-[110] flex items-center justify-center p-4">
+            <motion.div 
+              initial={{ scale: 0.9, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} exit={{ scale: 0.9, opacity: 0 }}
+              className="bg-kalian-dark w-full max-w-sm rounded-[2rem] border border-kalian-gold/20 shadow-2xl p-8 space-y-6"
+            >
+              <div className="text-center space-y-2">
+                <div className="bg-kalian-gold/10 w-16 h-16 rounded-full flex items-center justify-center mx-auto border border-kalian-gold/20">
+                  <Clock className="text-kalian-gold w-8 h-8" />
+                </div>
+                <h3 className="text-xl kalian-poster-text text-kalian-gold uppercase italic">¿Confirmar Cambio?</h3>
+                <p className="text-kalian-cream/60 text-xs italic">Se actualizará el horario en la base de datos.</p>
+              </div>
+
+              <div className="bg-black/40 p-5 rounded-2xl border border-kalian-gold/10 space-y-4">
+                <div className="flex justify-between items-center border-b border-white/5 pb-3">
+                  <p className="text-[8px] font-black uppercase text-kalian-gold/40 tracking-widest">Nueva Fecha</p>
+                  <p className="text-sm font-bold text-kalian-cream">{pendingChange.newDate}</p>
+                </div>
+                <div className="flex justify-between items-center">
+                  <p className="text-[8px] font-black uppercase text-kalian-gold/40 tracking-widest">Nuevo Horario</p>
+                  <p className="text-sm font-bold text-kalian-cream">{pendingChange.newStart} - {pendingChange.newEnd}</p>
+                </div>
+              </div>
+
+              <div className="grid gap-3">
+                <button 
+                  onClick={() => confirmPendingChange('single')}
+                  className="w-full bg-kalian-gold text-black py-4 rounded-xl font-black uppercase text-[10px] tracking-widest hover:bg-white transition-all shadow-lg"
+                >
+                  Confirmar Solo Esta Clase
+                </button>
+                {pendingChange.esRecurrente && pendingChange.type === 'sesion' && (
+                  <button 
+                    onClick={() => confirmPendingChange('series')}
+                    className="w-full bg-kalian-cream text-black py-4 rounded-xl font-black uppercase text-[10px] tracking-widest hover:bg-white transition-all"
+                  >
+                    Confirmar en toda la serie
+                  </button>
+                )}
+                <button 
+                  onClick={cancelPendingChange}
+                  className="w-full bg-red-500/10 text-red-500 py-3 rounded-xl font-black uppercase text-[9px] tracking-widest border border-red-500/20 hover:bg-red-500 hover:text-white transition-all"
+                >
+                  Cancelar y Revertir
+                </button>
+              </div>
+            </motion.div>
+          </div>
         )}
       </AnimatePresence>
 
@@ -391,7 +551,13 @@ const KalianCalendar: React.FC<KalianCalendarProps> = ({ teacherMode = false }) 
 
 // COMPONENTE MODAL INDEPENDIENTE
 const EventModal = ({ event, onClose, userRole, userUID, cursos, checkConflictos }: any) => {
-  const { type, courseId, courseName, profesorNombre, sala, fecha, hora_inicio, hora_fin, path, esRecurrente, profesorId } = event.extendedProps;
+  // Extraemos datos frescos directamente del objeto event de FullCalendar
+  const { type, courseId, courseName, profesorNombre, sala, path, esRecurrente, profesorId } = event.extendedProps;
+  
+  const fecha = event.startStr.split('T')[0];
+  const hora_inicio = event.startStr.includes('T') ? event.startStr.split('T')[1].substring(0, 5) : "00:00";
+  const hora_fin = event.endStr?.includes('T') ? event.endStr.split('T')[1].substring(0, 5) : "23:59";
+
   const [editMode, setEditMode] = useState(false);
   const [form, setForm] = useState({ sala, hora_inicio, hora_fin, fecha });
   const [loading, setLoading] = useState(false);
@@ -528,6 +694,10 @@ const EventModal = ({ event, onClose, userRole, userUID, cursos, checkConflictos
                     <p className="text-sm font-black text-kalian-cream">{hora_inicio} - {hora_fin}</p>
                   </div>
                   <div className="space-y-1">
+                    <p className="text-[8px] font-black uppercase text-kalian-gold/40 tracking-widest flex items-center gap-1"><MapPin size={10} /> Fecha</p>
+                    <p className="text-sm font-black text-kalian-cream uppercase">{fecha}</p>
+                  </div>
+                  <div className="col-span-2 space-y-1 pt-2 border-t border-white/5">
                     <p className="text-[8px] font-black uppercase text-kalian-gold/40 tracking-widest flex items-center gap-1"><MapPin size={10} /> Sala</p>
                     <p className="text-sm font-black text-kalian-cream uppercase">{sala}</p>
                   </div>

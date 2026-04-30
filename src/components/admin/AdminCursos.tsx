@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
-import { db } from '../../firebase';
-import { collection, setDoc, doc, getDocs, deleteDoc, query, orderBy, DocumentData, updateDoc, getDoc, arrayUnion, increment, where, writeBatch, arrayRemove, collectionGroup, serverTimestamp } from 'firebase/firestore';
+import { db, auth } from '../../firebase';
+import { collection, setDoc, doc, getDocs, getDocsFromServer, deleteDoc, query, orderBy, DocumentData, updateDoc, getDoc, arrayUnion, increment, where, writeBatch, arrayRemove, collectionGroup, serverTimestamp } from 'firebase/firestore';
 import { Link, useSearchParams } from 'react-router-dom';
 import { Trash2 } from 'lucide-react';
 import { syncMultipleSocios } from '../../lib/socioService';
@@ -13,6 +13,7 @@ const AdminCursos = () => {
   const [cursos, setCursos] = useState<DocumentData[]>([]);
   const [profesores, setProfesores] = useState<DocumentData[]>([]);
   const [academias, setAcademias] = useState<DocumentData[]>([]);
+  const [loading, setLoading] = useState(true);
   const [msg, setMsg] = useState('');
   const [nuevaSubcat, setNuevaSubcat] = useState('');
   const [mostrandoNuevaSubcat, setMostrandoNuevaSubcat] = useState(false);
@@ -56,38 +57,44 @@ const AdminCursos = () => {
   const [tabActiva, setTabActiva] = useState<'activos' | 'proximos' | 'historico'>('activos');
 
   const fetchCursos = async () => {
-    // Fetch all courses and filter/sort in memory to avoid issues with missing fields in old documents
-    const q = query(collection(db, "cursos"));
-    const snap = await getDocs(q);
-    const allCursos = snap.docs.map(d => ({ id: d.id, ...d.data() }));
-    const filtered = allCursos.filter((c: any) => !c.deletedAt);
-    
-    // Sort by category name (handling missing categories)
-    filtered.sort((a: any, b: any) => {
-      const catA = a.categoria || '';
-      const catB = b.categoria || '';
-      return catA.localeCompare(catB);
-    });
-    
-    setCursos(filtered);
+    setLoading(true);
+    setMsg("⏳ Cargando datos...");
+    try {
+      // Lanzamos todas las peticiones en paralelo para máxima velocidad
+      const [snap, snapAca, snapSol, snapProf] = await Promise.all([
+        getDocs(collection(db, "cursos")),
+        getDocs(query(collection(db, "academias"), orderBy("orden", "asc"))),
+        getDocs(query(collection(db, "reservas"), where("esCurso", "==", true))),
+        getDocs(query(collection(db, "profesores"), orderBy("nombre", "asc")))
+      ]);
+      
+      // Procesar Cursos
+      const allCursos = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+      const filtered = allCursos.filter((c: any) => !c.deletedAt);
+      filtered.sort((a: any, b: any) => (a.categoria || '').localeCompare(b.categoria || ''));
+      setCursos(filtered);
 
-    // Fetch academias for categories
-    const snapAca = await getDocs(query(collection(db, "academias"), orderBy("orden", "asc")));
-    const acas = snapAca.docs.map(d => ({ id: d.id, ...d.data() } as any));
-    setAcademias(acas);
+      // Procesar Academias
+      const acas = snapAca.docs.map(d => ({ id: d.id, ...d.data() } as any));
+      setAcademias(acas);
 
-    // Set default category if not set
-    if (!form.categoria && acas.length > 0) {
-      setForm(prev => ({ ...prev, categoria: acas[0].nombre }));
+      if (!form.categoria && acas.length > 0) {
+        setForm(prev => ({ ...prev, categoria: acas[0].nombre }));
+      }
+
+      // Procesar Solicitudes
+      setSolicitudes(snapSol.docs.map(d => ({ id: d.id, ...d.data() })));
+
+      // Procesar Profesores
+      setProfesores(snapProf.docs.map(d => ({ id: d.id, ...d.data() })));
+      
+      setMsg("");
+    } catch (err: any) {
+      console.error("⛔ AdminCursos: Error al cargar datos:", err);
+      setMsg("❌ Error: " + (err.message || "Permisos insuficientes"));
+    } finally {
+      setLoading(false);
     }
-
-    // Fetch solicitudes (reservas de cursos)
-    const snapSol = await getDocs(query(collection(db, "reservas"), where("esCurso", "==", true)));
-    setSolicitudes(snapSol.docs.map(d => ({ id: d.id, ...d.data() })));
-
-    // Fetch profesores from the dedicated collection
-    const snapProf = await getDocs(query(collection(db, "profesores"), orderBy("nombre", "asc")));
-    setProfesores(snapProf.docs.map(d => ({ id: d.id, ...d.data() })));
   };
 
   const hoy = new Date().toISOString().split('T')[0];
@@ -164,7 +171,7 @@ const AdminCursos = () => {
       for (const f of fechasAComprobar) {
         const conflictingEvento = eventosExistentes.find(ev => {
           // Si el evento tiene sala y no es "Toda la Sala", solo choca si es la misma sala
-          const compartenSala = !ev.sala || ev.sala === 'Toda la Sala' || ev.sala === form.sala;
+          const compartenSala = !ev.sala || ev.sala === 'Toda la Sala' || form.sala === 'Toda la Sala' || ev.sala === form.sala;
           if (!compartenSala) return false;
 
           const startDateTime = new Date(`${f}T${form.horaInicio}`);
@@ -186,7 +193,7 @@ const AdminCursos = () => {
 
         const conflictingSesion = sesionesExistentes.find((s: any) => 
           s.fecha === f && 
-          s.sala === form.sala && 
+          (form.sala === 'Toda la Sala' || s.sala === 'Toda la Sala' || s.sala === form.sala) && 
           s.cursoId !== editando &&
           (form.horaInicio < s.hora_fin) && (form.horaFin > s.hora_inicio)
         );
@@ -271,7 +278,7 @@ const AdminCursos = () => {
 
       for (const f of fechasAComprobar) {
         const conflictingEvento = eventosExistentes.find(ev => {
-          const compartenSala = !ev.sala || ev.sala === 'Toda la Sala' || ev.sala === nuevaSesion.sala;
+          const compartenSala = !ev.sala || ev.sala === 'Toda la Sala' || nuevaSesion.sala === 'Toda la Sala' || ev.sala === nuevaSesion.sala;
           if (!compartenSala) return false;
 
           const startDateTime = new Date(`${f}T${nuevaSesion.hora_inicio}`);
@@ -293,7 +300,7 @@ const AdminCursos = () => {
 
         const conflictingSesion = sesionesExistentes.find((s: any) => 
           s.fecha === f && 
-          s.sala === nuevaSesion.sala && 
+          (nuevaSesion.sala === 'Toda la Sala' || s.sala === 'Toda la Sala' || s.sala === nuevaSesion.sala) && 
           (nuevaSesion.hora_inicio < s.hora_fin) && (nuevaSesion.hora_fin > s.hora_inicio)
         );
 
@@ -357,30 +364,44 @@ const AdminCursos = () => {
   };
 
   const eliminarCurso = async (cursoId: string) => {
-    if (window.confirm("¿Seguro que quieres eliminar este curso? Se moverá a la papelera de reciclaje.")) {
-      try {
-        // 1. Obtener socios afectados
-        const q = query(collection(db, "socios"), where("cursos", "array-contains", cursoId));
-        const snap = await getDocs(q);
-        const socioIds = snap.docs.map(d => d.id);
+    if (!window.confirm("¿Estás ABSOLUTAMENTE SEGURO de eliminar este curso PERMANENTEMENTE? No se podrá recuperar.\n\nTambién se eliminarán todas las sesiones vinculadas.")) return;
+    
+    setMigrando(true);
+    setMsg(`⏳ Eliminando curso: ${cursoId}...`);
+    
+    try {
+      const cursoRef = doc(db, "cursos", cursoId);
+      
+      // 1. Identificar socios inscritos para sincronizar su estado después
+      const q = query(collection(db, "socios"), where("cursos", "array-contains", cursoId));
+      const snap = await getDocs(q);
+      const socioIds = snap.docs.map(d => d.id);
 
-        // 2. Soft delete del curso
-        await updateDoc(doc(db, "cursos", cursoId), {
-          deletedAt: serverTimestamp()
-        });
+      const batch = writeBatch(db);
 
-        // 3. Sincronizar estados de socios
-        if (socioIds.length > 0) {
-          await syncMultipleSocios(socioIds);
-        }
+      // 2. Borrar sub-colección de sesiones
+      const sesSnap = await getDocs(collection(db, "cursos", cursoId, "sesiones"));
+      sesSnap.forEach(s => batch.delete(s.ref));
 
-        setMsg("✅ Curso movido a la papelera y estados de socios actualizados");
-        setTimeout(() => setMsg(''), 3000);
-        fetchCursos();
-      } catch (err) {
-        console.error(err);
-        alert("Error al eliminar");
+      // 3. Borrar el documento principal
+      batch.delete(cursoRef);
+      
+      await batch.commit();
+
+      // 4. Sincronizar estados de socios
+      if (socioIds.length > 0) {
+        setMsg("⏳ Sincronizando estados de socios afectados...");
+        await syncMultipleSocios(socioIds);
       }
+
+      setMsg("✅ Curso y sesiones eliminados correctamente");
+      setTimeout(() => setMsg(''), 3000);
+      fetchCursos();
+    } catch (err: any) {
+      console.error("Error al eliminar curso:", err);
+      alert("❌ Error al eliminar: " + (err.message || "Error desconocido"));
+    } finally {
+      setMigrando(false);
     }
   };
 
@@ -388,14 +409,22 @@ const AdminCursos = () => {
     if (window.confirm(`¿Quieres duplicar el curso "${curso.titulo}"? Se creará una copia sin alumnos.`)) {
       try {
         const { id, alumnos, aforo_actual, ...data } = curso;
+        
+        const academia = academias.find(a => a.id === data.categoria || a.nombre === data.categoria);
+        const academiaSlug = academia ? academia.nombre.toUpperCase().replace(/\s+/g, '-') : 'GENERAL';
+        const anioMes = data.fechaInicio.substring(0, 7) || '0000-00';
+        const slug = (data.titulo + " COPIA").trim().replace(/\s+/g, '-').toUpperCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+        const nuevoId = `${anioMes}-${academiaSlug}-${slug}`;
+
         const nuevoCurso = {
           ...data,
           titulo: `${data.titulo} (COPIA)`,
           alumnos: [],
-          aforo_actual: 0
+          aforo_actual: 0,
+          updatedAt: serverTimestamp()
         };
-        const docRef = doc(collection(db, "cursos"));
-        await setDoc(docRef, nuevoCurso);
+        
+        await setDoc(doc(db, "cursos", nuevoId), nuevoCurso);
         fetchCursos();
         setMsg("✅ Curso duplicado correctamente");
         setTimeout(() => setMsg(''), 3000);
@@ -480,72 +509,159 @@ const AdminCursos = () => {
 
   const [migrando, setMigrando] = useState(false);
 
-  const migrarCursos = async () => {
-    if (!window.confirm("¿Deseas migrar los cursos con ID aleatorio al nuevo formato legible? Esto también moverá sus sesiones.")) return;
+  const getIdealId = (cursoData: any) => {
+    if (!cursoData.titulo && !cursoData.id) return "";
+    
+    const rawTitulo = cursoData.titulo || (cursoData.id ? cursoData.id.split('-').slice(2).join('-') : 'CURSO');
+    const fecha = cursoData.fechaInicio || cursoData.fechaFin || '2025-09-01';
+    const categoria = cursoData.categoria || 'GENERAL';
+
+    // 1. Normalizar Academia
+    const academia = academias.find(a => a.id === categoria || a.nombre === categoria);
+    const academiaSlug = (academia ? academia.nombre : (categoria || 'GENERAL'))
+      .normalize("NFD").replace(/[\u0300-\u036f]/g, "")
+      .toUpperCase().replace(/[^A-Z0-9]/g, '-').replace(/-+/g, '-').replace(/^-+|-+$/g, '');
+    
+    let titleSlug = rawTitulo.trim()
+      .normalize("NFD").replace(/[\u0300-\u036f]/g, "")
+      .toUpperCase().replace(/[^A-Z0-9]/g, '-').replace(/-+/g, '-').replace(/^-+|-+$/g, '');
+
+    const anioMes = (fecha || '2025-09').substring(0, 7);
+    
+    // Simplificamos: Solo quitamos el prefijo de la academia si está repetido
+    if (titleSlug.startsWith(academiaSlug)) {
+      titleSlug = titleSlug.substring(academiaSlug.length).replace(/^-+/, '');
+    }
+    
+    const finalId = `${anioMes}-${academiaSlug}-${titleSlug || 'CURSO'}`.replace(/-+/g, '-').replace(/^-+|-+$/g, '');
+    return finalId;
+  };
+
+  const manualRename = async (oldId: string, newId: string) => {
+    // Eliminamos cualquier lógica de limpieza aquí para que el usuario tenga el control real.
+    // Usamos EXACTAMENTE lo que el usuario escribió en el input.
+    if (!newId || oldId === newId) return;
+    
+    if (!window.confirm(`¿Seguro que quieres forzar este ID EXACTO?\n\nDe: ${oldId}\nA: ${newId}\n\nNota: Se respetarán acentos y símbolos si los has puesto.`)) return;
+    
     setMigrando(true);
+    setMsg(`⏳ Forzando ID a ${newId}...`);
+    
     try {
-      const cursosAMigrar = cursos.filter(c => c.id.length !== 15 && !c.id.includes('-')); // Filtro simple para detectar IDs aleatorios
-      let migradosCount = 0;
+      const cursoRef = doc(db, "cursos", oldId);
+      const cursoSnap = await getDoc(cursoRef);
+      if (!cursoSnap.exists()) throw new Error("El curso original no existe");
 
-      for (const curso of cursosAMigrar) {
-        const academia = academias.find(a => a.id === curso.categoria || a.nombre === curso.categoria);
-        const academiaNombre = academia ? academia.nombre.toUpperCase().replace(/\s+/g, '-') : 'GENERAL';
-        const anioMes = curso.fechaInicio.substring(0, 7);
-        const slug = curso.titulo.trim().replace(/\s+/g, '-').toUpperCase();
-        const nuevoId = `${anioMes}-${academiaNombre}-${slug}`;
+      const batch = writeBatch(db);
+      const data = cursoSnap.data();
 
-        if (nuevoId === curso.id) continue;
+      // Al crear el nuevo doc, nos aseguramos de que no se pierdan datos
+      batch.set(doc(db, "cursos", newId), {
+        ...data,
+        id: newId, // Guardamos el ID dentro por si acaso
+        updatedAt: serverTimestamp()
+      });
 
-        const batch = writeBatch(db);
-        
-        // 1. Crear nuevo documento de curso
-        const { id, ...cursoData } = curso;
-        // Normalizar categoría al nombre oficial
-        if (academia) {
-          cursoData.categoria = academia.nombre; 
-        }
-        
-        batch.set(doc(db, "cursos", nuevoId), {
-          ...cursoData,
-          migradoDesde: id,
-          updatedAt: serverTimestamp()
-        });
-
-        // 2. Mover sesiones
-        const sesionesSnap = await getDocs(collection(db, "cursos", id, "sesiones"));
-        sesionesSnap.docs.forEach(sDoc => {
-          const sData = sDoc.data();
-          const nuevaSesionId = sDoc.id; // Mantenemos el ID de la sesión (fecha_hora)
-          batch.set(doc(db, "cursos", nuevoId, "sesiones", nuevaSesionId), {
-            ...sData,
-            cursoId: nuevoId
-          });
-          // Borrar sesión antigua
-          batch.delete(sDoc.ref);
-        });
-
-        // 3. Actualizar socios que tienen este curso
-        const sociosSnap = await getDocs(query(collection(db, "socios"), where("cursos", "array-contains", id)));
-        sociosSnap.docs.forEach(socioDoc => {
-          const socioData = socioDoc.data();
-          const nuevosCursos = socioData.cursos.map((cId: string) => cId === id ? nuevoId : cId);
-          batch.update(socioDoc.ref, { cursos: nuevosCursos });
-        });
-
-        // 4. Borrar curso antiguo
-        batch.delete(doc(db, "cursos", id));
-
-        await batch.commit();
-        migradosCount++;
+      // Mover Sesiones
+      const sesSnap = await getDocs(collection(db, "cursos", oldId, "sesiones"));
+      for (const s of sesSnap.docs) {
+        batch.set(doc(db, "cursos", newId, "sesiones", s.id), { ...s.data(), cursoId: newId });
+        batch.delete(s.ref);
       }
 
-      setMsg(`✅ Migración completada: ${migradosCount} cursos movidos.`);
-      fetchCursos();
-    } catch (err) {
-      console.error("Error en migración:", err);
-      alert("Error durante la migración de IDs.");
+      // Actualizar Socios
+      const socSnap = await getDocs(query(collection(db, "socios"), where("cursos", "array-contains", oldId)));
+      for (const s of socSnap.docs) {
+        const sData = s.data();
+        const list = (sData.cursos || []).map((cid: string) => cid === oldId ? newId : cid);
+        batch.update(s.ref, { cursos: list });
+      }
+
+      batch.delete(cursoRef);
+      await batch.commit();
+      
+      alert("✅ Identificador cambiado correctamente.");
+      window.location.reload();
+    } catch (err: any) {
+      console.error(err);
+      alert("Error crítico: " + err.message);
+    } finally {
+      setMigrando(false);
     }
-    setMigrando(false);
+  };
+
+  const migrarCursos = async () => {
+    setMigrando(true);
+    setMsg("⏳ Escaneando base de datos completa...");
+    
+    try {
+      // Fetch fresco para ignorar filtros de React
+      const snap = await getDocs(collection(db, "cursos"));
+      const allCursos = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+      
+      const cursosAMigrar = allCursos.filter((c: any) => {
+        const ideal = getIdealId(c);
+        return ideal && c.id !== ideal;
+      });
+      
+      if (cursosAMigrar.length === 0) {
+        alert("✅ Todos los IDs están limpios y normalizados.");
+        setMigrando(false);
+        setMsg("");
+        return;
+      }
+
+      const plan = cursosAMigrar.map((c: any) => `DOC: ${c.id}\nNUEVO: ${getIdealId(c)}`).join('\n\n');
+      if (!window.confirm(`Se han detectado ${cursosAMigrar.length} cursos con IDs duplicados o incorrectos.\n\nPLAN:\n${plan}\n\n¿Deseas corregirlos?`)) {
+        setMigrando(false);
+        setMsg("");
+        return;
+      }
+
+      let count = 0;
+      for (const cursoItem of cursosAMigrar) {
+        const curso = cursoItem as any;
+        const nuevoId = getIdealId(curso);
+        const oldId = curso.id;
+        setMsg(`⏳ Corrigiendo (${count+1}/${cursosAMigrar.length}): ${curso.titulo || oldId}`);
+
+        const batch = writeBatch(db);
+        const { id, ...data } = curso as any;
+        
+        // Fix categoria
+        const aca = academias.find(a => a.id === data.categoria || a.nombre === data.categoria);
+        if (aca) data.categoria = aca.nombre;
+
+        batch.set(doc(db, "cursos", nuevoId), { ...data, migradoDesde: oldId, updatedAt: serverTimestamp() });
+
+        // Sesiones
+        const ses = await getDocs(collection(db, "cursos", oldId, "sesiones"));
+        for (const s of ses.docs) {
+          batch.set(doc(db, "cursos", nuevoId, "sesiones", s.id), { ...s.data(), cursoId: nuevoId });
+          batch.delete(s.ref);
+        }
+
+        // Socios
+        const socs = await getDocs(query(collection(db, "socios"), where("cursos", "array-contains", oldId)));
+        for (const s of socs.docs) {
+          const sData = s.data();
+          const list = (sData.cursos || []).map((cid: string) => cid === oldId ? nuevoId : cid);
+          batch.update(s.ref, { cursos: list });
+        }
+
+        batch.delete(doc(db, "cursos", oldId));
+        await batch.commit();
+        count++;
+      }
+
+      alert(`✅ ¡Proceso terminado!\nSe han corregido ${count} documentos.`);
+      window.location.reload();
+    } catch (err: any) {
+      console.error(err);
+      alert("Error: " + err.message);
+    } finally {
+      setMigrando(false);
+    }
   };
 
   const guardar = async (e: React.FormEvent) => {
@@ -559,8 +675,7 @@ const AdminCursos = () => {
       const prof = profesores.find(p => p.id === form.profesorId);
       const academia = academias.find(a => a.id === form.categoria || a.nombre === form.categoria);
       
-      // Normalización de nombres de academia para el ID
-      const academiaSlug = academia ? academia.nombre.toUpperCase().replace(/\s+/g, '-') : 'GENERAL';
+      const generatedId = getIdealId(form);
 
       const cursoData = { 
         ...form, 
@@ -575,15 +690,41 @@ const AdminCursos = () => {
       };
 
       const batch = writeBatch(db);
-      let finalId = editando;
-
-      if (editando) {
+      const finalId = generatedId;
+      
+      if (editando && editando === generatedId) {
+        // Mismo ID, solo actualizar data
         batch.update(doc(db, "cursos", editando), cursoData);
       } else {
-        const anioMes = form.fechaInicio.substring(0, 7); 
-        const slug = form.titulo.trim().replace(/\s+/g, '-').toUpperCase();
-        finalId = `${anioMes}-${academiaSlug}-${slug}`;
-        batch.set(doc(db, "cursos", finalId), cursoData);
+        // Nuevo curso O Cambio de ID (Rename)
+        if (editando) {
+          // 1. Mover datos al nuevo ID
+          batch.set(doc(db, "cursos", generatedId), cursoData);
+
+          // 2. Mover sesiones
+          const sesSnap = await getDocs(collection(db, "cursos", editando, "sesiones"));
+          for (const sDoc of sesSnap.docs) {
+            batch.set(doc(db, "cursos", generatedId, "sesiones", sDoc.id), {
+              ...sDoc.data(),
+              cursoId: generatedId
+            });
+            batch.delete(sDoc.ref);
+          }
+
+          // 3. Actualizar socios
+          const socSnap = await getDocs(query(collection(db, "socios"), where("cursos", "array-contains", editando)));
+          for (const sDoc of socSnap.docs) {
+            const sData = sDoc.data();
+            const nuevosCursos = (sData.cursos || []).map((cId: string) => cId === editando ? generatedId : cId);
+            batch.update(sDoc.ref, { cursos: nuevosCursos });
+          }
+
+          // 4. Borrar antiguo
+          batch.delete(doc(db, "cursos", editando));
+        } else {
+          // Creación normal con setDoc
+          batch.set(doc(db, "cursos", generatedId), cursoData);
+        }
       }
 
       // Programación Automática de Sesiones
@@ -747,13 +888,13 @@ const AdminCursos = () => {
         <Link to="/staff" className="text-indigo-600 font-bold text-xs uppercase tracking-widest">← Volver</Link>
         <div className="flex justify-between items-center mb-8 mt-2">
           <h1 className="text-4xl font-black italic uppercase tracking-tighter">KALIAN <span className="text-indigo-600">CLUB</span></h1>
-          {cursos.some(c => c.id.length > 15 && !c.id.includes('-')) && (
+          {cursos.some(c => c.id !== getIdealId(c)) && (
             <button 
               onClick={migrarCursos}
               disabled={migrando}
               className="bg-amber-100 text-amber-700 px-4 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest hover:bg-amber-200 transition-all flex items-center gap-2"
             >
-              {migrando ? 'Migrando...' : '⚠️ Migrar IDs Antiguos'}
+              {migrando ? 'Normalizando...' : '⚠️ Normalizar IDs'}
             </button>
           )}
         </div>
@@ -813,6 +954,35 @@ const AdminCursos = () => {
               <label className="text-[9px] font-black uppercase text-slate-400 ml-4">Nombre del Curso</label>
               <input type="text" placeholder="Nombre del Curso" className="w-full p-5 bg-slate-50 rounded-2xl outline-none focus:ring-2 ring-indigo-500 border border-slate-200 text-slate-900" value={form.titulo} onChange={e => setForm({...form, titulo: e.target.value})} required />
             </div>
+
+            {/* Herramienta de Renombrado Quirúrgico (UID) */}
+            {editando && (
+              <div className="p-6 bg-amber-50 border-2 border-amber-200 rounded-[2rem] space-y-3">
+                <label className="block text-[9px] font-black text-amber-800 uppercase tracking-[0.2em] ml-2">
+                  Identificador de Base de Datos (UID)
+                </label>
+                <div className="flex gap-2">
+                  <input
+                    type="text"
+                    value={form.id || editando}
+                    onChange={(e) => setForm({ ...form, id: e.target.value.toUpperCase() })}
+                    className="flex-1 px-4 py-3 bg-white border border-amber-300 rounded-xl font-mono text-xs uppercase text-amber-900 focus:ring-2 ring-amber-500 outline-none"
+                    placeholder="YYYY-MM-ACADEMIA-NOMBRE"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => manualRename(editando, form.id || '')}
+                    disabled={!form.id || form.id === editando || migrando}
+                    className="px-6 py-3 bg-amber-600 text-white rounded-xl font-black uppercase text-[10px] tracking-widest hover:bg-amber-700 disabled:opacity-50 transition-all shadow-lg shadow-amber-600/20"
+                  >
+                    {migrando ? '...' : 'Renombrar'}
+                  </button>
+                </div>
+                <p className="text-[9px] text-amber-700 italic ml-2">
+                   ⚠️ Usa esto para corregir IDs duplicados o corruptos de forma manual.
+                </p>
+              </div>
+            )}
 
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-1">
@@ -1115,7 +1285,10 @@ const AdminCursos = () => {
             </div>
 
             <div className="flex gap-3">
-              <button className="flex-1 bg-slate-900 text-white p-6 rounded-[2rem] font-black uppercase shadow-2xl hover:bg-indigo-600 transition-all active:scale-95">
+              <button 
+                disabled={!form.titulo || !form.fechaInicio || !form.categoria || !form.subcategoria}
+                className="flex-1 bg-slate-900 text-white p-6 rounded-[2rem] font-black uppercase shadow-2xl hover:bg-indigo-600 transition-all active:scale-95 disabled:opacity-50 disabled:grayscale disabled:cursor-not-allowed"
+              >
                 {editando ? 'Actualizar Curso' : 'Publicar Curso'}
               </button>
               {editando && (
@@ -1168,7 +1341,11 @@ const AdminCursos = () => {
             </div>
 
             <div className="space-y-4">
-              {cursosAMostrar.length === 0 ? (
+              {loading ? (
+                <div className="p-20 text-center text-slate-400 font-bold uppercase tracking-widest animate-pulse">
+                  Cargando cursos...
+                </div>
+              ) : cursosAMostrar.length === 0 ? (
                 <div className="bg-white p-12 rounded-[3rem] text-center border-2 border-dashed border-slate-200">
                   <p className="text-slate-400 font-bold uppercase tracking-widest text-xs">No hay cursos en esta categoría</p>
                 </div>
@@ -1285,8 +1462,9 @@ const AdminCursos = () => {
                         </div>
                         <button 
                           onClick={() => eliminarCurso(c.id)} 
-                          className="text-red-300 hover:text-red-500 font-bold text-[10px] uppercase"
+                          className="flex items-center gap-1.5 px-4 py-2 bg-red-50 text-red-500 rounded-xl font-bold text-[10px] uppercase hover:bg-red-500 hover:text-white transition-all border border-red-100"
                         >
+                          <Trash2 size={12} />
                           Eliminar
                         </button>
                       </div>

@@ -1,7 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { db } from '../../firebase';
-import { collection, getDocs, doc, setDoc, getDoc, query, orderBy, DocumentData, deleteDoc, where, onSnapshot, writeBatch, serverTimestamp } from 'firebase/firestore';
+import { collection, getDocs, getDocsFromServer, limit, doc, setDoc, getDoc, query, orderBy, DocumentData, deleteDoc, where, onSnapshot, writeBatch, serverTimestamp } from 'firebase/firestore';
 import { Link } from 'react-router-dom';
+import { useAuth } from '../../context/AuthContext';
 import { createSocioAuth } from '../../lib/adminAuth';
 import { sendWelcomeEmail, sendMembershipUpdateEmail } from '../../lib/brevoService';
 import { updateDoc, increment } from 'firebase/firestore';
@@ -12,6 +13,7 @@ import { syncSocioStatus } from '../../lib/socioService';
 import { motion, AnimatePresence } from 'motion/react';
 
 const AdminSocios = () => {
+  const { user } = useAuth();
   const [socios, setSocios] = useState<DocumentData[]>([]);
   const [pagosMensuales, setPagosMensuales] = useState<Record<string, any>>({});
   const [cursosExistentes, setCursosExistentes] = useState<Set<string>>(new Set());
@@ -30,6 +32,8 @@ const AdminSocios = () => {
   const anioActual = new Date().getFullYear();
 
   useEffect(() => { 
+    if (!user) return;
+    
     fetchConfig().then(conf => setCuotaGlobal(conf.cuotaMensualSocio));
 
     // Real-time socios
@@ -39,6 +43,11 @@ const AdminSocios = () => {
       const filtered = allSocios.filter((s: any) => !s.deletedAt);
       filtered.sort((a: any, b: any) => (a.nombre || '').localeCompare(b.nombre || ''));
       setSocios(filtered);
+      setLoading(false);
+    }, (err) => {
+      console.error("AdminSocios: Error en socios onSnapshot:", err.message);
+      setMsg("❌ Error de permisos: " + err.message);
+      setLoading(false);
     });
 
     // Real-time payments
@@ -53,21 +62,21 @@ const AdminSocios = () => {
         mapPagos[d.data().socioId] = d.data();
       });
       setPagosMensuales(mapPagos);
+    }, (err) => {
+      console.error("AdminSocios: Error en pagos onSnapshot:", err.message);
     });
 
     // Fetch courses once (they don't change often)
     getDocs(collection(db, "cursos")).then(cursosSnap => {
       const ids = new Set(cursosSnap.docs.map(d => d.id));
       setCursosExistentes(ids);
-    });
-
-    setLoading(false);
+    }).catch(err => console.error("AdminSocios: Error cursos getDocs:", err.message));
 
     return () => {
       unsubSocios();
       unsubPagos();
     };
-  }, [mesActual, anioActual]);
+  }, [mesActual, anioActual, user]);
 
   const handleCleanup = async () => {
     if (!window.confirm("¿Seguro que quieres limpiar la base de datos? Se eliminarán soci@s que lleven más de 4 meses inactivos.")) return;

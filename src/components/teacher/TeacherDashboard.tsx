@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { db, storage } from '../../firebase';
-import { collection, getDocs, updateDoc, doc, query, orderBy, DocumentData, where, setDoc, getDoc, getDocsFromServer, arrayUnion, arrayRemove, increment, writeBatch, collectionGroup, deleteDoc, serverTimestamp } from 'firebase/firestore';
+import { collection, getDocs, updateDoc, doc, query, orderBy, DocumentData, where, setDoc, getDoc, getDocsFromServer, arrayUnion, arrayRemove, increment, writeBatch, collectionGroup, deleteDoc, serverTimestamp, onSnapshot } from 'firebase/firestore';
 import { ref, uploadBytes, getDownloadURL, deleteObject } from 'firebase/storage';
 import { useAuth } from '../../context/AuthContext';
 import { Link } from 'react-router-dom';
@@ -46,75 +46,64 @@ const TeacherDashboard = () => {
   const usagePercent = Math.min(100, (storageUsage / storageLimit) * 100);
   const usageMB = (storageUsage / (1024 * 1024)).toFixed(2);
 
-  const fetchCursos = async () => {
-    if (!user) return;
-    setLoading(true);
-    try {
-      const q = query(
-        collection(db, "cursos"), 
-        where("profesorId", "==", user.uid)
-      );
-      let snap;
-      try {
-        snap = await getDocs(q);
-      } catch (e: any) {
-        console.warn("Error en query normal, intentando desde servidor:", e);
-        snap = await getDocsFromServer(q);
-      }
-      setCursos(snap.docs.map(d => ({ id: d.id, ...d.data() })));
-    } catch (err) { console.error(err); }
-    setLoading(false);
-  };
-
-  const fetchPagos = async () => {
-    try {
-      // 1. Fetch monthly payments (Aportación Kalian)
-      const qM = query(
-        collection(db, "pagos_mensuales"),
-        where("mes", "==", mesActual),
-        where("anio", "==", anioActual)
-      );
-      const snapM = await getDocs(qM);
-      const mapM: Record<string, any> = {};
-      snapM.docs.forEach(d => { mapM[d.data().socioId] = d.data(); });
-      setPagosMensuales(mapM);
-
-      // 2. Fetch one-time course payments (Inscripciones)
-      if (cursoSeleccionado) {
-        const qI = query(
-          collection(db, "pagos_inscripciones"),
-          where("cursoId", "==", cursoSeleccionado.id)
-        );
-        const snapI = await getDocs(qI);
-        const mapI: Record<string, any> = {};
-        snapI.docs.forEach(d => { mapI[d.data().socioId] = d.data(); });
-        setPagosInscripciones(mapI);
-      }
-    } catch (err) { console.error(err); }
-  };
-
-  const fetchNotificaciones = async () => {
-    if (!user) return;
-    try {
-      const q = query(
-        collection(db, "notificaciones"),
-        where("userId", "==", user.uid),
-        orderBy("fecha", "desc")
-      );
-      const snap = await getDocs(q);
-      setNotificaciones(snap.docs.map(d => ({ id: d.id, ...d.data() })));
-    } catch (err) { console.error(err); }
-  };
-
   useEffect(() => { 
-    fetchCursos(); 
+    if (!user) return;
+    
+    // Listen to cursos
+    const qC = query(collection(db, "cursos"), where("profesorId", "==", user.uid));
+    const unsubC = onSnapshot(qC, (snap) => {
+      setCursos(snap.docs.map(d => ({ id: d.id, ...d.data() })));
+      setLoading(false);
+    }, (err) => console.error("TeacherDashboard: Error en cursos onSnapshot:", err.message));
+
+    // Listen to notificaciones
+    const qN = query(collection(db, "notificaciones"), where("userId", "==", user.uid), orderBy("fecha", "desc"));
+    const unsubN = onSnapshot(qN, (snap) => {
+      setNotificaciones(snap.docs.map(d => ({ id: d.id, ...d.data() })));
+    }, (err) => console.error("TeacherDashboard: Error en notificaciones onSnapshot:", err.message));
+
     fetchStorageUsage();
-    fetchNotificaciones();
+
+    return () => {
+      unsubC();
+      unsubN();
+    };
   }, [user]);
 
   useEffect(() => {
-    fetchPagos();
-  }, [user, cursoSeleccionado]);
+    if (!user) return;
+
+    // Listen to monthly payments
+    const qM = query(
+      collection(db, "pagos_mensuales"),
+      where("mes", "==", mesActual),
+      where("anio", "==", anioActual)
+    );
+    const unsubM = onSnapshot(qM, (snap) => {
+      const mapM: Record<string, any> = {};
+      snap.docs.forEach(d => { mapM[d.data().socioId] = d.data(); });
+      setPagosMensuales(mapM);
+    }, (err) => console.error("TeacherDashboard: Error en pagos_mensuales onSnapshot:", err.message));
+
+    // Listen to course-specific payments
+    let unsubI = () => {};
+    if (cursoSeleccionado) {
+      const qI = query(
+        collection(db, "pagos_inscripciones"),
+        where("cursoId", "==", cursoSeleccionado.id)
+      );
+      unsubI = onSnapshot(qI, (snap) => {
+        const mapI: Record<string, any> = {};
+        snap.docs.forEach(d => { mapI[d.data().socioId] = d.data(); });
+        setPagosInscripciones(mapI);
+      }, (err) => console.error("TeacherDashboard: Error en pagos_inscripciones onSnapshot:", err.message));
+    }
+
+    return () => {
+      unsubM();
+      unsubI();
+    };
+  }, [user, cursoSeleccionado, mesActual, anioActual]);
 
   useEffect(() => {
     const fetchAlumnos = async () => {
@@ -140,7 +129,6 @@ const TeacherDashboard = () => {
   const toggleAforo = async (id: string, actual: boolean) => {
     try {
       await updateDoc(doc(db, "cursos", id), { aforo_disponible: !actual });
-      fetchCursos();
     } catch (err) { console.error(err); }
   };
 
@@ -222,7 +210,6 @@ const TeacherDashboard = () => {
           });
         }
       }
-      fetchPagos();
     } catch (err) { console.error(err); }
   };
 
@@ -258,7 +245,6 @@ const TeacherDashboard = () => {
 
       setShowConfirmModal(false);
       setConfirmingPago(null);
-      fetchPagos();
       setMsg("✅ Pago registrado y bloqueado");
       setTimeout(() => setMsg(''), 3000);
     } catch (err) {
@@ -316,7 +302,6 @@ const TeacherDashboard = () => {
       }
 
       setArchivo(null);
-      fetchCursos();
       fetchStorageUsage();
       alert("✅ Documento subido con éxito");
     } catch (err) {
@@ -343,7 +328,6 @@ const TeacherDashboard = () => {
         totalBytes: increment(-(documento.size || 0)) 
       });
       
-      fetchCursos();
       fetchStorageUsage();
     } catch (err) {
       console.error(err);
@@ -460,14 +444,12 @@ const TeacherDashboard = () => {
   const marcarLeida = async (id: string) => {
     try {
       await updateDoc(doc(db, "notificaciones", id), { leida: true });
-      fetchNotificaciones();
     } catch (err) { console.error(err); }
   };
 
   const eliminarNotificacion = async (id: string) => {
     try {
       await deleteDoc(doc(db, "notificaciones", id));
-      fetchNotificaciones();
     } catch (err) { console.error(err); }
   };
 
@@ -541,7 +523,7 @@ const TeacherDashboard = () => {
               {view === 'list' ? '📅 Ver Calendario' : '📋 Ver Lista'}
             </button>
             <button 
-              onClick={() => { fetchCursos(); fetchPagos(); }}
+              onClick={() => { fetchStorageUsage(); }}
               className="bg-kalian-gold/5 text-kalian-gold/40 px-4 py-3 rounded-xl font-black text-[10px] uppercase tracking-widest hover:text-kalian-gold transition-all"
             >
               🔄 Refrescar

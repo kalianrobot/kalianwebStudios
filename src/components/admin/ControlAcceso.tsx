@@ -88,12 +88,17 @@ const ControlAcceso = ({ isPuertaMode = false }: { isPuertaMode?: boolean }) => 
     const hoy = new Date().toISOString().split('T')[0];
     const q = query(collection(db, "eventos"), where("fecha", ">=", hoy));
     
+    // Solo suscribirse si hay un usuario autenticado para evitar Permission Denied iniciales
+    if (!user) return;
+
     const unsubscribe = onSnapshot(q, (snap) => {
       const evs = snap.docs.map(d => ({ id: d.id, ...d.data() }));
       setEventos(evs);
       if (evs.length === 1 && !eventoSeleccionado) {
         setEventoSeleccionado(evs[0]);
       }
+    }, (err) => {
+      console.error("ControlAcceso: Error en onSnapshot:", err.message);
     });
 
     return () => unsubscribe();

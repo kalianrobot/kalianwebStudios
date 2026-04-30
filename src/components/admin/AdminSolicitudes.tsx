@@ -2,11 +2,13 @@ import React, { useState, useEffect } from 'react';
 import { db } from '../../firebase';
 import { collection, onSnapshot, doc, setDoc, getDoc, query, where, DocumentData, deleteDoc, updateDoc, arrayUnion } from 'firebase/firestore';
 import { Link } from 'react-router-dom';
+import { useAuth } from '../../context/AuthContext';
 import { createSocioAuth } from '../../lib/adminAuth';
 import { sendWelcomeEmail, sendMembershipUpdateEmail } from '../../lib/brevoService';
 import { registrarIngreso, MetodoPago } from '../../lib/finanzas';
 
 const AdminSolicitudes = () => {
+  const { user } = useAuth();
   const [solicitudes, setSolicitudes] = useState<DocumentData[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -14,6 +16,7 @@ const AdminSolicitudes = () => {
   const [metodosPago, setMetodosPago] = useState<Record<string, MetodoPago>>({});
 
   useEffect(() => {
+    if (!user) return;
     setLoading(true);
     setError(null);
     
@@ -30,13 +33,13 @@ const AdminSolicitudes = () => {
       setSolicitudes(data);
       setLoading(false);
     }, (err) => {
-      console.error("Error fetching solicitudes real-time:", err);
+      console.error("Error fetching solicitudes real-time:", err.message);
       setError("Error al cargar las solicitudes en tiempo real.");
       setLoading(false);
     });
 
     return () => unsubscribe();
-  }, []);
+  }, [user]);
 
   const fetchSolicitudes = () => {
     // onSnapshot ya se encarga, pero mantenemos la función para el botón de refresco manual si se desea

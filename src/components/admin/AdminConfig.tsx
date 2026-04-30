@@ -5,8 +5,10 @@ import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 import { Link } from 'react-router-dom';
 import { Database, Download, ShieldCheck, RefreshCw, Wand2 } from 'lucide-react';
 import { fetchConfig, updateConfig, subscribeToConfig } from '../../lib/configService';
+import { useAuth } from '../../context/AuthContext';
 
 const AdminConfig = () => {
+  const { user } = useAuth();
   const [config, setConfig] = useState({
     siteName: 'KALIAN HKG',
     slogan: 'KALIAN HIRI KULTUR GUNEA',
@@ -115,6 +117,7 @@ const AdminConfig = () => {
   };
 
   useEffect(() => {
+    if (!user) return;
     const fetchConfigData = async () => {
       const docRef = doc(db, "config", "site");
       const snap = await getDoc(docRef);
@@ -124,7 +127,7 @@ const AdminConfig = () => {
       setLoading(false);
     };
     fetchConfigData();
-  }, []);
+  }, [user]);
 
   const normalizarFinanzas = async () => {
     if (!window.confirm("¿Deseas normalizar la colección de Finanzas? Se corregirán nombres de categorías y se vincularán IDs de cursos migrados.")) return;

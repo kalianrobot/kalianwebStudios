@@ -1,0 +1,196 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // 0. GLOBAL SAFETY NET
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    // ===============================================================
+    // PHASE 3: PRIMITIVE DEFINITIONS & GLOBAL HELPERS
+    // ===============================================================
+
+    function isSignedIn() { return request.auth != null; }
+    function isVerified() { return isSignedIn() && request.auth.token.email_verified == true; }
+    
+    // Auth helpers that fetch role from /users/{uid}
+    function getRole() { return get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role; }
+    function isAdmin() { return isSignedIn() && getRole() == 'admin'; }
+    function isTeacher() { return isSignedIn() && getRole() == 'teacher'; }
+    function isPortero() { return isSignedIn() && getRole() == 'portero'; }
+    function isSocio() { return isSignedIn() && getRole() == 'socio'; }
+
+    function incoming() { return request.resource.data; }
+    function existing() { return resource.data; }
+    function isValidId(id) { return id is string && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$'); }
+
+    // ===============================================================
+    // PHASE 4: VALIDATION BLUEPRINTS
+    // ===============================================================
+
+    function isValidUser(data) {
+      return data.keys().hasAll(['role', 'email']) &&
+             data.keys().size() >= 2 &&
+             data.role in ['admin', 'teacher', 'portero', 'socio', 'invitado'] &&
+             data.email is string && data.email.size() <= 100;
+    }
+
+    function isValidSocio(data) {
+      return data.keys().hasAll(['dni', 'nombre', 'email', 'uid', 'estado']) &&
+             data.dni is string && data.dni.size() <= 20 &&
+             data.nombre is string && data.nombre.size() <= 100 &&
+             data.email is string && data.email.size() <= 100 &&
+             data.uid is string && data.uid.size() <= 128 &&
+             data.estado in ['activo', 'inactivo'];
+    }
+
+    function isValidCurso(data) {
+      return data.keys().hasAll(['titulo', 'categoria', 'fechaInicio', 'fechaFin', 'sala']) &&
+             data.titulo is string && data.titulo.size() <= 200 &&
+             data.categoria is string &&
+             data.fechaInicio is string &&
+             data.fechaFin is string &&
+             data.sala is string;
+    }
+
+    function isValidSesion(data) {
+      return data.keys().hasAll(['fecha', 'hora_inicio', 'hora_fin', 'sala', 'cursoId']) &&
+             data.fecha is string &&
+             data.hora_inicio is string &&
+             data.hora_fin is string &&
+             data.sala is string &&
+             isValidId(data.cursoId);
+    }
+
+    function isValidEvento(data) {
+      return data.keys().hasAll(['titulo', 'fecha', 'precio_estandar', 'sala']) &&
+             data.titulo is string && data.titulo.size() <= 200 &&
+             data.fecha is string &&
+             data.precio_estandar is number && data.precio_estandar >= 0 &&
+             data.sala is string;
+    }
+
+    // ===============================================================
+    // PHASE 5: COLLECTION MATCH BLOCKS
+    // ===============================================================
+
+    // --- USERS & ROLES ---
+    match /users/{userId} {
+      allow get: if isSignedIn() && (request.auth.uid == userId || isAdmin());
+      allow list: if isAdmin();
+      allow create: if isAdmin() && isValidUser(incoming());
+      allow update: if isAdmin() && isValidUser(incoming()) && 
+                    incoming().email == existing().email &&
+                    // Protected Role: Only admins can change roles, but we already have allow update: if isAdmin()
+                    true;
+      allow delete: if isAdmin();
+    }
+
+    // --- SOCIOS ---
+    match /socios/{dni} {
+      // Identity Protection: One can only see their own socio record or be an admin
+      allow get: if isAdmin() || (isSignedIn() && existing().uid == request.auth.uid);
+      // List restricted to admin/portero with explicit filtering likely needed in app, 
+      // but here we check admin/portero rights.
+      allow list: if isAdmin() || isPortero(); 
+      allow create: if isAdmin() && isValidSocio(incoming());
+      allow update: if (isAdmin() || (isSignedIn() && existing().uid == request.auth.uid)) && 
+                    isValidSocio(incoming()) &&
+                    incoming().uid == existing().uid &&
+                    (isAdmin() || incoming().diff(existing()).affectedKeys().hasOnly(['email', 'nombre', 'membresias'])); 
+      allow delete: if isAdmin();
+    }
+
+    // --- CURSOS & SESIONES ---
+    match /cursos/{cursoId} {
+      // Public catalog: No blanket list, must be active (not deleted)
+      allow list: if resource.data.deletedAt == null;
+      allow get: if true;
+      allow create: if isAdmin() && isValidCurso(incoming());
+      allow update: if (isAdmin() || (isTeacher() && existing().profesorId == request.auth.uid)) && 
+                    isValidCurso(incoming()) &&
+                    (isAdmin() || incoming().diff(existing()).affectedKeys().hasOnly(['horario', 'sala', 'alumnos', 'aforo_actual', 'descripcion']));
+      allow delete: if isAdmin();
+
+      match /sesiones/{sesionId} {
+        allow list: if true;
+        allow get: if true;
+        allow create: if (isAdmin() || (isTeacher() && get(/databases/$(database)/documents/cursos/$(cursoId)).data.profesorId == request.auth.uid)) && 
+                      isValidSesion(incoming()) &&
+                      incoming().cursoId == cursoId;
+        allow update: if (isAdmin() || (isTeacher() && get(/databases/$(database)/documents/cursos/$(cursoId)).data.profesorId == request.auth.uid)) && 
+                      isValidSesion(incoming()) &&
+                      incoming().cursoId == cursoId;
+        allow delete: if isAdmin() || (isTeacher() && get(/databases/$(database)/documents/cursos/$(cursoId)).data.profesorId == request.auth.uid);
+      }
+    }
+
+    // Collection Group for sessions (Calendar view)
+    match /{path=**}/sesiones/{sesionId} {
+      allow list: if true;
+      allow get: if true;
+    }
+
+    // --- EVENTOS & ASISTENCIA ---
+    match /eventos/{eventoId} {
+      // Only public events are visible to all
+      allow list: if resource.data.es_publico == true || isAdmin();
+      allow get: if resource.data.es_publico == true || isAdmin();
+      allow create: if isAdmin() && isValidEvento(incoming());
+      allow update: if isAdmin() && isValidEvento(incoming());
+      allow delete: if isAdmin();
+    }
+
+    match /asistencia_eventos/{asistenciaId} {
+      allow read: if isAdmin() || isPortero();
+      allow create: if isAdmin() || isPortero();
+      allow update: if isAdmin() || isPortero();
+      allow delete: if isAdmin();
+    }
+
+    match /reservas/{reservaId} {
+      allow read: if isAdmin() || (isSignedIn() && (existing().uidTitular == request.auth.uid || existing().emailTitular == request.auth.token.email));
+      allow create: if incoming().keys().hasAll(['eventoId', 'tickets', 'total']) && incoming().total >= 0;
+      allow update: if isAdmin() || (isSignedIn() && existing().uidTitular == request.auth.uid);
+      allow delete: if isAdmin();
+    }
+
+    // --- FINANZAS & CAJA ---
+    match /finanzas/{docId} {
+      allow read, write: if isAdmin();
+    }
+
+    match /caja_eventos/{mesAnio} {
+      allow read, write: if isAdmin();
+    }
+
+    match /pagos_mensuales/{pagoId} {
+      allow read: if isAdmin();
+      allow write: if isAdmin();
+    }
+
+    match /pagos_inscripciones/{pagoId} {
+      allow read: if isAdmin();
+      allow write: if isAdmin();
+    }
+
+    // --- SUPPORTING COLLECTIONS ---
+    match /academias/{academiaId} {
+      allow list: if resource.data.activo == true || isAdmin();
+      allow get: if true;
+      allow write: if isAdmin();
+    }
+
+    match /profesores/{profId} {
+      allow list: if resource.data.activo == true || isAdmin();
+      allow get: if true;
+      allow write: if isAdmin();
+    }
+
+    match /solicitudes_cursos/{solicitudId} {
+      allow create: if incoming().keys().hasAll(['nombre', 'email', 'cursoId']) && incoming().email is string;
+      allow read, update, delete: if isAdmin() || isTeacher();
+    }
+  }
+}

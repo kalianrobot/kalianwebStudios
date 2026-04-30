@@ -42,23 +42,55 @@ const PageLoader = () => (
   </div>
 );
 
+import { ErrorBoundary } from 'react-error-boundary';
+
+const ErrorFallback = ({ error, resetErrorBoundary }: any) => (
+  <div className="min-h-screen bg-slate-900 flex flex-col items-center justify-center p-10 text-center">
+    <div className="text-6xl mb-8">😱</div>
+    <h1 className="text-4xl kalian-poster-text text-kalian-gold mb-4 uppercase italic">Vaya, algo se ha roto</h1>
+    <p className="text-kalian-cream/60 max-w-md mb-8 italic text-sm">
+      Ha ocurrido un error inesperado. Este tipo de fallos suelen ocurrir al intentar acceder a datos sin permisos suficientes o por una inestabilidad temporal.
+    </p>
+    <div className="bg-black/40 p-6 rounded-2xl border border-red-500/20 text-left mb-8 w-full max-w-xl overflow-auto max-h-40">
+      <code className="text-red-400 text-[10px] font-mono break-all">{error.message}</code>
+    </div>
+    <div className="flex gap-4">
+      <button 
+        onClick={() => window.location.href = '/'}
+        className="bg-kalian-gold text-black px-8 py-3 rounded-xl font-black uppercase text-[10px] tracking-widest shadow-xl shadow-kalian-gold/10 transition-all hover:scale-105"
+      >
+        Ir al Inicio
+      </button>
+      <button 
+        onClick={resetErrorBoundary}
+        className="bg-kalian-cream text-black px-8 py-3 rounded-xl font-black uppercase text-[10px] tracking-widest transition-all hover:scale-105"
+      >
+        Reintentar
+      </button>
+    </div>
+  </div>
+);
+
 function AppContent() {
   const { user, role, socioData } = useAuth();
   const location = useLocation();
+  const isMaster = user?.email?.toLowerCase() === 'kalianrobot@gmail.com';
+  const hasAdminAccess = role === 'admin' || isMaster;
+  
   const isLanding = location.pathname === '/';
   const isPuerta = location.pathname === '/puerta';
   const isLogin = ['/login', '/profesor/login', '/staff/login'].includes(location.pathname);
 
   // Bloqueo de Panel para socios inactivos (solo aplica a usuarios con rol socio o invitado_registrado)
   const isSocioArea = ['/home', '/perfil'].includes(location.pathname);
-  const needsActiveCheck = role === 'socio' || role === 'invitado_registrado';
+  const needsActiveCheck = (role === 'socio' || role === 'invitado_registrado') && !isMaster;
   
   if (user && needsActiveCheck && socioData?.estado === 'inactivo' && isSocioArea) {
     return <Navigate to="/" state={{ msg: "Tu suscripción de socio no está activa. Apúntate a un curso para recuperar el acceso a las ventajas de socio." }} replace />;
   }
 
   return (
-    <>
+    <ErrorBoundary FallbackComponent={ErrorFallback} onReset={() => window.location.reload()}>
       {!isLanding && !isLogin && !isPuerta && <Navbar />}
 
       <Suspense fallback={<PageLoader />}>
@@ -74,8 +106,8 @@ function AppContent() {
 
         {/* RUTAS STAFF (ADMIN) */}
         <Route path="/staff/login" element={
-          (role === 'admin' || role === 'portero') ? (
-            <Navigate to={role === 'admin' ? "/staff" : "/control-acceso"} />
+          (hasAdminAccess || role === 'portero') ? (
+            <Navigate to={hasAdminAccess ? "/staff" : "/control-acceso"} />
           ) : (
             <AdminLogin />
           )
@@ -84,28 +116,28 @@ function AppContent() {
         <Route path="/login-admin" element={<Navigate to="/staff/login" />} />
         
         <Route path="/staff" element={
-          role === 'admin' ? (
+          hasAdminAccess ? (
             <AdminDashboard />
           ) : (
             <Navigate to="/staff/login" />
           )
         } />
 
-        <Route path="/staff/eventos" element={role === 'admin' ? <AdminEventos /> : <Navigate to="/staff/login" />} />
-        <Route path="/staff/cursos" element={role === 'admin' ? <AdminCursos /> : <Navigate to="/staff/login" />} />
-        <Route path="/staff/socios" element={role === 'admin' ? <AdminSocios /> : <Navigate to="/staff/login" />} />
-        <Route path="/staff/profesores" element={role === 'admin' ? <AdminProfesores /> : <Navigate to="/staff/login" />} />
-        <Route path="/staff/locales" element={role === 'admin' ? <AdminLocales /> : <Navigate to="/staff/login" />} />
-        <Route path="/staff/academias" element={role === 'admin' ? <AdminAcademias /> : <Navigate to="/staff/login" />} />
-        <Route path="/staff/staff" element={role === 'admin' ? <AdminStaff /> : <Navigate to="/staff/login" />} />
-        <Route path="/staff/solicitudes" element={role === 'admin' ? <AdminSolicitudes /> : <Navigate to="/staff/login" />} />
-        <Route path="/staff/contabilidad" element={role === 'admin' ? <AdminContabilidad /> : <Navigate to="/staff/login" />} />
-        <Route path="/staff/galeria" element={role === 'admin' ? <AdminExposiciones /> : <Navigate to="/staff/login" />} />
-        <Route path="/staff/config" element={role === 'admin' ? <AdminConfig /> : <Navigate to="/staff/login" />} />
+        <Route path="/staff/eventos" element={hasAdminAccess ? <AdminEventos /> : <Navigate to="/staff/login" />} />
+        <Route path="/staff/cursos" element={hasAdminAccess ? <AdminCursos /> : <Navigate to="/staff/login" />} />
+        <Route path="/staff/socios" element={hasAdminAccess ? <AdminSocios /> : <Navigate to="/staff/login" />} />
+        <Route path="/staff/profesores" element={hasAdminAccess ? <AdminProfesores /> : <Navigate to="/staff/login" />} />
+        <Route path="/staff/locales" element={hasAdminAccess ? <AdminLocales /> : <Navigate to="/staff/login" />} />
+        <Route path="/staff/academias" element={hasAdminAccess ? <AdminAcademias /> : <Navigate to="/staff/login" />} />
+        <Route path="/staff/staff" element={hasAdminAccess ? <AdminStaff /> : <Navigate to="/staff/login" />} />
+        <Route path="/staff/solicitudes" element={hasAdminAccess ? <AdminSolicitudes /> : <Navigate to="/staff/login" />} />
+        <Route path="/staff/contabilidad" element={hasAdminAccess ? <AdminContabilidad /> : <Navigate to="/staff/login" />} />
+        <Route path="/staff/galeria" element={hasAdminAccess ? <AdminExposiciones /> : <Navigate to="/staff/login" />} />
+        <Route path="/staff/config" element={hasAdminAccess ? <AdminConfig /> : <Navigate to="/staff/login" />} />
 
         {/* RUTA CONTROL ACCESO (PORTERO) */}
         <Route path="/control-acceso" element={
-          (role === 'admin' || role === 'portero') ? (
+          (hasAdminAccess || role === 'portero') ? (
             <ControlAcceso />
           ) : (
             <Navigate to="/staff/login" />
@@ -130,18 +162,20 @@ function AppContent() {
         <Route path="*" element={<Navigate to="/" />} />
       </Routes>
     </Suspense>
-  </>
-);
+    </ErrorBoundary>
+  );
 }
 
 export default function App() {
   return (
-    <AuthProvider>
-      <LanguageProvider>
-        <Router>
-          <AppContent />
-        </Router>
-      </LanguageProvider>
-    </AuthProvider>
+    <ErrorBoundary FallbackComponent={ErrorFallback}>
+      <AuthProvider>
+        <LanguageProvider>
+          <Router>
+            <AppContent />
+          </Router>
+        </LanguageProvider>
+      </AuthProvider>
+    </ErrorBoundary>
   );
 }

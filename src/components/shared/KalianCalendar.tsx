@@ -7,6 +7,7 @@ import { db } from '../../firebase';
 import { 
   collection, 
   getDocs, 
+  getDocsFromServer,
   query, 
   orderBy, 
   collectionGroup, 
@@ -62,48 +63,83 @@ const KalianCalendar: React.FC<KalianCalendarProps> = ({ teacherMode = false }) 
 
   // 1. LISTENERS EN TIEMPO REAL
   useEffect(() => {
-    // Listener para Eventos
-    const unsubEventos = onSnapshot(query(collection(db, "eventos"), orderBy("fecha", "asc")), (snap) => {
-      setRawEventos(snap.docs.map(d => ({ id: d.id, ...d.data(), refPath: d.ref.path })));
-    });
+    if (!user) {
+      setLoading(false);
+      return;
+    }
 
-    // Listener para Cursos
-    const unsubCursos = onSnapshot(collection(db, "cursos"), (snap) => {
-      setCursos(snap.docs.map(d => ({ id: d.id, ...d.data() })));
-    });
+    let unsubEventos = () => {};
+    let unsubCursos = () => {};
+    let unsubSesiones = () => {};
+    let unsubProf = () => {};
+    let unsubFallback = () => {};
 
-    // Listener para Sesiones (Collection Group)
-    const unsubSesiones = onSnapshot(collectionGroup(db, "sesiones"), (snap) => {
-      setRawSesiones(snap.docs.map(d => ({ 
-        id: d.id, 
-        ...d.data(), 
-        refPath: d.ref.path,
-        courseId: d.ref.parent.parent?.id 
-      })));
-    });
+    try {
+      setLoading(true);
+      // Carga inicial forzada desde servidor para estabilidad en el proxy
+      const fetchInitial = async () => {
+        try {
+          const [evSnap, curSnap, sesSnap, profSnap] = await Promise.all([
+            getDocsFromServer(query(collection(db, "eventos"), orderBy("fecha", "asc"))),
+            getDocsFromServer(collection(db, "cursos")),
+            getDocsFromServer(collectionGroup(db, "sesiones")),
+            getDocsFromServer(collection(db, "profesores"))
+          ]);
+          setRawEventos(evSnap.docs.map(d => ({ id: d.id, ...d.data(), refPath: d.ref.path })));
+          setCursos(curSnap.docs.map(d => ({ id: d.id, ...d.data() })));
+          setRawSesiones(sesSnap.docs.map(d => ({ id: d.id, ...d.data(), refPath: d.ref.path, courseId: d.ref.parent.parent?.id })));
+          setProfesores(profSnap.docs.map(d => ({ id: d.id, ...d.data() })));
+        } catch (err: any) {
+          console.warn("Calendar: Fallo en carga servidor inicial:", err.message);
+        } finally {
+          setLoading(false);
+        }
+      };
+      fetchInitial();
 
-    // Listener para Profesores
-    // Nota: Intentamos cargar de 'profesores', si no hay datos, 'socios' con rol profesor
-    const unsubProf = onSnapshot(collection(db, "profesores"), (snap) => {
-      if (!snap.empty) {
-        setProfesores(snap.docs.map(d => ({ id: d.id, ...d.data() })));
-      } else {
-        // Fallback a socios con rol profesor si la colección dedicada está vacía
-        const qP = query(collection(db, "socios"), where("rol", "==", "profesor"));
-        const unsubFall = onSnapshot(qP, (snapF) => {
-          setProfesores(snapF.docs.map(df => ({ id: df.id, ...df.data() })));
-        });
-        return unsubFall;
-      }
-    });
+      // Listener para Eventos
+      unsubEventos = onSnapshot(query(collection(db, "eventos"), orderBy("fecha", "asc")), (snap) => {
+        setRawEventos(snap.docs.map(d => ({ id: d.id, ...d.data(), refPath: d.ref.path })));
+      }, (err) => console.warn("Calendar: Error eventos:", err.message));
+
+      // Listener para Cursos
+      unsubCursos = onSnapshot(collection(db, "cursos"), (snap) => {
+        setCursos(snap.docs.map(d => ({ id: d.id, ...d.data() })));
+      }, (err) => console.warn("Calendar: Error cursos:", err.message));
+
+      // Listener para Sesiones (Collection Group)
+      unsubSesiones = onSnapshot(collectionGroup(db, "sesiones"), (snap) => {
+        setRawSesiones(snap.docs.map(d => ({ 
+          id: d.id, 
+          ...d.data(), 
+          refPath: d.ref.path,
+          courseId: d.ref.parent.parent?.id 
+        })));
+      }, (err) => console.error("Calendar: Error sessions group:", err.message));
+
+      // Listener para Profesores
+      unsubProf = onSnapshot(collection(db, "profesores"), (snap) => {
+        if (!snap.empty) {
+          setProfesores(snap.docs.map(d => ({ id: d.id, ...d.data() })));
+        } else {
+          const qP = query(collection(db, "socios"), where("rol", "==", "profesor"));
+          unsubFallback = onSnapshot(qP, (snapF) => {
+            setProfesores(snapF.docs.map(df => ({ id: df.id, ...df.data() })));
+          }, (err) => console.warn("Calendar: Error fallback prof:", err.message));
+        }
+      }, (err) => console.warn("Calendar: Error prof:", err.message));
+    } catch (e: any) {
+      console.error("Calendar: Fatal error initializing listeners:", e.message);
+    }
 
     return () => {
       unsubEventos();
       unsubCursos();
       unsubSesiones();
       unsubProf();
+      unsubFallback();
     };
-  }, []);
+  }, [user]);
 
   // 2. PROCESAMIENTO DE EVENTOS PARA EL CALENDARIO
   useEffect(() => {
@@ -125,16 +161,22 @@ const KalianCalendar: React.FC<KalianCalendarProps> = ({ teacherMode = false }) 
     rawEventos.forEach(ev => {
       const isEditable = userRole === 'admin';
       const start = ev.fecha;
-      const end = ev.hora_fin 
-        ? `${ev.fecha.substring(0, 11)}${ev.hora_fin}` 
-        : (ev.fecha.includes('T') ? undefined : undefined);
+      const hasTime = typeof start === 'string' && start.includes('T');
+      
+      let end = undefined;
+      if (ev.hora_fin) {
+        const datePart = typeof start === 'string' ? start.split('T')[0] : '';
+        if (datePart) {
+          end = `${datePart}T${ev.hora_fin.padStart(5, '0')}`;
+        }
+      }
 
       allEvents.push({
         id: ev.id,
         title: `[EVENTO] ${ev.titulo}`,
         start,
         end,
-        allDay: !ev.fecha.includes('T'),
+        allDay: !hasTime,
         backgroundColor: ev.es_publico !== false ? '#10b981' : '#f59e0b',
         borderColor: 'transparent',
         textColor: '#ffffff',
@@ -143,9 +185,9 @@ const KalianCalendar: React.FC<KalianCalendarProps> = ({ teacherMode = false }) 
           type: 'evento', 
           data: ev,
           path: ev.refPath,
-          fecha: ev.fecha.split('T')[0],
-          hora_inicio: start.includes('T') ? start.split('T')[1]?.substring(0, 5) : "00:00",
-          hora_fin: ev.hora_fin || "23:59"
+          fecha: typeof start === 'string' ? start.split('T')[0] : '',
+          hora_inicio: hasTime ? start.split('T')[1]?.substring(0, 5) : "00:00",
+          hora_fin: ev.hora_fin || (hasTime ? "23:59" : "23:59")
         }
       });
     });
@@ -158,11 +200,16 @@ const KalianCalendar: React.FC<KalianCalendarProps> = ({ teacherMode = false }) 
       const isOwner = curso.profesorId === userUID;
       const isEditable = userRole === 'admin' || (userRole === 'profesor' && isOwner);
 
+      // Normalizar horas
+      const hInicio = (sesion.hora_inicio || '00:00').padStart(5, '0');
+      const hFin = (sesion.hora_fin || '01:00').padStart(5, '0');
+
       allEvents.push({
         id: sesion.id,
         title: `${sesion.esRecurrente ? '🔁 ' : ''}${curso.titulo}`,
-        start: `${sesion.fecha}T${sesion.hora_inicio}`,
-        end: `${sesion.fecha}T${sesion.hora_fin}`,
+        start: `${sesion.fecha}T${hInicio}`,
+        end: `${sesion.fecha}T${hFin}`,
+        allDay: false,
         backgroundColor: isEditable ? '#3b82f6' : '#94a3b8',
         borderColor: 'transparent',
         textColor: '#ffffff',
@@ -176,8 +223,8 @@ const KalianCalendar: React.FC<KalianCalendarProps> = ({ teacherMode = false }) 
           profesorNombre: profMap[curso.profesorId] || 'Sin asignar',
           sala: sesion.sala || 'Principal',
           fecha: sesion.fecha,
-          hora_inicio: sesion.hora_inicio,
-          hora_fin: sesion.hora_fin,
+          hora_inicio: hInicio,
+          hora_fin: hFin,
           path: sesion.refPath,
           esRecurrente: sesion.esRecurrente
         }
@@ -194,8 +241,12 @@ const KalianCalendar: React.FC<KalianCalendarProps> = ({ teacherMode = false }) 
       if (ev.id === excludeId) return false;
       const ep = ev.extendedProps;
       
-      // Debe ser el mismo día y misma sala
-      if (ep.fecha !== fecha || ep.sala !== sala) return false;
+      // Debe ser el mismo día
+      if (ep.fecha !== fecha) return false;
+
+      // Debe ser la misma sala O que una de las dos sea "Toda la Sala"
+      const compartenSala = sala === ep.sala || sala === 'Toda la Sala' || ep.sala === 'Toda la Sala';
+      if (!compartenSala) return false;
 
       // Comprobar solape: (nuevaInicio < existenteFin) && (nuevaFin > existenteInicio)
       return (newStart < ep.hora_fin) && (newEnd > ep.hora_inicio);
@@ -411,10 +462,12 @@ const KalianCalendar: React.FC<KalianCalendarProps> = ({ teacherMode = false }) 
             scrollTime="09:00:00"
             allDaySlot={true}
             allDayText="Todo el día"
-            height="auto"
+            height="800px"
+            contentHeight="740px"
             nowIndicator={true}
             expandRows={true}
             handleWindowResize={true}
+            slotEventOverlap={false}
             defaultTimedEventDuration="01:00"
           />
         </div>

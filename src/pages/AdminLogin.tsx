@@ -3,36 +3,48 @@ import { useAuth } from '../context/AuthContext';
 import { useNavigate } from 'react-router-dom';
 
 const AdminLogin = () => {
+  const [email, setEmail] = useState('');
   const [pass, setPass] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
-  const { loginAdmin, role } = useAuth();
+  const { loginAdmin, role, user } = useAuth();
   const navigate = useNavigate();
 
-  const ADMIN_EMAIL = "kalianrobot@gmail.com"; // Email de administrador por defecto
+  // Email de administrador por defecto (se puede usar si se desea, o cualquier otro con permisos)
+  const SUGGESTED_EMAIL = "kalianrobot@gmail.com";
 
   useEffect(() => {
-    if (role === 'admin') {
+    const isMaster = user?.email?.toLowerCase() === SUGGESTED_EMAIL;
+    const hasAdminAccess = role === 'admin' || isMaster;
+
+    console.log("AdminLogin: Access check:", { role, user: user?.email, isMaster, hasAdminAccess });
+    
+    if (hasAdminAccess) {
+      console.log("AdminLogin: Navegando a /staff");
       navigate('/staff');
     } else if (role === 'portero') {
+      console.log("AdminLogin: Navegando a /control-acceso");
       navigate('/control-acceso');
+    } else if (user && !hasAdminAccess && role !== 'portero') {
+      setError('⚠️ No tienes permisos de Staff.');
     }
-  }, [role, navigate]);
+  }, [role, navigate, user]);
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
     setError('');
     try {
-      // Usamos el email fijo de admin y el password introducido
-      await loginAdmin(ADMIN_EMAIL, pass);
+      console.log("AdminLogin: Iniciando sesión...");
+      await loginAdmin(email, pass);
+      console.log("AdminLogin: loginAdmin finalizado exitosamente");
       // No navegamos manualmente, dejamos que el useEffect de role lo haga
     } catch (err: any) {
       console.error("Error de login admin:", err);
       if (err.code === 'auth/wrong-password' || err.code === 'auth/invalid-credential') {
-        setError('Clave de Staff incorrecta');
+        setError('Email o clave incorrecta');
       } else if (err.code === 'auth/user-not-found') {
-        setError('El usuario administrador no existe en el sistema');
+        setError('El usuario no existe en el sistema');
       } else if (err.code === 'auth/too-many-requests') {
         setError('Demasiados intentos fallidos. Inténtalo más tarde.');
       } else {
@@ -67,13 +79,24 @@ const AdminLogin = () => {
 
         <form onSubmit={handleLogin} className="space-y-6">
           <div className="space-y-2">
-            <p className="text-[9px] font-black text-kalian-gold/70 uppercase tracking-[0.4em] ml-4">Contraseña de Staff</p>
+            <p className="text-[9px] font-black text-kalian-gold/70 uppercase tracking-[0.4em] ml-4">Email de Staff</p>
+            <input
+              type="email"
+              placeholder={SUGGESTED_EMAIL}
+              className="w-full p-5 bg-kalian-gold/5 rounded-2xl text-center text-xl font-bold border border-kalian-gold/10 focus:border-kalian-gold focus:bg-kalian-gold/10 outline-none text-kalian-gold transition-all"
+              required
+              value={email}
+              onChange={e => setEmail(e.target.value)}
+            />
+          </div>
+
+          <div className="space-y-2">
+            <p className="text-[9px] font-black text-kalian-gold/70 uppercase tracking-[0.4em] ml-4">Contraseña</p>
             <input
               type="password"
               placeholder="••••••••"
-              className="w-full p-6 bg-kalian-gold/5 rounded-2xl text-center text-2xl kalian-poster-text border border-kalian-gold/10 focus:border-kalian-gold focus:bg-kalian-gold/10 outline-none text-kalian-gold transition-all placeholder:text-kalian-gold/20"
+              className="w-full p-5 bg-kalian-gold/5 rounded-2xl text-center text-2xl kalian-poster-text border border-kalian-gold/10 focus:border-kalian-gold focus:bg-kalian-gold/10 outline-none text-kalian-gold transition-all"
               required
-              autoFocus
               value={pass}
               onChange={e => setPass(e.target.value)}
             />

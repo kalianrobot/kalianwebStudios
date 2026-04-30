@@ -8,18 +8,25 @@ import { useAuth } from '../../context/AuthContext';
 const AdminDashboard = () => {
   const [pendientes, setPendientes] = useState(0);
 
-  const { user } = useAuth();
+  const { user, role, isAdmin, loading } = useAuth();
 
   useEffect(() => {
-    const q = query(collection(db, "solicitudes_cursos"), where("estado", "==", "pendiente"));
-    const unsubscribe = onSnapshot(q, (snap) => {
-      setPendientes(snap.size);
-    }, (err) => {
-      console.error("Error en real-time badge:", err);
-    });
+    if (!user || loading) return;
+    try {
+      const q = query(collection(db, "solicitudes_cursos"), where("estado", "==", "pendiente"));
+      const unsubscribe = onSnapshot(q, (snap) => {
+        setPendientes(snap.size);
+      }, (err) => {
+        console.warn("Dashboard: Error silencioso en badge:", err.message);
+      });
 
-    return () => unsubscribe();
-  }, []);
+      return () => {
+        if (unsubscribe) unsubscribe();
+      };
+    } catch (e: any) {
+      console.warn("Dashboard: Error inicializando listener:", e.message);
+    }
+  }, [user]);
 
   const menus = [
     { t: 'Control Acceso', icon: '🛂', color: 'border-red-600', path: '/control-acceso' },

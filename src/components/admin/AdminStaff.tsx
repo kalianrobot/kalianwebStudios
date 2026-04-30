@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { db } from '../../firebase';
-import { collection, getDocs, doc, setDoc, getDoc, updateDoc, query, orderBy, DocumentData, deleteDoc } from 'firebase/firestore';
+import { collection, getDocs, getDocsFromServer, doc, setDoc, getDoc, updateDoc, query, orderBy, DocumentData, deleteDoc } from 'firebase/firestore';
 import { Link } from 'react-router-dom';
 import { Shield, UserCog, Trash2, UserCheck } from 'lucide-react';
 
@@ -13,6 +13,7 @@ const AdminStaff = () => {
 
   const fetchStaff = async () => {
     setLoading(true);
+    setMsg('');
     try {
       const snap = await getDocs(collection(db, "users"));
       const data = snap.docs.map(d => ({ id: d.id, ...d.data() }));
@@ -23,8 +24,9 @@ const AdminStaff = () => {
       if (configSnap.exists()) {
         setDoorPass(configSnap.data().clave_puerta || '');
       }
-    } catch (err) {
-      console.error(err);
+    } catch (err: any) {
+      console.error("AdminStaff: Error en fetchStaff:", err);
+      setMsg("❌ Error de carga: " + (err.message || "Permiso denegado"));
     }
     setLoading(false);
   };

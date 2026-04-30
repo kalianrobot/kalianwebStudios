@@ -1,152 +1,111 @@
 rules_version = '2';
+
 service cloud.firestore {
   match /databases/{database}/documents {
-    
-    // ===============================================================
-    // Helper Functions
-    // ===============================================================
-    function isAuthenticated() {
-      return request.auth != null;
+
+    function isSignedIn() { 
+      return request.auth != null; 
     }
     
-    function isOwner(userId) {
-      return isAuthenticated() && request.auth.uid == userId;
+    function isMasterAdmin() {
+      return isSignedIn() && 
+             request.auth.token.email.lower() == 'kalianrobot@gmail.com';
     }
 
-    function isAdmin() {
-      return isAuthenticated() && 
-        (request.auth.token.email == "kalianrobot@gmail.com" ||
-         (exists(/databases/$(database)/documents/users/$(request.auth.uid)) && 
-          get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin'));
+    function isAdmin() { 
+      return isMasterAdmin() || 
+             (exists(/databases/$(database)/documents/users/$(request.auth.uid)) && 
+              get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin'); 
+    }
+    
+    function isTeacher() { 
+      return isMasterAdmin() || 
+             (exists(/databases/$(database)/documents/users/$(request.auth.uid)) && 
+              get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role in ['teacher', 'profesor', 'teacher_admin']); 
     }
 
-    function isTeacher() {
-      return isAuthenticated() && 
-        (get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'teacher' ||
-         exists(/databases/$(database)/documents/profesores/$(request.auth.uid)));
-    }
+    // ELIMINA la regla comodín que bloquea todo:
+    // match /{document=**} { ... }
 
-    function isValidEmail(email) {
-      return email is string && email.matches("^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\\.[a-zA-Z]{2,}$");
-    }
-
-    // ===============================================================
-    // Rules
-    // ===============================================================
-
-    // SOCIOS: Solo lectura propia, admin o profesor (para ver alumnos). Escritura solo admin.
-    match /socios/{socioId} {
-      allow read: if isAuthenticated() && (
-        isOwner(resource.data.uid) || 
-        resource.data.email == request.auth.token.email ||
-        isAdmin() || 
-        isTeacher()
-      );
-      allow update: if isAdmin() || (
-        isAuthenticated() && 
-        resource.data.email == request.auth.token.email &&
-        request.resource.data.diff(resource.data).affectedKeys().hasOnly(['uid'])
-      );
-      allow create, delete: if isAdmin();
-    }
-
-    // RESERVAS: Lectura propia, por DNI de socio o admin.
-    match /reservas/{reservaId} {
-      allow read: if isAuthenticated() && (
-        resource.data.uidTitular == request.auth.uid || 
-        resource.data.emailTitular == request.auth.token.email ||
-        (resource.data.dniTitular != null && 
-         exists(/databases/$(database)/documents/socios/$(resource.data.dniTitular)) && 
-         get(/databases/$(database)/documents/socios/$(resource.data.dniTitular)).data.uid == request.auth.uid) ||
-        isAdmin()
-      );
-      allow create: if isAuthenticated();
-      allow update: if isAuthenticated() && (
-        resource.data.uidTitular == request.auth.uid || 
-        isAdmin()
-      );
-      allow delete: if isAdmin();
-    }
-
-    // EVENTOS Y CURSOS: Lectura pública. Escritura admin.
-    match /eventos/{eventoId} {
-      allow read: if true;
-      allow write: if isAdmin();
-    }
-    match /cursos/{cursoId} {
-      allow read: if true;
-      allow update: if isAdmin() || (isTeacher() && resource.data.profesorId == request.auth.uid);
-      allow create, delete: if isAdmin();
-      
-      match /sesiones/{sesionId} {
-        allow read: if true;
-        allow write: if isAdmin() || (isTeacher() && get(/databases/$(database)/documents/cursos/$(cursoId)).data.profesorId == request.auth.uid);
-      }
-    }
-
-    // Permitir collectionGroup para sesiones (necesario para el Calendario Maestro)
-    match /{path=**}/sesiones/{sesionId} {
-      allow read: if true;
-    }
-
-    // PROFESORES: Lectura propia o admin. Escritura admin.
-    match /profesores/{uid} {
-      allow read: if isAuthenticated() && (isOwner(uid) || isAdmin());
-      allow write: if isAdmin();
-    }
-
-    // PAGOS MENSUALES: Lectura y escritura admin o profesor.
-    match /pagos_mensuales/{pagoId} {
-      allow read, write: if isAdmin() || isTeacher();
-    }
-
-    // LOCALES: Lectura pública. Escritura admin.
-    match /locales/{localId} {
-      allow read: if true;
-      allow write: if isAdmin();
-    }
-
-    // USERS (Roles): Lectura propia o admin. Escritura admin.
+    // Perfiles - usuarios normales
     match /users/{userId} {
-      allow read: if isAuthenticated() && (isOwner(userId) || isAdmin());
-      allow write: if isAdmin();
-    }
-
-    // NEWSLETTER: Solo creación pública. Lectura admin.
-    match /newsletter_subscribers/{subId} {
-      allow create: if true;
+      allow read, write: if isSignedIn() && request.auth.uid == userId;
       allow read: if isAdmin();
     }
 
-    // ASISTENCIA Y CAJA: Solo admin.
-    match /asistencia_eventos/{asistenciaId} {
-      allow read, write: if isAdmin();
+    // Datos públicos - CORREGIDO
+    match /cursos/{id} { 
+      allow read: if isSignedIn(); 
+      allow write: if isAdmin(); 
     }
-    match /caja_eventos/{mesAnio} {
-      allow read, write: if isAdmin();
+    
+    match /eventos/{id} { 
+      allow read: if isSignedIn(); 
+      allow write: if isAdmin(); 
+    }
+    
+    match /academias/{id} { 
+      allow read: if isSignedIn(); 
+      allow write: if isAdmin(); 
+    }
+    
+    match /profesores/{id} { 
+      allow read: if isSignedIn(); 
+      allow write: if isAdmin(); 
+    }
+    
+    match /exposiciones/{id} { 
+      allow read: if isSignedIn(); 
+      allow write: if isAdmin(); 
+    }
+    
+    match /locales/{id} { 
+      allow read: if isSignedIn(); 
+      allow write: if isAdmin(); 
     }
 
-    // SOLICITUDES CURSOS: Creación pública con validación básica. Lectura admin o profesor.
-    match /solicitudes_cursos/{solicitudId} {
-      allow create: if request.resource.data.nombre is string && 
-                      request.resource.data.nombre.size() > 0 &&
-                      isValidEmail(request.resource.data.email) &&
-                      request.resource.data.telefono is string &&
-                      request.resource.data.tipo in ['consulta', 'solicitud_inscripcion'] &&
-                      (request.resource.data.tipo == 'consulta' || (request.resource.data.dni is string && request.resource.data.dni.size() > 0));
-      allow read, update, delete: if isAdmin() || isTeacher();
+    // Registro y Reservas
+    match /solicitudes_cursos/{id} { 
+      allow create: if true; 
+      allow read, write: if isAdmin() || isTeacher(); 
+    }
+    
+    match /reservas/{id} { 
+      allow create: if true; 
+      allow read: if isAdmin() || (isSignedIn() && resource.data.uidTitular == request.auth.uid);
+      allow update, delete: if isAdmin() || (isSignedIn() && resource.data.uidTitular == request.auth.uid);
     }
 
-    // METADATA: Almacenamiento total
-    match /metadata/storage {
-      allow read: if isAuthenticated();
-      allow write: if isAdmin() || isTeacher();
+    // Notificaciones
+    match /notificaciones/{id} {
+      allow read: if isSignedIn() && (resource.data.userId == request.auth.uid || isAdmin());
+      allow write: if isSignedIn();
     }
 
-    // ACADEMIAS: Lectura pública. Escritura admin.
-    match /academias/{academiaId} {
-      allow read: if true;
-      allow write: if isAdmin();
+    // Sesiones - CORREGIDO
+    match /cursos/{cursoId}/sesiones/{sId} { 
+      allow read: if isSignedIn(); 
+      allow write: if isAdmin(); 
+    }
+    
+    // Socios
+    match /socios/{id} {
+      allow read: if isSignedIn() && (resource.data.uid == request.auth.uid || isAdmin());
+      allow create: if isSignedIn();
+      allow update, delete: if isAdmin();
+    }
+
+    // Finanzas - solo admin
+    match /finanzas/{id} { 
+      allow read, write: if isAdmin(); 
+    }
+    
+    match /pagos_mensuales/{id} { 
+      allow read, write: if isAdmin(); 
+    }
+    
+    match /pagos_inscripciones/{id} { 
+      allow read, write: if isAdmin(); 
     }
   }
 }

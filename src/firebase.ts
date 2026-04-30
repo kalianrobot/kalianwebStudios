@@ -1,7 +1,7 @@
 import { initializeApp } from "firebase/app";
-import { getFirestore, enableIndexedDbPersistence } from "firebase/firestore";
 import { getAuth } from "firebase/auth";
 import { getStorage } from "firebase/storage";
+import { initializeFirestore, collection, limit, getDocsFromServer, query } from "firebase/firestore";
 
 const firebaseConfig = {
   apiKey: "AIzaSyD5gbpdxZ1acXElYmMGUd1s0aMELxV9lQ0",
@@ -17,17 +17,10 @@ const firebaseConfig = {
 const app = initializeApp(firebaseConfig);
 
 // Exportamos las herramientas para usarlas en el resto de la web
-export const db = getFirestore(app);
+// Forzamos LONG POLLING para evitar errores internos de Firestore en el proxy de AI Studio
+export const db = initializeFirestore(app, {
+  experimentalForceLongPolling: true,
+});
+
 export const auth = getAuth(app);
 export const storage = getStorage(app);
-
-// Habilitar persistencia offline
-enableIndexedDbPersistence(db).catch((err) => {
-    if (err.code === 'failed-precondition') {
-        // Múltiples pestañas abiertas, la persistencia solo puede habilitarse en una.
-        console.warn("Persistencia offline falló: Múltiples pestañas abiertas.");
-    } else if (err.code === 'unimplemented') {
-        // El navegador no soporta todas las características necesarias.
-        console.warn("Persistencia offline falló: El navegador no la soporta.");
-    }
-});

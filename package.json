@@ -29,15 +29,18 @@
     "qrcode.react": "^4.2.0",
     "react": "^19.0.0",
     "react-dom": "^19.0.0",
+    "react-error-boundary": "^6.1.1",
     "react-qr-code": "^2.0.18",
     "react-router-dom": "^7.13.2",
     "recharts": "^3.8.1",
     "vite": "^6.2.0"
   },
   "devDependencies": {
+    "@firebase/eslint-plugin-security-rules": "^0.0.2",
     "@types/express": "^4.17.21",
     "@types/node": "^22.14.0",
     "autoprefixer": "^10.4.21",
+    "eslint": "^10.2.1",
     "tailwindcss": "^4.1.14",
     "tsx": "^4.21.0",
     "typescript": "~5.8.2",

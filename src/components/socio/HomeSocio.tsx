@@ -3,6 +3,7 @@ import { db } from '../../firebase';
 import { collection, getDocs, query, orderBy, DocumentData, where, doc, getDoc, onSnapshot } from 'firebase/firestore';
 import { Link } from 'react-router-dom';
 import { motion, AnimatePresence } from 'motion/react';
+import { useAuth } from '../../context/AuthContext';
 import ReservaForm from '../public/ReservaForm';
 import LegalModal from '../public/LegalModal';
 import KalianHeader from '../shared/KalianHeader';
@@ -10,6 +11,7 @@ import EventCard from '../shared/EventCard';
 import SectionTitle from '../shared/SectionTitle';
 
 export const HomeSocio = () => {
+  const { user } = useAuth();
   const [eventos, setEventos] = useState<DocumentData[]>([]);
   const [cursos, setCursos] = useState<DocumentData[]>([]);
   const [locales, setLocales] = useState<DocumentData[]>([]);
@@ -46,30 +48,42 @@ export const HomeSocio = () => {
   };
 
   useEffect(() => {
+    if (!user) return;
     const hoy = new Date().toISOString();
     
     // Listen to events
     const qE = query(collection(db, "eventos"), orderBy("fecha", "asc"));
     const unsubE = onSnapshot(qE, (snap) => {
       setEventos(snap.docs.map(d => ({ id: d.id, ...d.data() } as any)).filter(ev => ev.fecha >= hoy && ev.es_publico !== false));
+    }, (err) => {
+      console.error("HomeSocio: Error en eventos onSnapshot:", err.message);
     });
 
     // Listen to courses
     const qC = query(collection(db, "cursos"), orderBy("fechaInicio", "asc"));
     const unsubC = onSnapshot(qC, (snap) => {
-      setCursos(snap.docs.map(d => ({ id: d.id, ...d.data() })));
+      const hoyStr = new Date().toISOString().split('T')[0];
+      const allCursos = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+      // Solo mostramos cursos que no han terminado (fin >= hoy)
+      setCursos(allCursos.filter((c: any) => !c.deletedAt && (!c.fechaFin || c.fechaFin >= hoyStr)));
+    }, (err) => {
+      console.error("HomeSocio: Error en cursos onSnapshot:", err.message);
     });
 
     // Listen to academies
     const qA = query(collection(db, "academias"), orderBy("orden", "asc"));
     const unsubA = onSnapshot(qA, (snap) => {
       setAcademias(snap.docs.map(d => ({ id: d.id, ...d.data() } as any)).filter(a => a.activo));
+    }, (err) => {
+      console.error("HomeSocio: Error en academias onSnapshot:", err.message);
     });
 
     // Listen to exhibitions
     const qExpo = query(collection(db, "exposiciones"), orderBy("fechaInicio", "desc"));
     const unsubExpo = onSnapshot(qExpo, (snap) => {
       setExposiciones(snap.docs.map(d => ({ id: d.id, ...d.data() })));
+    }, (err) => {
+      console.error("HomeSocio: Error en exposiciones onSnapshot:", err.message);
     });
 
     // Fetch static data
@@ -90,7 +104,7 @@ export const HomeSocio = () => {
       unsubA();
       unsubExpo();
     };
-  }, []);
+  }, [user]);
 
   // Scroll automático al seleccionar subcategoría
   useEffect(() => {
@@ -103,7 +117,8 @@ export const HomeSocio = () => {
     }
   }, [subcategoriaActiva]);
 
-  const hayLocalesLibres = locales.some(l => l.estado === 'libre');
+  const localesLibres = locales.filter(l => l.estado === 'disponible' && l.alquilado === false);
+  const hayLocalesLibres = localesLibres.length > 0;
 
   const hoy = new Date().toISOString().split('T')[0];
   const expoActual = exposiciones.find(e => e.fechaInicio <= hoy && (e.fechaFin ? e.fechaFin >= hoy : true));
@@ -478,7 +493,11 @@ export const HomeSocio = () => {
               <div className={`px-10 py-6 rounded-3xl border-2 kalian-poster-text text-3xl tracking-widest ${hayLocalesLibres ? 'border-emerald-500/30 bg-emerald-500/10 text-emerald-500' : 'border-red-500/30 bg-red-500/10 text-red-500'}`}>
                 {hayLocalesLibres ? 'HAY DISPONIBILIDAD' : 'SIN DISPONIBILIDAD'}
               </div>
-              <p className="text-[9px] font-black uppercase text-kalian-gold/40 tracking-[0.4em]">Estado de los locales en tiempo real</p>
+              <p className="text-[9px] font-black uppercase text-kalian-gold/40 tracking-[0.4em]">
+                {hayLocalesLibres 
+                  ? `Disponemos de ${localesLibres.length} locales libres actualmente`
+                  : "Actualmente todos nuestros locales están ocupados. ¡Suscríbete para recibir avisos de próximas vacantes!"}
+              </p>
             </div>
           </motion.div>
         </section>

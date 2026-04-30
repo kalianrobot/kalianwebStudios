@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { db } from '../../firebase';
 import { collection, query, orderBy, onSnapshot, Timestamp, where, getDocs, writeBatch, doc } from 'firebase/firestore';
 import { Link } from 'react-router-dom';
+import { useAuth } from '../../context/AuthContext';
 import { 
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell, PieChart, Pie 
 } from 'recharts';
@@ -21,6 +22,7 @@ interface Transaccion {
 }
 
 const AdminContabilidad = () => {
+  const { user } = useAuth();
   const [transacciones, setTransacciones] = useState<Transaccion[]>([]);
   const [loading, setLoading] = useState(true);
   const [filtroCategoria, setFiltroCategoria] = useState<string>('todas');
@@ -45,6 +47,7 @@ const AdminContabilidad = () => {
   const mesesCortos = ["Ene", "Feb", "Mar", "Abr", "May", "Jun", "Jul", "Ago", "Sep", "Oct", "Nov", "Dic"];
 
   useEffect(() => {
+    if (!user) return;
     let q;
     if (viewMode === 'mensual') {
       const inicioMes = new Date(selectedYear, selectedMonth, 1);
@@ -70,6 +73,9 @@ const AdminContabilidad = () => {
       filtered.sort((a, b) => b.fecha.toMillis() - a.fecha.toMillis());
       setTransacciones(filtered);
       setLoading(false);
+    }, (err) => {
+      console.error("AdminContabilidad: Error en onSnapshot:", err.message);
+      setLoading(false);
     });
 
     const unsubConfig = subscribeToConfig((conf) => {
@@ -81,7 +87,7 @@ const AdminContabilidad = () => {
       unsubscribe();
       unsubConfig();
     };
-  }, [selectedMonth, selectedYear, viewMode]);
+  }, [selectedMonth, selectedYear, viewMode, user]);
 
   const handleSaveConfig = async () => {
     if (window.confirm("⚠️ ¿Confirmas el cambio de cuota? La nueva cuota se aplicará a todos los cálculos a partir de ahora.")) {

@@ -2,13 +2,16 @@ import React, { useState, useEffect } from 'react';
 import { db } from '../../firebase';
 import { collection, getDocs, updateDoc, doc, DocumentData, setDoc, getDoc, query, where, writeBatch, onSnapshot } from 'firebase/firestore';
 import { Link } from 'react-router-dom';
+import { useAuth } from '../../context/AuthContext';
 import { registrarIngreso, MetodoPago } from '../../lib/finanzas';
 import { fetchConfig } from '../../lib/configService';
 import { syncMultipleSocios } from '../../lib/socioService';
 
 const AdminLocales = () => {
+  const { user } = useAuth();
   const [locales, setLocales] = useState<DocumentData[]>([]);
   const [loading, setLoading] = useState(true);
+  const [normalizing, setNormalizing] = useState(false);
   const [editando, setEditando] = useState<any | null>(null);
   const [msg, setMsg] = useState('');
   const [metodoPago, setMetodoPago] = useState<MetodoPago>('Transferencia');
@@ -20,6 +23,7 @@ const AdminLocales = () => {
   const mesAnioKey = `${anioActual}_${mesActual}`;
 
   useEffect(() => { 
+    if (!user) return;
     fetchConfig().then(conf => setCuotaGlobal(conf.cuotaMensualSocio));
 
     const unsub = onSnapshot(collection(db, "locales"), (snap) => {
@@ -42,10 +46,50 @@ const AdminLocales = () => {
         setLocales(snap.docs.map(d => ({ id: d.id, ...d.data() })));
       }
       setLoading(false);
+    }, (err) => {
+      console.error("AdminLocales: Error en onSnapshot:", err.message);
     });
 
     return () => unsub();
-  }, []);
+  }, [user]);
+
+  const normalizarLocales = async () => {
+    if (!window.confirm("¿Seguro que deseas normalizar la colección de locales? Esto asegurará que todos tengan los campos 'estado' y 'alquilado' según el estándar.")) return;
+    
+    try {
+      setNormalizing(true);
+      const batch = writeBatch(db);
+      const snap = await getDocs(collection(db, "locales"));
+      
+      snap.forEach(lDoc => {
+        const data = lDoc.data();
+        const update: any = {};
+        
+        // 1. Normalizar 'alquilado'
+        if (data.alquilado === undefined) {
+          update.alquilado = false;
+        }
+        
+        // 2. Normalizar 'estado'
+        if (!data.estado || !['disponible', 'mantenimiento', 'reservado'].includes(data.estado)) {
+          update.estado = 'disponible';
+        }
+        
+        if (Object.keys(update).length > 0) {
+          batch.update(lDoc.ref, update);
+        }
+      });
+      
+      await batch.commit();
+      setMsg("✅ Normalización completada con éxito");
+      setTimeout(() => setMsg(''), 3000);
+    } catch (err) {
+      console.error(err);
+      alert("Error al normalizar locales");
+    } finally {
+      setNormalizing(false);
+    }
+  };
 
   const toggleEstado = async (id: string, actual: string) => {
     const nuevo = actual === 'disponible' ? 'mantenimiento' : 'disponible';
@@ -270,6 +314,13 @@ const AdminLocales = () => {
                 <option value="Transferencia">Transferencia</option>
               </select>
             </div>
+            <button 
+              onClick={normalizarLocales}
+              disabled={normalizing}
+              className="bg-indigo-50 text-indigo-600 px-4 py-2 rounded-xl font-black uppercase text-[9px] tracking-widest border border-indigo-100 hover:bg-indigo-600 hover:text-white transition-all disabled:opacity-50"
+            >
+              {normalizing ? 'NORMALIZANDO...' : 'NORMALIZAR DATOS'}
+            </button>
             {msg && <div className="bg-emerald-500 text-white px-6 py-3 rounded-2xl font-bold animate-bounce shadow-lg">{msg}</div>}
           </div>
         </header>

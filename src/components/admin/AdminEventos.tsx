@@ -1,8 +1,9 @@
 import React, { useState, useEffect } from 'react';
 import { db, storage } from '../../firebase';
-import { collection, setDoc, doc, getDocs, deleteDoc, query, orderBy, DocumentData, updateDoc } from 'firebase/firestore';
+import { collection, setDoc, doc, getDocs, getDocsFromServer, deleteDoc, query, orderBy, DocumentData, updateDoc, collectionGroup, onSnapshot } from 'firebase/firestore';
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 import { Link, useSearchParams } from 'react-router-dom';
+import { useAuth } from '../../context/AuthContext';
 
 const AdminEventos = () => {
   const [searchParams] = useSearchParams();
@@ -15,6 +16,7 @@ ESPACIO LIBRE DE REDES SOCIALES. PROHIBIDA LA DIFUSIÓN DE VÍDEOS O IMÁGENES.
 ENTRADA HASTA LAS 00:00. RESERVAS DISPONIBLES HASTA COMPLETAR AFORO.`;
 
   const [eventos, setEventos] = useState<DocumentData[]>([]);
+  const [loading, setLoading] = useState(true);
   const [form, setForm] = useState({ 
     titulo: '', 
     fecha: '', 
@@ -41,23 +43,33 @@ ENTRADA HASTA LAS 00:00. RESERVAS DISPONIBLES HASTA COMPLETAR AFORO.`;
   const [subiendo, setSubiendo] = useState(false);
   const [editando, setEditando] = useState<string | null>(null);
   const [msg, setMsg] = useState('');
+  const { user } = useAuth();
   const [conflictos, setConflictos] = useState<{fecha: string, motivo: string}[]>([]);
   const [isCheckingConflictos, setIsCheckingConflictos] = useState(false);
 
-  const fetchEventos = async () => {
-    try {
-      const snap = await getDocs(collection(db, "eventos"));
-      const data = snap.docs.map(d => ({ id: d.id, ...d.data() }));
-      data.sort((a: any, b: any) => (a.fecha || '').localeCompare(b.fecha || ''));
-      setEventos(data);
-    } catch (err) { console.error(err); }
-  };
+  useEffect(() => { 
+    if (!user) return;
+    setLoading(true);
+    setMsg('⏳ Cargando eventos...');
 
-  useEffect(() => { fetchEventos(); }, []);
+    const q = query(collection(db, "eventos"), orderBy("fecha", "asc"));
+    const unsubscribe = onSnapshot(q, (snap) => {
+      const data = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+      setEventos(data);
+      setLoading(false);
+      setMsg('');
+    }, (err) => {
+      console.error("AdminEventos: Error en onSnapshot:", err.message);
+      setMsg("❌ Error de permisos: " + err.message);
+      setLoading(false);
+    });
+    return () => unsubscribe();
+  }, [user]);
 
   useEffect(() => {
     const editId = searchParams.get('edit');
     if (editId && eventos.length > 0) {
+      console.log("AdminEventos: Modo edición detectado para:", editId);
       const ev = eventos.find(e => e.id === editId);
       if (ev) {
         setEditando(ev.id);
@@ -104,11 +116,9 @@ ENTRADA HASTA LAS 00:00. RESERVAS DISPONIBLES HASTA COMPLETAR AFORO.`;
       const end = new Date(form.fecha_fin);
       const dateStr = form.fecha.substring(0, 10);
 
-      // 1. Comprobar contra otros Eventos
-      const snapE = await getDocs(query(collection(db, "eventos")));
-      snapE.docs.forEach(d => {
-        if (d.id === editando) return;
-        const ev = d.data();
+      // 1. Comprobar contra otros Eventos (Usando el estado 'eventos' ya cargado por onSnapshot)
+      eventos.forEach(ev => {
+        if (ev.id === editando) return;
         const evStart = new Date(ev.fecha);
         const evEnd = new Date(ev.fecha_fin || `${ev.fecha.substring(0, 11)}${ev.hora_fin || '23:59'}`);
         
@@ -120,24 +130,20 @@ ENTRADA HASTA LAS 00:00. RESERVAS DISPONIBLES HASTA COMPLETAR AFORO.`;
         }
       });
 
-      // 2. Comprobar contra Sesiones de Cursos
-      const { collectionGroup } = await import('firebase/firestore');
+      // 2. Comprobar contra Sesiones de Cursos (Solo si es absolutamente necesario para ahorrar recursos)
+      // En una versión futura deberiamos tener las sesiones también en onSnapshot global.
+      // Por ahora, bajamos la frecuencia de comprobación.
       const snapS = await getDocs(collectionGroup(db, "sesiones"));
-      
-      // Fetch all courses for titles
       const snapC = await getDocs(collection(db, "cursos"));
       const cursosMap: Record<string, string> = {};
-      snapC.docs.forEach(d => {
-        cursosMap[d.id] = d.data().titulo;
-      });
+      snapC.docs.forEach(d => { cursosMap[d.id] = d.data().titulo; });
 
       snapS.docs.forEach(d => {
         const s = d.data();
         const cursoId = d.ref.parent.parent?.id;
         const sStart = new Date(`${s.fecha}T${s.hora_inicio}`);
         const sEnd = new Date(`${s.fecha}T${s.hora_fin}`);
-        
-        const compartenSala = form.sala === 'Toda la Sala' || form.sala === s.sala;
+        const compartenSala = form.sala === 'Toda la Sala' || s.sala === 'Toda la Sala' || form.sala === s.sala;
 
         if (compartenSala && (start < sEnd) && (end > sStart)) {
           const cursoTitulo = cursosMap[cursoId || ''] || "Otro Curso";
@@ -147,7 +153,7 @@ ENTRADA HASTA LAS 00:00. RESERVAS DISPONIBLES HASTA COMPLETAR AFORO.`;
 
       setConflictos(conflicts);
     } catch (err) {
-      console.error(err);
+      console.error("AdminEventos: Error verificando conflictos:", err);
     }
     setIsCheckingConflictos(false);
   };
@@ -162,9 +168,8 @@ ENTRADA HASTA LAS 00:00. RESERVAS DISPONIBLES HASTA COMPLETAR AFORO.`;
   const guardar = async (e: React.FormEvent) => {
     e.preventDefault();
     if (conflictos.length > 0) {
-      if (!window.confirm("⚠️ Hay conflictos de horario detectados. ¿Quieres guardar de todas formas?")) {
-        return;
-      }
+      alert("⚠️ NO SE PUEDE GUARDAR: Se han detectado conflictos de horario en la sala.");
+      return;
     }
     setSubiendo(true);
     try {
@@ -224,7 +229,6 @@ ENTRADA HASTA LAS 00:00. RESERVAS DISPONIBLES HASTA COMPLETAR AFORO.`;
       });
       setArchivo(null);
       setEditando(null);
-      fetchEventos();
       setTimeout(() => setMsg(''), 3000);
     } catch (err: any) {
       console.error(err);
@@ -466,7 +470,9 @@ ENTRADA HASTA LAS 00:00. RESERVAS DISPONIBLES HASTA COMPLETAR AFORO.`;
           {/* EVENTOS PROGRAMADOS */}
           <div className="space-y-4">
             <h2 className="text-2xl kalian-poster-text text-kalian-gold/80 uppercase mb-6 ml-4 tracking-widest">Eventos Programados</h2>
-            {eventos.filter(ev => new Date(ev.fecha) >= new Date()).length === 0 ? (
+            {loading ? (
+              <div className="p-20 text-center animate-pulse text-slate-500 font-bold uppercase tracking-[0.2em]">Cargando eventos...</div>
+            ) : eventos.filter(ev => new Date(ev.fecha) >= new Date()).length === 0 ? (
               <p className="text-center py-10 text-kalian-gold/20 font-black uppercase tracking-widest italic">No hay eventos programados</p>
             ) : (
               eventos
@@ -567,7 +573,6 @@ ENTRADA HASTA LAS 00:00. RESERVAS DISPONIBLES HASTA COMPLETAR AFORO.`;
                         onClick={async () => { 
                           if (window.confirm("¿Seguro que quieres borrar este evento?")) {
                             await deleteDoc(doc(db, "eventos", ev.id)); 
-                            fetchEventos(); 
                           }
                         }} 
                         className="bg-red-500/10 text-red-500 hover:bg-red-500 hover:text-white px-6 py-3 rounded-xl font-black text-[10px] uppercase tracking-widest transition-all"
@@ -647,7 +652,6 @@ ENTRADA HASTA LAS 00:00. RESERVAS DISPONIBLES HASTA COMPLETAR AFORO.`;
                         onClick={async () => { 
                           if (window.confirm("¿Seguro que quieres borrar este evento del histórico?")) {
                             await deleteDoc(doc(db, "eventos", ev.id)); 
-                            fetchEventos(); 
                           }
                         }} 
                         className="bg-red-500/5 text-red-500/40 hover:text-red-500 px-4 py-2 rounded-lg font-black text-[8px] uppercase tracking-widest transition-all"

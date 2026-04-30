@@ -1,10 +1,12 @@
 import React, { useState, useEffect } from 'react';
 import { db, storage } from '../../firebase';
-import { collection, setDoc, doc, getDocs, deleteDoc, query, orderBy, DocumentData, updateDoc } from 'firebase/firestore';
+import { collection, setDoc, doc, getDocs, deleteDoc, query, orderBy, DocumentData, updateDoc, onSnapshot } from 'firebase/firestore';
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 import { Link } from 'react-router-dom';
+import { useAuth } from '../../context/AuthContext';
 
 const AdminExposiciones = () => {
+  const { user } = useAuth();
   const [exposiciones, setExposiciones] = useState<DocumentData[]>([]);
   const [form, setForm] = useState({ 
     titulo: '', 
@@ -27,7 +29,16 @@ const AdminExposiciones = () => {
     } catch (err) { console.error(err); }
   };
 
-  useEffect(() => { fetchExposiciones(); }, []);
+  useEffect(() => { 
+    if (!user) return;
+    const q = query(collection(db, "exposiciones"), orderBy("fechaInicio", "desc"));
+    const unsub = onSnapshot(q, (snap) => {
+      setExposiciones(snap.docs.map(d => ({ id: d.id, ...d.data() })));
+    }, (err) => {
+      console.error("AdminExposiciones: Error en onSnapshot:", err.message);
+    });
+    return () => unsub();
+  }, [user]);
 
   const guardar = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -58,7 +69,6 @@ const AdminExposiciones = () => {
       setForm({ titulo: '', autor: '', descripcion: '', imagenUrl: '', fechaInicio: new Date().toISOString().split('T')[0], fechaFin: '', es_activa: true });
       setArchivo(null);
       setEditando(null);
-      fetchExposiciones();
       setTimeout(() => setMsg(''), 3000);
     } catch (err) {
       console.error(err);
@@ -70,7 +80,6 @@ const AdminExposiciones = () => {
   const eliminar = async (id: string) => {
     if (!window.confirm("¿Seguro?")) return;
     await deleteDoc(doc(db, "exposiciones", id));
-    fetchExposiciones();
   };
 
   const editar = (expo: any) => {

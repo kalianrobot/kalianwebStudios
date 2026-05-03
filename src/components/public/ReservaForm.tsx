@@ -22,6 +22,8 @@ const ReservaForm = ({ item, alCerrar }: ReservaFormProps) => {
   const [precioCalculado, setPrecioCalculado] = useState({ total: 0, esSocio: false, esClave: false });
   const navigate = useNavigate();
   
+  const [mensajeBloqueo, setMensajeBloqueo] = useState('');
+
   const esCurso = item.fechaFin !== undefined;
   const categoriaActividad = item.categoria || 'musica';
   const precioBase = Number(item.precio_estandar || item.precio || 0);
@@ -76,8 +78,7 @@ const ReservaForm = ({ item, alCerrar }: ReservaFormProps) => {
         } catch (e) { console.error(e); }
       }
 
-      // Validación de Clave
-      const esClaveValida = item.clave_descuento && claveInput.trim().toUpperCase() === item.clave_descuento.toUpperCase();
+      const esClaveValida = item.cupon && claveInput.trim().toUpperCase() === item.cupon.toUpperCase();
       setClaveValida(!!esClaveValida);
 
       let precioTitular = precioBase;
@@ -86,7 +87,7 @@ const ReservaForm = ({ item, alCerrar }: ReservaFormProps) => {
 
       // Lógica de Descuentos NO Acumulables (Arquitecto: Elegir el mejor precio)
       const pSocio = item.tiene_descuento ? Number(item.precio_descuento) : precioBase;
-      const pClave = (esClaveValida && item.precio_clave) ? Number(item.precio_clave) : precioBase;
+      const pClave = (esClaveValida && item.precioCupon) ? Number(item.precioCupon) : precioBase;
 
       // Determinamos cuál es el mejor precio disponible para el titular
       if (socio && pSocio < precioTitular) {
@@ -108,6 +109,49 @@ const ReservaForm = ({ item, alCerrar }: ReservaFormProps) => {
       }
       
       setPrecioCalculado({ total, esSocio: aplicadoSocio, esClave: aplicadoClave });
+
+      // BLOQUEO POR FECHA (Arquitecto)
+      if (!esCurso) {
+        const ahora = new Date();
+        const esSocio = aplicadoSocio || !!socioData;
+        const usaCuponApertura = item.cupon && claveInput.trim().toUpperCase() === item.cupon.toUpperCase();
+
+        if (esSocio) {
+          if (item.apertura_socios) {
+            const aperturaSocios = new Date(item.apertura_socios);
+            if (ahora < aperturaSocios) {
+              setMensajeBloqueo(`Las reservas para soci@s abren el ${aperturaSocios.toLocaleString('es-ES')}`);
+            } else {
+              setMensajeBloqueo('');
+            }
+          } else {
+            setMensajeBloqueo('');
+          }
+        } else if (usaCuponApertura) {
+          if (item.fechaCupon) {
+            const aperturaCupon = new Date(item.fechaCupon);
+            if (ahora < aperturaCupon) {
+              setMensajeBloqueo(`Las reservas con cupón abren el ${aperturaCupon.toLocaleString('es-ES')}`);
+            } else {
+              setMensajeBloqueo('');
+            }
+          } else {
+            setMensajeBloqueo('');
+          }
+        } else {
+          // Invitado
+          if (item.apertura_general) {
+            const aperturaInv = new Date(item.apertura_general);
+            if (ahora < aperturaInv) {
+              setMensajeBloqueo(`Las reservas para invitados abren el ${aperturaInv.toLocaleString('es-ES')}`);
+            } else {
+              setMensajeBloqueo('');
+            }
+          } else {
+            setMensajeBloqueo('');
+          }
+        }
+      }
     };
     calcular();
   }, [form.dni, form.acompañantes, claveInput, socioData, esCurso, categoriaActividad, precioBase, item.tiene_descuento, item.precio_descuento, item.clave_descuento, item.precio_clave]);
@@ -133,6 +177,7 @@ const ReservaForm = ({ item, alCerrar }: ReservaFormProps) => {
       if (!esCurso) {
         const ahora = new Date();
         const esSocio = precioCalculado.esSocio || !!socioData;
+        const usaCuponApertura = item.cupon && claveInput.trim().toUpperCase() === item.cupon.toUpperCase();
         
         if (esSocio) {
           if (item.apertura_socios) {
@@ -143,12 +188,26 @@ const ReservaForm = ({ item, alCerrar }: ReservaFormProps) => {
               return;
             }
           }
+        } else if (usaCuponApertura) {
+          if (item.fechaCupon) {
+            const aperturaCupon = new Date(item.fechaCupon);
+            if (ahora < aperturaCupon) {
+              setMensaje(`⚠️ Las reservas con cupón abren el ${aperturaCupon.toLocaleString('es-ES')}`);
+              setCargando(false);
+              return;
+            }
+          }
         } else {
-          // Público general o con clave
+          // Invitados (Público general)
           if (item.apertura_general) {
-            const aperturaGral = new Date(item.apertura_general);
-            if (ahora < aperturaGral) {
-              setMensaje(`⚠️ Las reservas para público general abren el ${aperturaGral.toLocaleString('es-ES')}`);
+            const aperturaInv = new Date(item.apertura_general);
+            if (ahora < aperturaInv) {
+              // Si no es socio ni tiene el cupón de apertura, le decimos que aún no está abierto
+              if (item.cupon) {
+                setMensaje(`⚠️ Las reservas para invitados abren el ${aperturaInv.toLocaleString('es-ES')}. Si tienes un cupón de acceso anticipado, introdúcelo abajo.`);
+              } else {
+                setMensaje(`⚠️ Las reservas para invitados abren el ${aperturaInv.toLocaleString('es-ES')}`);
+              }
               setCargando(false);
               return;
             }
@@ -461,15 +520,40 @@ const ReservaForm = ({ item, alCerrar }: ReservaFormProps) => {
           </div>
         )}
 
-        {/* SECCIÓN DE RESERVA / MENSAJE */}
-        <div className="pt-4">
-          {mensaje ? (
-            <div className="bg-kalian-gold/5 border border-kalian-gold/20 text-kalian-gold p-10 rounded-[2.5rem] text-center font-black kalian-poster-text text-2xl animate-in fade-in zoom-in italic leading-tight">
-              {mensaje}
-            </div>
-          ) : (
-            <form onSubmit={enviar} className="space-y-8">
-              <div className="grid grid-cols-1 gap-6">
+      {/* SECCIÓN DE RESERVA / MENSAJE */}
+      <div className="pt-4">
+        {mensaje ? (
+          <div className="bg-kalian-gold/5 border border-kalian-gold/20 text-kalian-gold p-10 rounded-[2.5rem] text-center font-black kalian-poster-text text-2xl animate-in fade-in zoom-in italic leading-tight">
+            {mensaje}
+          </div>
+        ) : (
+          <div className="space-y-8">
+            {mensajeBloqueo && (
+              <div className="bg-red-500/10 border border-red-500/20 p-8 rounded-[2.5rem] text-center space-y-4">
+                <p className="text-red-500 font-black kalian-poster-text text-xl italic uppercase leading-none">
+                  ⚠️ ACCESO RESTRINGIDO TEMPORALMENTE
+                </p>
+                <p className="text-kalian-cream/60 font-bold text-xs">
+                  {mensajeBloqueo}
+                </p>
+                {!socioData && item.cupon && (
+                  <div className="pt-4 space-y-2">
+                    <p className="text-[10px] font-black text-emerald-400/60 uppercase tracking-widest">¿Tienes un cupón de acceso anticipado?</p>
+                    <input 
+                      type="text" 
+                      placeholder="INTRODUCIR CUPÓN" 
+                      className="w-full p-4 bg-emerald-500/5 rounded-xl border border-emerald-500/10 text-center font-black uppercase text-emerald-500 outline-none focus:border-emerald-500 transition-all"
+                      value={claveInput}
+                      onChange={e => setClaveInput(e.target.value.toUpperCase())}
+                    />
+                  </div>
+                )}
+              </div>
+            )}
+
+            {!mensajeBloqueo && (
+              <form onSubmit={enviar} className="space-y-8 animate-in fade-in slide-in-from-top-2 duration-500">
+                <div className="grid grid-cols-1 gap-6">
                 <div className="space-y-2">
                   <label className="text-[9px] font-black text-kalian-gold/90 uppercase tracking-[0.3em] ml-4">
                     {esCurso ? 'DNI (OBLIGATORIO)' : 'TU IDENTIFICACIÓN (DNI SI ERES SOCI@S)'}
@@ -585,15 +669,20 @@ const ReservaForm = ({ item, alCerrar }: ReservaFormProps) => {
                 {cargando ? 'PROCESANDO...' : (esCurso ? 'CONSULTAR INSCRIPCIÓN' : 'CONFIRMAR RESERVA')}
               </button>
               
+              </form>
+            )}
+            
+            {!esCurso && !mensajeBloqueo && (
               <p className="text-center text-[9px] text-kalian-gold/20 font-black uppercase tracking-[0.4em]">
                 El pago se realizará en efectivo en el centro
               </p>
-            </form>
-          )}
-        </div>
+            )}
+          </div>
+        )}
       </div>
     </div>
-  );
+  </div>
+);
 };
 
 export default ReservaForm;

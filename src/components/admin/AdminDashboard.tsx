@@ -38,7 +38,7 @@ const AdminDashboard = () => {
     { t: 'Academias', icon: '🎨', color: 'border-pink-500', path: '/staff/academias' },
     { t: 'Equipo Staff', icon: '🛡️', color: 'border-red-500', path: '/staff/staff' },
     { t: 'Galería', icon: '🖼️', color: 'border-kalian-gold', path: '/staff/galeria' },
-    { t: 'Identidad', icon: '🎨', color: 'border-kalian-gold', path: '/staff/config' },
+    { t: 'Identidad', icon: '🎨', color: 'border-kalian-gold', path: '/staff/identidad' },
     { t: 'Solicitudes', icon: '📩', color: 'border-emerald-500', path: '/staff/solicitudes', badge: pendientes },
     { t: 'Contabilidad', icon: '💰', color: 'border-kalian-gold', path: '/staff/contabilidad' }
   ];

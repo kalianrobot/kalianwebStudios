@@ -134,6 +134,7 @@ function AppContent() {
         <Route path="/staff/contabilidad" element={hasAdminAccess ? <AdminContabilidad /> : <Navigate to="/staff/login" />} />
         <Route path="/staff/galeria" element={hasAdminAccess ? <AdminExposiciones /> : <Navigate to="/staff/login" />} />
         <Route path="/staff/config" element={hasAdminAccess ? <AdminConfig /> : <Navigate to="/staff/login" />} />
+        <Route path="/staff/identidad" element={hasAdminAccess ? <AdminConfig /> : <Navigate to="/staff/login" />} />
 
         {/* RUTA CONTROL ACCESO (PORTERO) */}
         <Route path="/control-acceso" element={

@@ -119,12 +119,17 @@ const AdminConfig = () => {
   useEffect(() => {
     if (!user) return;
     const fetchConfigData = async () => {
-      const docRef = doc(db, "config", "site");
-      const snap = await getDoc(docRef);
-      if (snap.exists()) {
-        setConfig(snap.data() as any);
+      try {
+        const docRef = doc(db, "config", "site");
+        const snap = await getDoc(docRef);
+        if (snap.exists()) {
+          setConfig(snap.data() as any);
+        }
+      } catch (err) {
+        console.error("AdminConfig: Error fetching config:", err);
+      } finally {
+        setLoading(false);
       }
-      setLoading(false);
     };
     fetchConfigData();
   }, [user]);

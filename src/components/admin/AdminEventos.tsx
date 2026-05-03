@@ -30,8 +30,9 @@ ENTRADA HASTA LAS 00:00. RESERVAS DISPONIBLES HASTA COMPLETAR AFORO.`;
     max_acompanantes: '4',
     tiene_descuento: false,
     precio_descuento: '',
-    clave_descuento: '',
-    precio_clave: '',
+    cupon: '',
+    precioCupon: '',
+    fechaCupon: '',
     apertura_socios: '',
     apertura_general: '',
     imagenUrl: '',
@@ -91,8 +92,9 @@ ENTRADA HASTA LAS 00:00. RESERVAS DISPONIBLES HASTA COMPLETAR AFORO.`;
           aforo_actual: ev.aforo_actual || 0,
           tiene_descuento: ev.tiene_descuento || false,
           precio_descuento: ev.precio_descuento?.toString() || '',
-          clave_descuento: ev.clave_descuento || '',
-          precio_clave: ev.precio_clave?.toString() || '',
+          cupon: ev.cupon || ev.clave_descuento || ev.codigoCupon || '',
+          precioCupon: ev.precioCupon?.toString() || ev.precio_clave?.toString() || '',
+          fechaCupon: ev.fechaCupon || ev.fechaAperturaCupon || '',
           apertura_socios: ev.apertura_socios || '',
           apertura_general: ev.apertura_general || '',
           imagenUrl: ev.imagenUrl || '',
@@ -186,7 +188,7 @@ ENTRADA HASTA LAS 00:00. RESERVAS DISPONIBLES HASTA COMPLETAR AFORO.`;
         imagenUrl: finalImagenUrl,
         precio_estandar: Number(form.precio_estandar),
         precio_descuento: form.tiene_descuento ? Number(form.precio_descuento) : Number(form.precio_estandar),
-        precio_clave: form.clave_descuento ? Number(form.precio_clave) : Number(form.precio_estandar),
+        precioCupon: form.cupon ? Number(form.precioCupon) : Number(form.precio_estandar),
         aforo_maximo: Number(form.aforo_maximo),
         max_acompanantes: Number(form.max_acompanantes),
         aforo_reservado: editando ? (eventos.find(ev => ev.id === editando)?.aforo_reservado || 0) : 0,
@@ -218,8 +220,9 @@ ENTRADA HASTA LAS 00:00. RESERVAS DISPONIBLES HASTA COMPLETAR AFORO.`;
         max_acompanantes: '4',
         tiene_descuento: false, 
         precio_descuento: '', 
-        clave_descuento: '',
-        precio_clave: '',
+        cupon: '',
+        precioCupon: '',
+        fechaCupon: '',
         apertura_socios: '',
         apertura_general: '',
         imagenUrl: '',
@@ -356,29 +359,62 @@ ENTRADA HASTA LAS 00:00. RESERVAS DISPONIBLES HASTA COMPLETAR AFORO.`;
             )}
           </div>
 
-          {/* SISTEMA DE CUPONES */}
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6 p-6 bg-kalian-gold/5 rounded-[2rem] border border-kalian-gold/10">
-            <div className="space-y-2">
-              <label className="text-[9px] font-black uppercase text-kalian-gold/40 ml-4 tracking-widest">Clave de Descuento (Cupón)</label>
-              <input type="text" placeholder="EJ: KALIANLINDY" className="w-full p-5 bg-black/40 rounded-2xl outline-none border border-kalian-gold/10 focus:border-kalian-gold transition-all text-kalian-gold font-black uppercase" value={form.clave_descuento} onChange={e => setForm({...form, clave_descuento: e.target.value.toUpperCase()})} />
+          {/* GESTIÓN DE CUPÓN Y ACCESO ANTICIPADO */}
+          <div className="p-8 bg-emerald-500/5 rounded-[3rem] border border-emerald-500/20 space-y-8">
+            <div className="flex items-center gap-4">
+              <div className="w-10 h-10 bg-emerald-500/10 rounded-full flex items-center justify-center text-emerald-500">🎟️</div>
+              <h3 className="text-xl kalian-poster-text text-emerald-500 uppercase italic">Gestión de Cupón y Acceso Anticipado</h3>
             </div>
-            {form.clave_descuento && (
+
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
               <div className="space-y-2">
-                <label className="text-[9px] font-black uppercase text-kalian-gold/80 ml-4 tracking-widest">Aportación con Clave (€)</label>
-                <input type="number" placeholder="APORTACIÓN CLAVE (€)" className="w-full p-5 bg-black/40 rounded-2xl outline-none border border-kalian-gold/10 focus:border-kalian-gold transition-all text-kalian-gold font-black text-xl" value={form.precio_clave} onChange={e => setForm({...form, precio_clave: e.target.value})} required />
+                <label className="text-[9px] font-black uppercase text-emerald-500/40 ml-4 tracking-widest">Código del Cupón</label>
+                <input 
+                  type="text" 
+                  placeholder="EJ: PREVENTA2024" 
+                  className="w-full p-5 bg-black/40 rounded-2xl outline-none border border-emerald-500/10 focus:border-emerald-500 transition-all text-emerald-500 font-black uppercase" 
+                  value={form.cupon} 
+                  onChange={e => setForm({...form, cupon: e.target.value.toUpperCase()})} 
+                />
               </div>
-            )}
+              <div className="space-y-2">
+                <label className="text-[9px] font-black uppercase text-emerald-500/40 ml-4 tracking-widest">Aportación con Cupón (€)</label>
+                <input 
+                  type="number" 
+                  placeholder="APORTACIÓN (€)" 
+                  className="w-full p-5 bg-black/40 rounded-2xl outline-none border border-emerald-500/10 focus:border-emerald-500 transition-all text-emerald-500 font-black text-xl" 
+                  value={form.precioCupon} 
+                  onChange={e => setForm({...form, precioCupon: e.target.value})} 
+                  required={!!form.cupon}
+                />
+              </div>
+              <div className="space-y-2">
+                <label className="text-[9px] font-black uppercase text-emerald-500/40 ml-4 tracking-widest">Apertura con Cupón</label>
+                <input 
+                  type="datetime-local" 
+                  className="w-full p-5 bg-black/40 rounded-2xl outline-none border border-emerald-500/10 focus:border-emerald-500 transition-all text-kalian-cream font-bold" 
+                  value={form.fechaCupon} 
+                  onChange={e => setForm({...form, fechaCupon: e.target.value})} 
+                />
+              </div>
+            </div>
+            <p className="text-[10px] text-emerald-500/40 italic ml-4">
+              * Los usuarios que introduzcan este código podrán reservar antes que el público general y al precio definido aquí.
+            </p>
           </div>
 
-          {/* RESERVA ESCALONADA */}
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6 p-6 bg-kalian-gold/5 rounded-[2rem] border border-kalian-gold/10">
-            <div className="space-y-2">
-              <label className="text-[9px] font-black uppercase text-kalian-gold/40 ml-4 tracking-widest">Apertura Reservas Soci@s</label>
-              <input type="datetime-local" className="w-full p-5 bg-black/40 rounded-2xl outline-none border border-kalian-gold/10 focus:border-kalian-gold transition-all text-kalian-cream font-bold" value={form.apertura_socios} onChange={e => setForm({...form, apertura_socios: e.target.value})} required />
-            </div>
-            <div className="space-y-2">
-              <label className="text-[9px] font-black uppercase text-kalian-gold/40 ml-4 tracking-widest">Apertura Reservas General / Clave</label>
-              <input type="datetime-local" className="w-full p-5 bg-black/40 rounded-2xl outline-none border border-kalian-gold/10 focus:border-kalian-gold transition-all text-kalian-cream font-bold" value={form.apertura_general} onChange={e => setForm({...form, apertura_general: e.target.value})} required />
+          {/* APERTURAS ESCALONADAS (SOCIOS Y GENERAL) */}
+          <div className="p-8 bg-kalian-gold/5 rounded-[3rem] border border-kalian-gold/10 space-y-6">
+            <h3 className="text-sm font-black uppercase text-kalian-gold tracking-[0.2em]">Apertura de Reservas</h3>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              <div className="space-y-2">
+                <label className="text-[9px] font-black uppercase text-kalian-gold/40 ml-4 tracking-widest">Apertura Soci@s</label>
+                <input type="datetime-local" className="w-full p-5 bg-black/40 rounded-2xl outline-none border border-kalian-gold/10 focus:border-kalian-gold transition-all text-kalian-cream font-bold" value={form.apertura_socios} onChange={e => setForm({...form, apertura_socios: e.target.value})} required />
+              </div>
+              <div className="space-y-2">
+                <label className="text-[9px] font-black uppercase text-kalian-gold/40 ml-4 tracking-widest">Apertura Invitados (General)</label>
+                <input type="datetime-local" className="w-full p-5 bg-black/40 rounded-2xl outline-none border border-kalian-gold/10 focus:border-kalian-gold transition-all text-kalian-cream font-bold" value={form.apertura_general} onChange={e => setForm({...form, apertura_general: e.target.value})} required />
+              </div>
             </div>
           </div>
 
@@ -514,8 +550,9 @@ ENTRADA HASTA LAS 00:00. RESERVAS DISPONIBLES HASTA COMPLETAR AFORO.`;
                             aforo_actual: ev.aforo_actual || 0,
                             tiene_descuento: ev.tiene_descuento || false,
                             precio_descuento: ev.precio_descuento?.toString() || '',
-                            clave_descuento: ev.clave_descuento || '',
-                            precio_clave: ev.precio_clave?.toString() || '',
+                            cupon: ev.cupon || ev.clave_descuento || ev.codigoCupon || '',
+                            precioCupon: ev.precioCupon?.toString() || ev.precio_clave?.toString() || '',
+                            fechaCupon: ev.fechaCupon || ev.fechaAperturaCupon || '',
                             apertura_socios: ev.apertura_socios || '',
                             apertura_general: ev.apertura_general || '',
                             imagenUrl: ev.imagenUrl || '',
@@ -551,8 +588,9 @@ ENTRADA HASTA LAS 00:00. RESERVAS DISPONIBLES HASTA COMPLETAR AFORO.`;
                             aforo_actual: 0,
                             tiene_descuento: ev.tiene_descuento || false,
                             precio_descuento: ev.precio_descuento?.toString() || '',
-                            clave_descuento: ev.clave_descuento || '',
-                            precio_clave: ev.precio_clave?.toString() || '',
+                            cupon: ev.cupon || ev.clave_descuento || ev.codigoCupon || '',
+                            precioCupon: ev.precioCupon?.toString() || ev.precio_clave?.toString() || '',
+                            fechaCupon: ev.fechaCupon || ev.fechaAperturaCupon || '',
                             apertura_socios: ev.apertura_socios || '',
                             apertura_general: ev.apertura_general || '',
                             imagenUrl: ev.imagenUrl || '',
@@ -631,8 +669,9 @@ ENTRADA HASTA LAS 00:00. RESERVAS DISPONIBLES HASTA COMPLETAR AFORO.`;
                             aforo_actual: 0,
                             tiene_descuento: ev.tiene_descuento || false,
                             precio_descuento: ev.precio_descuento?.toString() || '',
-                            clave_descuento: ev.clave_descuento || '',
-                            precio_clave: ev.precio_clave?.toString() || '',
+                            cupon: ev.cupon || ev.clave_descuento || ev.codigoCupon || '',
+                            precioCupon: ev.precioCupon?.toString() || ev.precio_clave?.toString() || '',
+                            fechaCupon: '',
                             apertura_socios: '',
                             apertura_general: '',
                             imagenUrl: ev.imagenUrl || '',

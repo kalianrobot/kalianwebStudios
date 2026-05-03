@@ -21,7 +21,7 @@ ENTRADA HASTA LAS 00:00. RESERVAS DISPONIBLES HASTA COMPLETAR AFORO.`;
     titulo: '', 
     fecha: '', 
     fecha_fin: '',
-    sala: 'Toda la Sala',
+    sala: 'SALA',
     precio_estandar: '', 
     categoria: 'musica', 
     aforo_maximo: '50',
@@ -83,7 +83,7 @@ ENTRADA HASTA LAS 00:00. RESERVAS DISPONIBLES HASTA COMPLETAR AFORO.`;
           titulo: ev.titulo || '',
           fecha: ev.fecha || '',
           fecha_fin: fechaFin,
-          sala: ev.sala || 'Toda la Sala',
+          sala: ev.sala || 'SALA',
           precio_estandar: ev.precio_estandar?.toString() || '',
           categoria: ev.categoria || 'musica',
           aforo_maximo: ev.aforo_maximo?.toString() || '50',
@@ -209,7 +209,7 @@ ENTRADA HASTA LAS 00:00. RESERVAS DISPONIBLES HASTA COMPLETAR AFORO.`;
         titulo: '', 
         fecha: '', 
         fecha_fin: '',
-        sala: 'Toda la Sala',
+        sala: 'SALA',
         precio_estandar: '', 
         categoria: 'musica', 
         aforo_maximo: '50', 
@@ -309,9 +309,9 @@ ENTRADA HASTA LAS 00:00. RESERVAS DISPONIBLES HASTA COMPLETAR AFORO.`;
                 onChange={e => setForm({...form, sala: e.target.value})}
               >
                 <option value="Toda la Sala">Toda la Sala (Evento Grande)</option>
-                <option value="Sala Grande">Sala Grande</option>
-                <option value="Sala Pequeña">Sala Pequeña</option>
+                <option value="SALA">SALA</option>
                 <option value="Estudio">Estudio</option>
+                <option value="local pequeño">local pequeño</option>
               </select>
             </div>
             <div className="space-y-2">
@@ -506,7 +506,7 @@ ENTRADA HASTA LAS 00:00. RESERVAS DISPONIBLES HASTA COMPLETAR AFORO.`;
                             titulo: ev.titulo || '',
                             fecha: ev.fecha || '',
                             fecha_fin: fechaFin,
-                            sala: ev.sala || 'Toda la Sala',
+                            sala: ev.sala || 'SALA',
                             precio_estandar: ev.precio_estandar?.toString() || '',
                             categoria: ev.categoria || 'musica',
                             aforo_maximo: ev.aforo_maximo?.toString() || '50',
@@ -543,7 +543,7 @@ ENTRADA HASTA LAS 00:00. RESERVAS DISPONIBLES HASTA COMPLETAR AFORO.`;
                             titulo: `${ev.titulo} (COPIA)`,
                             fecha: ev.fecha || '',
                             fecha_fin: fechaFin,
-                            sala: ev.sala || 'Toda la Sala',
+                            sala: ev.sala || 'SALA',
                             precio_estandar: ev.precio_estandar?.toString() || '',
                             categoria: ev.categoria || 'musica',
                             aforo_maximo: ev.aforo_maximo?.toString() || '50',
@@ -623,7 +623,7 @@ ENTRADA HASTA LAS 00:00. RESERVAS DISPONIBLES HASTA COMPLETAR AFORO.`;
                             titulo: `${ev.titulo} (REPETIR)`,
                             fecha: '',
                             fecha_fin: '',
-                            sala: ev.sala || 'Toda la Sala',
+                            sala: ev.sala || 'SALA',
                             precio_estandar: ev.precio_estandar?.toString() || '',
                             categoria: ev.categoria || 'musica',
                             aforo_maximo: ev.aforo_maximo?.toString() || '50',

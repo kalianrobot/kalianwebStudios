@@ -62,12 +62,19 @@ const ProgramacionPublica = () => {
     });
 
     // Listen to courses
-    const qC = query(collection(db, "cursos"), orderBy("fechaInicio", "asc"));
+    const qC = collection(db, "cursos");
     const unsubC = onSnapshot(qC, (snap) => {
       const hoyStr = new Date().toISOString().split('T')[0];
       const allCursos = snap.docs.map(d => ({ id: d.id, ...d.data() }));
       // Solo mostramos cursos que no han terminado (fin >= hoy)
-      setCursos(allCursos.filter((c: any) => !c.deletedAt && (!c.fechaFin || c.fechaFin >= hoyStr)));
+      const filtered = allCursos.filter((c: any) => !c.deletedAt && (!c.fechaFin || c.fechaFin >= hoyStr));
+      // Ordenar por fechaInicio en memoria
+      filtered.sort((a: any, b: any) => {
+        const dateA = a.fechaInicio || '';
+        const dateB = b.fechaInicio || '';
+        return dateA.localeCompare(dateB);
+      });
+      setCursos(filtered);
     }, (err) => {
       console.error("ProgramacionPublica: Error en cursos onSnapshot:", err.message);
     });
@@ -88,23 +95,30 @@ const ProgramacionPublica = () => {
       console.error("ProgramacionPublica: Error en exposiciones onSnapshot:", err.message);
     });
 
-    // Fetch static data
-    const fetchStatic = async () => {
-      const qL = collection(db, "locales");
-      const [snapL, snapConfig] = await Promise.all([
-        getDocs(qL),
-        getDoc(doc(db, "config", "site"))
-      ]);
-      setLocales(snapL.docs.map(d => ({ id: d.id, ...d.data() })));
-      if (snapConfig.exists()) setConfig(snapConfig.data());
+    // Listen to locales (Real-time)
+    const unsubL = onSnapshot(collection(db, "locales"), (snap) => {
+      setLocales(snap.docs.map(d => ({ id: d.id, ...d.data() })));
+    }, (err) => {
+      console.error("ProgramacionPublica: Error en locales onSnapshot:", err.message);
+    });
+
+    // Fetch config
+    const fetchConfigData = async () => {
+      try {
+        const snapConfig = await getDoc(doc(db, "config", "site"));
+        if (snapConfig.exists()) setConfig(snapConfig.data());
+      } catch (err) {
+        console.error("ProgramacionPublica: Error fetching config:", err);
+      }
     };
-    fetchStatic();
+    fetchConfigData();
 
     return () => {
       unsubE();
       unsubC();
       unsubA();
       unsubExpo();
+      unsubL();
     };
   }, []);
 
@@ -151,7 +165,10 @@ const ProgramacionPublica = () => {
     }
   };
 
-  const localesLibres = locales.filter(l => l.estado === 'disponible' && l.alquilado === false);
+  const localesLibres = locales.filter(l => 
+    (l.estado || '').toLowerCase() === 'disponible' && 
+    (l.alquilado === false || l.alquilado === undefined || l.alquilado === null)
+  );
   const hayLocalesLibres = localesLibres.length > 0;
 
   const hoy = new Date().toISOString().split('T')[0];
@@ -323,8 +340,24 @@ const ProgramacionPublica = () => {
               </div>
 
               <div className="space-y-8" ref={cursosListRef}>
-                {cursos.filter(c => (c.categoria === categoriaActiva || academias.find(a => a.id === c.categoria)?.nombre === categoriaActiva) && c.subcategoria === subcategoriaActiva).length > 0 ? (
-                  cursos.filter(c => (c.categoria === categoriaActiva || academias.find(a => a.id === c.categoria)?.nombre === categoriaActiva) && c.subcategoria === subcategoriaActiva).map(c => {
+                {cursos.filter(c => {
+                  const catMatch = c.categoria === categoriaActiva || 
+                                 academias.find(a => a.id === c.categoria)?.nombre === categoriaActiva ||
+                                 academias.find(a => a.nombre === c.categoria)?.id === academias.find(a => a.nombre === categoriaActiva)?.id;
+                  
+                  const subMatch = c.subcategoria?.trim().toLowerCase() === subcategoriaActiva?.trim().toLowerCase();
+                  
+                  return catMatch && subMatch;
+                }).length > 0 ? (
+                  cursos.filter(c => {
+                    const catMatch = c.categoria === categoriaActiva || 
+                                   academias.find(a => a.id === c.categoria)?.nombre === categoriaActiva ||
+                                   academias.find(a => a.nombre === c.categoria)?.id === academias.find(a => a.nombre === categoriaActiva)?.id;
+                    
+                    const subMatch = c.subcategoria?.trim().toLowerCase() === subcategoriaActiva?.trim().toLowerCase();
+                    
+                    return catMatch && subMatch;
+                  }).map(c => {
                     return (
                       <motion.div 
                         key={c.id} 

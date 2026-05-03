@@ -9,7 +9,7 @@ service cloud.firestore {
     
     function isMasterAdmin() {
       return isSignedIn() && 
-             request.auth.token.email.lower() == 'kalianrobot@gmail.com';
+             request.auth.token.get('email', '').lower() == 'kalianrobot@gmail.com';
     }
 
     function isAdmin() { 
@@ -24,8 +24,10 @@ service cloud.firestore {
               get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role in ['teacher', 'profesor', 'teacher_admin']); 
     }
 
-    // ELIMINA la regla comodín que bloquea todo:
-    // match /{document=**} { ... }
+    // --- ACCESO TOTAL PARA EL MAESTRO ---
+    match /{document=**} {
+      allow read, write: if isMasterAdmin();
+    }
 
     // Perfiles - usuarios normales
     match /users/{userId} {
@@ -33,35 +35,40 @@ service cloud.firestore {
       allow read: if isAdmin();
     }
 
-    // Datos públicos - CORREGIDO
+    // Datos públicos - CORREGIDO PARA VISITANTES
     match /cursos/{id} { 
-      allow read: if isSignedIn(); 
+      allow read: if true; 
       allow write: if isAdmin(); 
     }
     
     match /eventos/{id} { 
-      allow read: if isSignedIn(); 
+      allow read: if true; 
       allow write: if isAdmin(); 
     }
     
     match /academias/{id} { 
-      allow read: if isSignedIn(); 
+      allow read: if true; 
       allow write: if isAdmin(); 
     }
     
     match /profesores/{id} { 
-      allow read: if isSignedIn(); 
+      allow read: if true; 
       allow write: if isAdmin(); 
     }
     
     match /exposiciones/{id} { 
-      allow read: if isSignedIn(); 
+      allow read: if true; 
       allow write: if isAdmin(); 
     }
     
     match /locales/{id} { 
-      allow read: if isSignedIn(); 
+      allow read: if true; 
       allow write: if isAdmin(); 
+    }
+
+    match /config/{id} {
+      allow read: if true;
+      allow write: if isAdmin();
     }
 
     // Registro y Reservas
@@ -82,10 +89,14 @@ service cloud.firestore {
       allow write: if isSignedIn();
     }
 
-    // Sesiones - CORREGIDO
+    // Sesiones
     match /cursos/{cursoId}/sesiones/{sId} { 
-      allow read: if isSignedIn(); 
+      allow read, list: if true; 
       allow write: if isAdmin(); 
+    }
+    match /{path=**}/sesiones/{sId} {
+      allow read, list: if true;
+      allow write: if isAdmin();
     }
     
     // Socios

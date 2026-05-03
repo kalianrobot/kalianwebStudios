@@ -34,7 +34,7 @@ const AdminCursos = () => {
     diasSemana: [1], 
     horaInicio: '18:00',
     horaFin: '19:30',
-    sala: 'Sala Grande',
+    sala: 'SALA',
     programacionAutomatica: false
   });
 
@@ -50,7 +50,7 @@ const AdminCursos = () => {
   const [cursoSeleccionado, setCursoSeleccionado] = useState<string | null>(null);
   const [gestionandoSesiones, setGestionandoSesiones] = useState<string | null>(null);
   const [sesiones, setSesiones] = useState<DocumentData[]>([]);
-  const [nuevaSesion, setNuevaSesion] = useState({ fecha: '', hora_inicio: '', hora_fin: '', sala: 'Sala Grande', esRecurrente: false });
+  const [nuevaSesion, setNuevaSesion] = useState({ fecha: '', hora_inicio: '', hora_fin: '', sala: 'SALA', esRecurrente: false });
   const [conflictos, setConflictos] = useState<{fecha: string, motivo: string}[]>([]);
   const [solicitudes, setSolicitudes] = useState<DocumentData[]>([]);
   const [manualAlumno, setManualAlumno] = useState({ dni: '', nombre: '', email: '' });
@@ -150,11 +150,15 @@ const AdminCursos = () => {
       }
 
       // 1. Comprobar contra Eventos
-      const snapE = await getDocs(query(collection(db, "eventos"), where("fecha", ">=", fechasAComprobar[0])));
+      const snapE = await getDocs(query(collection(db, "eventos"), where("fecha", ">=", today.toISOString())));
       const eventosExistentes = snapE.docs.map(d => ({ id: d.id, ...d.data() } as any));
       
-      // 2. Comprobar contra todas las Sesiones
-      const snapS = await getDocs(collectionGroup(db, "sesiones"));
+      // 2. Comprobar contra Sesiones en el rango de fechas (Optimizado)
+      const snapS = await getDocs(query(
+        collectionGroup(db, "sesiones"),
+        where("fecha", ">=", form.fechaInicio),
+        where("fecha", "<=", form.fechaFin)
+      ));
       
       // Fetch all courses to get their titles for the conflict message
       const snapC = await getDocs(collection(db, "cursos"));
@@ -261,8 +265,12 @@ const AdminCursos = () => {
       const snapE = await getDocs(query(collection(db, "eventos"), where("fecha", ">=", fechasAComprobar[0])));
       const eventosExistentes = snapE.docs.map(d => ({ id: d.id, ...d.data() } as any));
       
-      // 2. Comprobar contra todas las Sesiones (collectionGroup)
-      const snapS = await getDocs(collectionGroup(db, "sesiones"));
+      // 2. Comprobar contra todas las Sesiones (Optimizado)
+      const snapS = await getDocs(query(
+        collectionGroup(db, "sesiones"),
+        where("fecha", ">=", fechasAComprobar[0]),
+        where("fecha", "<=", fechasAComprobar[fechasAComprobar.length - 1])
+      ));
 
       // Fetch all courses for titles
       const snapC = await getDocs(collection(db, "cursos"));
@@ -325,7 +333,7 @@ const AdminCursos = () => {
 
       await batch.commit();
       setMsg(`✅ ${sesionesAGuardar.length} sesiones añadidas`);
-      setNuevaSesion({ fecha: '', hora_inicio: '', hora_fin: '', sala: 'Sala Grande', esRecurrente: false });
+      setNuevaSesion({ fecha: '', hora_inicio: '', hora_fin: '', sala: 'SALA', esRecurrente: false });
       fetchSesiones(gestionandoSesiones);
       setTimeout(() => setMsg(''), 3000);
     } catch (err) { 
@@ -779,7 +787,7 @@ const AdminCursos = () => {
         diasSemana: [1],
         horaInicio: '18:00',
         horaFin: '19:30',
-        sala: 'Sala Grande',
+        sala: 'SALA',
         programacionAutomatica: false
       });
       setEditando(null);
@@ -1124,9 +1132,9 @@ const AdminCursos = () => {
                   value={form.sala}
                   onChange={e => setForm({...form, sala: e.target.value})}
                 >
-                  <option value="Sala Grande">Sala Grande</option>
-                  <option value="Sala Pequeña">Sala Pequeña</option>
+                  <option value="SALA">SALA</option>
                   <option value="Estudio">Estudio</option>
+                  <option value="local pequeño">local pequeño</option>
                 </select>
               </div>
 
@@ -1512,9 +1520,9 @@ const AdminCursos = () => {
                         value={nuevaSesion.sala}
                         onChange={e => setNuevaSesion({...nuevaSesion, sala: e.target.value})}
                       >
-                        <option value="Sala Grande">Sala Grande</option>
-                        <option value="Sala Pequeña">Sala Pequeña</option>
+                        <option value="SALA">SALA</option>
                         <option value="Estudio">Estudio</option>
+                        <option value="local pequeño">local pequeño</option>
                       </select>
                     </div>
                   </div>

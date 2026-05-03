@@ -32,7 +32,7 @@ const KalianCalendar: React.FC<KalianCalendarProps> = ({ teacherMode = false }) 
   const { user, isAdmin, isTeacher } = useAuth();
   const [events, setEvents] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
-  const [filter, setFilter] = useState<'all' | 'mine' | 'events'>('all');
+  const [filter, setFilter] = useState<'all' | 'cursos' | 'events' | 'mine'>('all');
   const [toast, setToast] = useState<{ msg: string; type: 'success' | 'error' } | null>(null);
   
   // Estado para el Modal (separado para evitar re-renders del calendario)
@@ -73,49 +73,62 @@ const KalianCalendar: React.FC<KalianCalendarProps> = ({ teacherMode = false }) 
     let unsubSesiones = () => {};
     let unsubProf = () => {};
     let unsubFallback = () => {};
+    let unsubMulti = () => {};
 
     try {
       setLoading(true);
-      // Carga inicial forzada desde servidor para estabilidad en el proxy
-      const fetchInitial = async () => {
-        try {
-          const [evSnap, curSnap, sesSnap, profSnap] = await Promise.all([
-            getDocsFromServer(query(collection(db, "eventos"), orderBy("fecha", "asc"))),
-            getDocsFromServer(collection(db, "cursos")),
-            getDocsFromServer(collectionGroup(db, "sesiones")),
-            getDocsFromServer(collection(db, "profesores"))
-          ]);
-          setRawEventos(evSnap.docs.map(d => ({ id: d.id, ...d.data(), refPath: d.ref.path })));
-          setCursos(curSnap.docs.map(d => ({ id: d.id, ...d.data() })));
-          setRawSesiones(sesSnap.docs.map(d => ({ id: d.id, ...d.data(), refPath: d.ref.path, courseId: d.ref.parent.parent?.id })));
-          setProfesores(profSnap.docs.map(d => ({ id: d.id, ...d.data() })));
-        } catch (err: any) {
-          console.warn("Calendar: Fallo en carga servidor inicial:", err.message);
-        } finally {
-          setLoading(false);
-        }
-      };
-      fetchInitial();
-
+      
       // Listener para Eventos
       unsubEventos = onSnapshot(query(collection(db, "eventos"), orderBy("fecha", "asc")), (snap) => {
-        setRawEventos(snap.docs.map(d => ({ id: d.id, ...d.data(), refPath: d.ref.path })));
-      }, (err) => console.warn("Calendar: Error eventos:", err.message));
+        const data = snap.docs.map(d => ({ id: d.id, ...d.data(), refPath: d.ref.path }));
+        console.log("Calendar: Eventos actualizados:", data.length);
+        setRawEventos(data);
+        setLoading(false);
+      }, (err) => {
+        console.warn("Calendar: Error eventos:", err.message);
+        setLoading(false);
+      });
 
-      // Listener para Cursos
+      // Listener para Sesiones (Enfoque Jerárquico por Curso para máxima fiabilidad)
+      const setupRealTimeSesiones = async (cursosIdList: string[]) => {
+        if (unsubMulti) unsubMulti(); // Limpiar previo si existe
+        
+        console.log("📡 Configurando Real-Time para sesiones de", cursosIdList.length, "cursos");
+        const listeners: any[] = [];
+        const sesionesMap: Record<string, any[]> = {};
+
+        cursosIdList.forEach((cId) => {
+          const unsub = onSnapshot(collection(db, "cursos", cId, "sesiones"), (sSnap) => {
+            sesionesMap[cId] = sSnap.docs.map(sd => ({
+              id: sd.id,
+              ...sd.data(),
+              refPath: sd.ref.path,
+              courseId: cId
+            }));
+            const total = Object.values(sesionesMap).flat();
+            setRawSesiones(total);
+          }, (err) => console.warn(`Error en sesiones de ${cId}:`, err.message));
+          listeners.push(unsub);
+        });
+        
+        unsubMulti = () => listeners.forEach(un => un());
+      };
+
+      // Listener para Cursos (Y sus sesiones subordinadas)
       unsubCursos = onSnapshot(collection(db, "cursos"), (snap) => {
-        setCursos(snap.docs.map(d => ({ id: d.id, ...d.data() })));
-      }, (err) => console.warn("Calendar: Error cursos:", err.message));
+        const cursosData = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+        console.log("💎 Calendar: Cursos recibidos:", cursosData.length);
+        setCursos(cursosData);
+        
+        // Iniciamos carga de sesiones para estos cursos
+        const ids = cursosData.map(c => c.id);
+        setupRealTimeSesiones(ids);
+      }, (err) => {
+        console.error("Error cargando cursos:", err.message);
+      });
 
-      // Listener para Sesiones (Collection Group)
-      unsubSesiones = onSnapshot(collectionGroup(db, "sesiones"), (snap) => {
-        setRawSesiones(snap.docs.map(d => ({ 
-          id: d.id, 
-          ...d.data(), 
-          refPath: d.ref.path,
-          courseId: d.ref.parent.parent?.id 
-        })));
-      }, (err) => console.error("Calendar: Error sessions group:", err.message));
+      // Mantenemos esto solo como respaldo si se desea, pero el jerárquico es mejor para permisos
+      // unsubSesiones = onSnapshot(collectionGroup(db, "sesiones"), ...);
 
       // Listener para Profesores
       unsubProf = onSnapshot(collection(db, "profesores"), (snap) => {
@@ -131,13 +144,13 @@ const KalianCalendar: React.FC<KalianCalendarProps> = ({ teacherMode = false }) 
     } catch (e: any) {
       console.error("Calendar: Fatal error initializing listeners:", e.message);
     }
-
     return () => {
       unsubEventos();
       unsubCursos();
       unsubSesiones();
       unsubProf();
       unsubFallback();
+      if (unsubMulti) unsubMulti();
     };
   }, [user]);
 
@@ -152,10 +165,11 @@ const KalianCalendar: React.FC<KalianCalendarProps> = ({ teacherMode = false }) 
 
     const courseMap: Record<string, any> = {};
     cursos.forEach(c => {
-      courseMap[c.id] = c;
+      courseMap[c.id.trim()] = c;
     });
 
     const allEvents: any[] = [];
+    console.log(`📊 Calendar Processing: Cursos=${cursos.length}, Sesiones=${rawSesiones.length}, Eventos=${rawEventos.length}`);
 
     // Procesar Eventos
     rawEventos.forEach(ev => {
@@ -171,13 +185,20 @@ const KalianCalendar: React.FC<KalianCalendarProps> = ({ teacherMode = false }) 
         }
       }
 
+      // Color coding based on room
+      let bgColor = '#10b981'; // Green (default)
+      if (ev.sala === 'SALA') bgColor = '#3b82f6'; // Blue
+      if (ev.sala === 'Estudio') bgColor = '#f59e0b'; // Orange
+      if (ev.sala === 'local pequeño') bgColor = '#10b981'; // Green
+      if (ev.sala === 'Toda la Sala') bgColor = '#d946ef'; // Fuchsia
+
       allEvents.push({
         id: ev.id,
         title: `[EVENTO] ${ev.titulo}`,
         start,
         end,
         allDay: !hasTime,
-        backgroundColor: ev.es_publico !== false ? '#10b981' : '#f59e0b',
+        backgroundColor: bgColor,
         borderColor: 'transparent',
         textColor: '#ffffff',
         editable: isEditable,
@@ -187,15 +208,23 @@ const KalianCalendar: React.FC<KalianCalendarProps> = ({ teacherMode = false }) 
           path: ev.refPath,
           fecha: typeof start === 'string' ? start.split('T')[0] : '',
           hora_inicio: hasTime ? start.split('T')[1]?.substring(0, 5) : "00:00",
-          hora_fin: ev.hora_fin || (hasTime ? "23:59" : "23:59")
+          hora_fin: ev.hora_fin || (hasTime ? "23:59" : "23:59"),
+          sala: ev.sala || 'SALA'
         }
       });
     });
 
     // Procesar Sesiones
     rawSesiones.forEach(sesion => {
-      const curso = sesion.courseId ? courseMap[sesion.courseId] : null;
-      if (!curso) return;
+      if (sesion.deletedAt) return; // Filtrar sesiones eliminadas
+      
+      const cursoIdClean = sesion.courseId?.trim();
+      const curso = cursoIdClean ? courseMap[cursoIdClean] : null;
+      if (!curso) {
+        if (cursoIdClean) console.warn(`⚠️ Sesión ${sesion.id} ignorada: No se encontró curso con ID ${cursoIdClean}`);
+        return;
+      }
+      if (curso.deletedAt) return; 
 
       const isOwner = curso.profesorId === userUID;
       const isEditable = userRole === 'admin' || (userRole === 'profesor' && isOwner);
@@ -204,13 +233,21 @@ const KalianCalendar: React.FC<KalianCalendarProps> = ({ teacherMode = false }) 
       const hInicio = (sesion.hora_inicio || '00:00').padStart(5, '0');
       const hFin = (sesion.hora_fin || '01:00').padStart(5, '0');
 
+      // Color coding based on room
+      let bgColor = '#3b82f6'; // Blue (default)
+      const room = sesion.sala || curso.sala || 'SALA';
+      if (room === 'SALA') bgColor = '#3b82f6'; // Blue
+      if (room === 'Estudio') bgColor = '#f59e0b'; // Orange
+      if (room === 'local pequeño') bgColor = '#10b981'; // Green
+      if (room === 'Toda la Sala') bgColor = '#d946ef'; // Fuchsia
+
       allEvents.push({
         id: sesion.id,
         title: `${sesion.esRecurrente ? '🔁 ' : ''}${curso.titulo}`,
         start: `${sesion.fecha}T${hInicio}`,
         end: `${sesion.fecha}T${hFin}`,
         allDay: false,
-        backgroundColor: isEditable ? '#3b82f6' : '#94a3b8',
+        backgroundColor: bgColor,
         borderColor: 'transparent',
         textColor: '#ffffff',
         editable: isEditable,
@@ -221,7 +258,7 @@ const KalianCalendar: React.FC<KalianCalendarProps> = ({ teacherMode = false }) 
           courseName: curso.titulo,
           profesorId: curso.profesorId,
           profesorNombre: profMap[curso.profesorId] || 'Sin asignar',
-          sala: sesion.sala || 'Principal',
+          sala: room,
           fecha: sesion.fecha,
           hora_inicio: hInicio,
           hora_fin: hFin,
@@ -377,23 +414,67 @@ const KalianCalendar: React.FC<KalianCalendarProps> = ({ teacherMode = false }) 
     }
   };
 
-  // Filtrado de eventos
+  // 3. FILTRADO DE EVENTOS
   const filteredEvents = useMemo(() => {
     return events.filter(ev => {
       if (filter === 'all') return true;
-      if (filter === 'mine') return ev.extendedProps.profesorId === userUID;
+      if (filter === 'mine') {
+        // En modo "Mis Clases", mostramos sesiones del profesor actual 
+        // y eventos generales si el usuario es Admin
+        if (ev.extendedProps.type === 'sesion') {
+          return ev.extendedProps.profesorId === userUID;
+        }
+        return userRole === 'admin'; 
+      }
       if (filter === 'events') return ev.extendedProps.type === 'evento';
+      if (filter === 'cursos') return ev.extendedProps.type === 'sesion';
       return true;
     });
-  }, [events, filter, userUID]);
+  }, [events, filter, userUID, userRole]);
+
+  // Generamos una clave que combine la longitud de los datos y el filtro
+  // para forzar el repintado solo cuando sea estrictamente necesario
+  const calendarKey = useMemo(() => {
+    return `cal-${events.length}-${filter}-${rawSesiones.length}`;
+  }, [events.length, filter, rawSesiones.length]);
 
   return (
     <div className="space-y-6">
       {/* Filtros */}
       <div className="flex flex-wrap items-center justify-between gap-4 bg-black/20 p-4 rounded-3xl border border-kalian-gold/10">
-        <div className="flex items-center gap-2">
-          <Calendar className="text-kalian-gold w-5 h-5" />
-          <h2 className="text-xl kalian-poster-text text-kalian-gold uppercase italic">Calendario Kalian</h2>
+        <div className="flex items-center gap-4">
+          <div className="flex items-center gap-2">
+            <Calendar className="text-kalian-gold w-5 h-5" />
+            <h2 className="text-xl kalian-poster-text text-kalian-gold uppercase italic">Calendario Kalian</h2>
+          </div>
+          
+          {/* Debug Info para el Usuario */}
+          <div className="flex flex-col md:flex-row md:items-center gap-3 px-3 py-2 bg-kalian-gold/5 rounded-2xl border border-kalian-gold/10 text-[9px] font-black uppercase text-kalian-gold/60">
+            {cursos.length === 0 ? (
+              <span className="text-red-400 animate-pulse">⚠️ Error: 0 Cursos Cargados</span>
+            ) : (
+              <span className="text-emerald-400">✅ {cursos.length} Cursos OK</span>
+            )}
+            <span className="hidden md:block w-1 h-1 bg-kalian-gold/20 rounded-full"></span>
+            {rawSesiones.length === 0 ? (
+              <span className="text-red-400 animate-pulse">⚠️ Error: 0 Sesiones Cargadas</span>
+            ) : (
+              <span className="text-emerald-400">✅ {rawSesiones.length} Sesiones OK</span>
+            )}
+            <span className="hidden md:block w-1 h-1 bg-kalian-gold/20 rounded-full"></span>
+            <span>⚡ {rawEventos.length} Eventos</span>
+            <div className="flex gap-2 ml-auto">
+              <button 
+                onClick={() => {
+                  console.log("DEBUG CALENDAR MANUAL REFRESH");
+                  window.location.reload();
+                }}
+                className="bg-kalian-gold/10 hover:bg-kalian-gold hover:text-black px-2 py-1 rounded transition-all text-[8px]"
+              >
+                REINTENTAR TODO
+              </button>
+            </div>
+          </div>
         </div>
         
         <div className="flex bg-kalian-gold/5 p-1 rounded-xl border border-kalian-gold/10">
@@ -401,13 +482,13 @@ const KalianCalendar: React.FC<KalianCalendarProps> = ({ teacherMode = false }) 
             onClick={() => setFilter('all')}
             className={`px-4 py-2 rounded-lg text-[10px] font-black uppercase tracking-widest transition-all ${filter === 'all' ? 'bg-kalian-gold text-black' : 'text-kalian-gold/60 hover:text-kalian-gold'}`}
           >
-            Mostrar Todo
+            Ver Todo
           </button>
           <button 
-            onClick={() => setFilter('mine')}
-            className={`px-4 py-2 rounded-lg text-[10px] font-black uppercase tracking-widest transition-all ${filter === 'mine' ? 'bg-kalian-gold text-black' : 'text-kalian-gold/60 hover:text-kalian-gold'}`}
+            onClick={() => setFilter('cursos')}
+            className={`px-4 py-2 rounded-lg text-[10px] font-black uppercase tracking-widest transition-all ${filter === 'cursos' ? 'bg-kalian-gold text-black' : 'text-kalian-gold/60 hover:text-kalian-gold'}`}
           >
-            Solo Mis Clases
+            Solo Cursos
           </button>
           <button 
             onClick={() => setFilter('events')}
@@ -415,6 +496,14 @@ const KalianCalendar: React.FC<KalianCalendarProps> = ({ teacherMode = false }) 
           >
             Solo Eventos
           </button>
+          {isTeacher && (
+            <button 
+              onClick={() => setFilter('mine')}
+              className={`px-4 py-2 rounded-lg text-[10px] font-black uppercase tracking-widest transition-all ${filter === 'mine' ? 'bg-kalian-gold text-black' : 'text-kalian-gold/60 hover:text-kalian-gold'}`}
+            >
+              Mis Clases
+            </button>
+          )}
         </div>
       </div>
 
@@ -442,6 +531,7 @@ const KalianCalendar: React.FC<KalianCalendarProps> = ({ teacherMode = false }) 
         
         <div className="calendar-wrapper">
           <FullCalendar
+            key={calendarKey}
             plugins={[dayGridPlugin, timeGridPlugin, interactionPlugin]}
             initialView="timeGridWeek"
             headerToolbar={{
@@ -734,9 +824,9 @@ const EventModal = ({ event, onClose, userRole, userUID, cursos, checkConflictos
                   <div className="space-y-1">
                     <label className="text-[8px] font-black uppercase text-kalian-gold/40 ml-2">Sala</label>
                     <select className="w-full bg-black/40 border border-kalian-gold/20 rounded-xl p-3 text-xs text-kalian-cream" value={form.sala} onChange={e => setForm({...form, sala: e.target.value})}>
-                      <option value="Sala Grande">Sala Grande</option>
-                      <option value="Sala Pequeña">Sala Pequeña</option>
+                      <option value="SALA">SALA</option>
                       <option value="Estudio">Estudio</option>
+                      <option value="local pequeño">local pequeño</option>
                     </select>
                   </div>
                 </div>

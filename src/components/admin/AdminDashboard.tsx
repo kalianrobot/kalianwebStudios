@@ -43,6 +43,58 @@ const AdminDashboard = () => {
     { t: 'Contabilidad', icon: '💰', color: 'border-kalian-gold', path: '/staff/contabilidad' }
   ];
 
+  const [migrating, setMigrating] = useState(false);
+  const runMigration = async () => {
+    if (!isAdmin) return;
+    if (!window.confirm("¿Ejecutar migración de Salas? Esto asignará 'SALA' por defecto a todos los cursos y eventos sin sala especificada.")) return;
+    
+    setMigrating(true);
+    try {
+      const { getDocs, collection, writeBatch, doc } = await import('firebase/firestore');
+      const batch = writeBatch(db);
+      let count = 0;
+
+      // 1. Cursos
+      const cursosSnap = await getDocs(collection(db, "cursos"));
+      cursosSnap.docs.forEach(d => {
+        const data = d.data();
+        if (!data.sala) {
+          batch.update(doc(db, "cursos", d.id), { sala: "SALA" });
+          count++;
+        }
+      });
+
+      // 2. Eventos
+      const eventosSnap = await getDocs(collection(db, "eventos"));
+      eventosSnap.docs.forEach(d => {
+        const data = d.data();
+        if (!data.sala) {
+          batch.update(doc(db, "eventos", d.id), { sala: "SALA" });
+          count++;
+        }
+      });
+
+      // 3. Sesiones (Collection Group)
+      const { collectionGroup } = await import('firebase/firestore');
+      const sesionesSnap = await getDocs(collectionGroup(db, "sesiones"));
+      sesionesSnap.docs.forEach(d => {
+        const data = d.data();
+        if (!data.sala) {
+          batch.update(d.ref, { sala: "SALA" });
+          count++;
+        }
+      });
+
+      await batch.commit();
+      alert(`✅ Migración completada. Se han actualizado ${count} registros.`);
+    } catch (err: any) {
+      console.error(err);
+      alert("Error en la migración: " + err.message);
+    } finally {
+      setMigrating(false);
+    }
+  };
+
   return (
     <div className="min-h-screen bg-kalian-dark flex flex-col items-center justify-center p-6 text-kalian-cream font-sans relative overflow-hidden">
       <div className="absolute inset-0 opacity-5 pointer-events-none">
@@ -53,6 +105,18 @@ const AdminDashboard = () => {
         KALIAN <span className="text-kalian-cream">STAFF</span><br/>
         <span className="text-[10px] font-black tracking-[0.8em] text-kalian-gold/30 uppercase italic block mt-4">Módulo de Control v3.0</span>
       </h1>
+
+      {isAdmin && (
+        <div className="mb-8 relative z-10">
+          <button 
+            onClick={runMigration}
+            disabled={migrating}
+            className="flex items-center gap-2 bg-kalian-gold/10 hover:bg-kalian-gold hover:text-black py-2 px-6 rounded-full border border-kalian-gold/20 transition-all text-[10px] font-black uppercase tracking-widest disabled:opacity-50"
+          >
+            {migrating ? 'Migrando...' : '🚀 Sincronizar Sistema de Salas'}
+          </button>
+        </div>
+      )}
 
       <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-7 gap-6 w-full max-w-7xl relative z-10 mb-12">
         {menus.map(m => (

@@ -60,12 +60,19 @@ export const HomeSocio = () => {
     });
 
     // Listen to courses
-    const qC = query(collection(db, "cursos"), orderBy("fechaInicio", "asc"));
+    const qC = collection(db, "cursos");
     const unsubC = onSnapshot(qC, (snap) => {
       const hoyStr = new Date().toISOString().split('T')[0];
       const allCursos = snap.docs.map(d => ({ id: d.id, ...d.data() }));
       // Solo mostramos cursos que no han terminado (fin >= hoy)
-      setCursos(allCursos.filter((c: any) => !c.deletedAt && (!c.fechaFin || c.fechaFin >= hoyStr)));
+      const filtered = allCursos.filter((c: any) => !c.deletedAt && (!c.fechaFin || c.fechaFin >= hoyStr));
+      // Ordenar por fechaInicio en memoria
+      filtered.sort((a: any, b: any) => {
+        const dateA = a.fechaInicio || '';
+        const dateB = b.fechaInicio || '';
+        return dateA.localeCompare(dateB);
+      });
+      setCursos(filtered);
     }, (err) => {
       console.error("HomeSocio: Error en cursos onSnapshot:", err.message);
     });
@@ -86,23 +93,26 @@ export const HomeSocio = () => {
       console.error("HomeSocio: Error en exposiciones onSnapshot:", err.message);
     });
 
-    // Fetch static data
-    const fetchStatic = async () => {
-      const qL = collection(db, "locales");
-      const [snapL, snapConfig] = await Promise.all([
-        getDocs(qL),
-        getDoc(doc(db, "config", "site"))
-      ]);
-      setLocales(snapL.docs.map(d => ({ id: d.id, ...d.data() })));
+    // Listen to locales (Real-time)
+    const unsubL = onSnapshot(collection(db, "locales"), (snap) => {
+      setLocales(snap.docs.map(d => ({ id: d.id, ...d.data() })));
+    }, (err) => {
+      console.error("HomeSocio: Error en locales onSnapshot:", err.message);
+    });
+
+    // Fetch config
+    const fetchConfigData = async () => {
+      const snapConfig = await getDoc(doc(db, "config", "site"));
       if (snapConfig.exists()) setConfig(snapConfig.data());
     };
-    fetchStatic();
+    fetchConfigData();
 
     return () => {
       unsubE();
       unsubC();
       unsubA();
       unsubExpo();
+      unsubL();
     };
   }, [user]);
 
@@ -117,7 +127,10 @@ export const HomeSocio = () => {
     }
   }, [subcategoriaActiva]);
 
-  const localesLibres = locales.filter(l => l.estado === 'disponible' && l.alquilado === false);
+  const localesLibres = locales.filter(l => 
+    (l.estado || '').toLowerCase() === 'disponible' && 
+    (l.alquilado === false || l.alquilado === undefined || l.alquilado === null)
+  );
   const hayLocalesLibres = localesLibres.length > 0;
 
   const hoy = new Date().toISOString().split('T')[0];
@@ -224,7 +237,7 @@ export const HomeSocio = () => {
                   whileInView={{ opacity: 1, scale: 1 }}
                   viewport={{ once: true }}
                   whileHover={{ scale: 1.03 }}
-                  onClick={() => setCategoriaActiva(aca.id)}
+                  onClick={() => setCategoriaActiva(aca.nombre)}
                   className="bg-black/40 border border-kalian-gold/10 rounded-[3rem] p-12 text-center space-y-6 cursor-pointer hover:border-kalian-gold/40 transition-all group relative overflow-hidden shadow-xl hover:shadow-kalian-gold/5"
                 >
                   <div className="absolute inset-0 bg-kalian-gold/5 opacity-0 group-hover:opacity-100 transition-opacity duration-700"></div>
@@ -262,21 +275,21 @@ export const HomeSocio = () => {
                   <span className="group-hover:-translate-x-2 transition-transform">←</span> VOLVER A CATEGORÍAS
                 </button>
                 <h3 className="text-3xl kalian-poster-text text-kalian-gold uppercase italic">
-                  {academias.find(a => a.id === categoriaActiva)?.nombre}
+                  {academias.find(a => a.id === categoriaActiva || a.nombre === categoriaActiva)?.nombre}
                 </h3>
               </div>
 
               <div className="text-center space-y-12">
                 {/* Cartel de la categoría */}
-                {academias.find(a => a.id === categoriaActiva)?.imageUrl && (
+                {academias.find(a => a.id === categoriaActiva || a.nombre === categoriaActiva)?.imageUrl && (
                   <motion.div 
                     initial={{ opacity: 0, scale: 0.9 }}
                     animate={{ opacity: 1, scale: 1 }}
                     className="max-w-md mx-auto rounded-[2rem] overflow-hidden border border-kalian-gold/20 shadow-2xl"
                   >
                     <img 
-                      src={academias.find(a => a.id === categoriaActiva)?.imageUrl} 
-                      alt={academias.find(a => a.id === categoriaActiva)?.nombre} 
+                      src={academias.find(a => a.id === categoriaActiva || a.nombre === categoriaActiva)?.imageUrl} 
+                      alt={academias.find(a => a.id === categoriaActiva || a.nombre === categoriaActiva)?.nombre} 
                       className="w-full h-auto object-cover"
                       referrerPolicy="no-referrer"
                     />
@@ -285,7 +298,7 @@ export const HomeSocio = () => {
 
                 <p className="text-kalian-gold/40 text-[12px] font-black uppercase tracking-[0.6em]">Selecciona una especialidad</p>
                 <div className="flex flex-wrap justify-center gap-6">
-                  {(academias.find(a => a.id === categoriaActiva)?.subcategorias || []).map((sub: string) => (
+                  {(academias.find(a => a.id === categoriaActiva || a.nombre === categoriaActiva)?.subcategorias || []).map((sub: string) => (
                     <motion.button
                       key={sub}
                       whileHover={{ scale: 1.1, rotate: -2 }}
@@ -314,15 +327,31 @@ export const HomeSocio = () => {
                 </button>
                 <div className="text-right">
                   <h3 className="text-2xl kalian-poster-text text-kalian-gold uppercase italic leading-none">
-                  {academias.find(a => a.id === categoriaActiva)?.nombre}
+                  {academias.find(a => a.id === categoriaActiva || a.nombre === categoriaActiva)?.nombre}
                 </h3>
                   <p className="text-[10px] font-black text-kalian-cream/40 uppercase tracking-widest mt-1">{subcategoriaActiva}</p>
                 </div>
               </div>
 
               <div className="space-y-8" ref={cursosListRef}>
-                {cursos.filter(c => c.categoria === categoriaActiva && c.subcategoria === subcategoriaActiva).length > 0 ? (
-                  cursos.filter(c => c.categoria === categoriaActiva && c.subcategoria === subcategoriaActiva).map(c => {
+                {cursos.filter(c => {
+                  const catMatch = c.categoria === categoriaActiva || 
+                                 academias.find(a => a.id === c.categoria)?.nombre === categoriaActiva ||
+                                 academias.find(a => a.nombre === c.categoria)?.id === academias.find(a => a.nombre === categoriaActiva)?.id;
+                  
+                  const subMatch = c.subcategoria?.trim().toLowerCase() === subcategoriaActiva?.trim().toLowerCase();
+                  
+                  return catMatch && subMatch;
+                }).length > 0 ? (
+                  cursos.filter(c => {
+                    const catMatch = c.categoria === categoriaActiva || 
+                                   academias.find(a => a.id === c.categoria)?.nombre === categoriaActiva ||
+                                   academias.find(a => a.nombre === c.categoria)?.id === academias.find(a => a.nombre === categoriaActiva)?.id;
+                    
+                    const subMatch = c.subcategoria?.trim().toLowerCase() === subcategoriaActiva?.trim().toLowerCase();
+                    
+                    return catMatch && subMatch;
+                  }).map(c => {
                     return (
                       <motion.div 
                         key={c.id} 
@@ -337,7 +366,7 @@ export const HomeSocio = () => {
                         >
                           <div className="flex items-center gap-10 w-full md:w-auto">
                             <div className="w-24 h-24 rounded-[2rem] flex items-center justify-center text-5xl border border-kalian-gold/10 bg-kalian-gold/10">
-                              {academias.find(a => a.id === c.categoria)?.nombre?.toLowerCase().includes('danza') ? '💃' : '🎸'}
+                              {academias.find(a => a.id === c.categoria || a.nombre === c.categoria)?.nombre?.toLowerCase().includes('danza') ? '💃' : '🎸'}
                             </div>
                             <div>
                               <h3 className="text-4xl kalian-poster-text text-kalian-cream group-hover:text-kalian-gold transition-colors leading-tight uppercase italic">{c.titulo}</h3>

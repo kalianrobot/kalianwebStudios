@@ -1,50 +1,87 @@
 rules_version = '2';
 service firebase.storage {
   match /b/{bucket}/o {
-    
+
     function isAuthenticated() {
       return request.auth != null;
     }
-    
+
+    function isMasterAdmin() {
+      return isAuthenticated() && request.auth.token.email == "kalianrobot@gmail.com";
+    }
+
     function isAdmin() {
-      return isAuthenticated() && 
-        (request.auth.token.email == "kalianrobot@gmail.com" ||
-         firestore.get(/databases/(default)/documents/users/$(request.auth.uid)).data.role == 'admin');
+      return isMasterAdmin() || (
+        isAuthenticated() &&
+        firestore.exists(/databases/(default)/documents/users/$(request.auth.uid)) &&
+        firestore.get(/databases/(default)/documents/users/$(request.auth.uid)).data.role == 'admin'
+      );
     }
 
     function isTeacherOf(cursoId) {
-      return isAuthenticated() && 
+      return isAuthenticated() &&
+        firestore.exists(/databases/(default)/documents/cursos/$(cursoId)) &&
         firestore.get(/databases/(default)/documents/cursos/$(cursoId)).data.profesorId == request.auth.uid;
     }
 
-    // Simplificamos la comprobación de inscripción para evitar errores de CEL complejos
-    // Verificamos si el usuario tiene el rol de socio y si el curso existe
-    function isSocio() {
-      return isAuthenticated() && 
-        (firestore.get(/databases/(default)/documents/users/$(request.auth.uid)).data.role == 'socio' ||
-         exists(/databases/(default)/documents/socios/$(request.auth.uid)));
+    // Checks users/{uid}.role — socios collection uses DNI as doc ID, not UID
+    function isMember() {
+      return isAuthenticated() && (
+        isMasterAdmin() ||
+        (firestore.exists(/databases/(default)/documents/users/$(request.auth.uid)) &&
+         firestore.get(/databases/(default)/documents/users/$(request.auth.uid)).data.role in
+           ['socio', 'teacher', 'teacher_admin', 'portero', 'admin'])
+      );
     }
 
-    match /cursos/{cursoId}/{fileName} {
-      // Solo autenticados pueden leer. 
-      // Idealmente solo alumnos inscritos, pero la estructura de datos actual (array de objetos) 
-      // dificulta la validación estricta en reglas sin cambiar el modelo.
-      // Al menos restringimos a Socios, Profesores y Admins.
-      allow read: if isAuthenticated() && (isSocio() || isTeacherOf(cursoId) || isAdmin());
-      
-      // Límite de 20MB y solo profesores del curso o admins pueden subir
-      allow write: if isAuthenticated() && 
-                   (isTeacherOf(cursoId) || isAdmin()) && 
-                   request.resource.size < 20 * 1024 * 1024;
-                   
-      allow delete: if isAuthenticated() && (isTeacherOf(cursoId) || isAdmin());
+    // Site config images (logo, hero, gallery, hub)
+    match /config/{fileName} {
+      allow read: if true;
+      allow write: if isAdmin() && request.resource.size < 10 * 1024 * 1024;
+      allow delete: if isAdmin();
     }
 
-    // ACADEMIAS: Lectura pública. Escritura admin.
+    // Event posters — shown publicly on landing page and socio portal
+    match /eventos/{fileName} {
+      allow read: if true;
+      allow write: if isAdmin() && request.resource.size < 10 * 1024 * 1024;
+      allow delete: if isAdmin();
+    }
+
+    // Academia images
     match /academias/{fileName} {
       allow read: if true;
-      allow write: if isAdmin() && request.resource.size < 5 * 1024 * 1024; // 5MB limit
+      allow write: if isAdmin() && request.resource.size < 5 * 1024 * 1024;
       allow delete: if isAdmin();
+    }
+
+    // Professor profile images
+    match /profesores/{fileName} {
+      allow read: if true;
+      allow write: if isAdmin() && request.resource.size < 5 * 1024 * 1024;
+      allow delete: if isAdmin();
+    }
+
+    // Exhibition images
+    match /exposiciones/{fileName} {
+      allow read: if true;
+      allow write: if isAdmin() && request.resource.size < 10 * 1024 * 1024;
+      allow delete: if isAdmin();
+    }
+
+    // Local/space images
+    match /locales/{fileName} {
+      allow read: if true;
+      allow write: if isAdmin() && request.resource.size < 5 * 1024 * 1024;
+      allow delete: if isAdmin();
+    }
+
+    // Course materials: restricted to authenticated members
+    match /cursos/{cursoId}/{fileName} {
+      allow read: if isMember() || isTeacherOf(cursoId);
+      allow write: if (isTeacherOf(cursoId) || isAdmin()) &&
+                   request.resource.size < 20 * 1024 * 1024;
+      allow delete: if isTeacherOf(cursoId) || isAdmin();
     }
   }
 }

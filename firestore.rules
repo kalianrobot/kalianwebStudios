@@ -3,67 +3,73 @@ rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
 
-    function isSignedIn() { 
-      return request.auth != null; 
+    function isSignedIn() {
+      return request.auth != null;
     }
-    
+
     function isMasterAdmin() {
-      return isSignedIn() && 
+      return isSignedIn() &&
              request.auth.token.get('email', '').lower() == 'kalianrobot@gmail.com';
     }
 
-    function isAdmin() { 
-      return isMasterAdmin() || 
-             (exists(/databases/$(database)/documents/users/$(request.auth.uid)) && 
-              get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin'); 
-    }
-    
-    function isTeacher() { 
-      return isMasterAdmin() || 
-             (exists(/databases/$(database)/documents/users/$(request.auth.uid)) && 
-              get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role in ['teacher', 'profesor', 'teacher_admin']); 
+    function isAdmin() {
+      return isMasterAdmin() ||
+             (exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
+              get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin');
     }
 
-    // --- ACCESO TOTAL PARA EL MAESTRO ---
+    function isTeacher() {
+      return isMasterAdmin() ||
+             (exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
+              get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role in ['teacher', 'profesor', 'teacher_admin']);
+    }
+
+    function isTeacherOfCourse(cursoId) {
+      return isSignedIn() &&
+             exists(/databases/$(database)/documents/cursos/$(cursoId)) &&
+             get(/databases/$(database)/documents/cursos/$(cursoId)).data.profesorId == request.auth.uid;
+    }
+
+    // Acceso total para el master admin
     match /{document=**} {
       allow read, write: if isMasterAdmin();
     }
 
-    // Perfiles - usuarios normales
+    // Perfiles de usuario
     match /users/{userId} {
       allow read, write: if isSignedIn() && request.auth.uid == userId;
       allow read: if isAdmin();
     }
 
-    // Datos públicos - CORREGIDO PARA VISITANTES
-    match /cursos/{id} { 
-      allow read: if true; 
-      allow write: if isAdmin(); 
+    // Datos públicos
+    match /cursos/{id} {
+      allow read: if true;
+      allow write: if isAdmin();
     }
-    
-    match /eventos/{id} { 
-      allow read: if true; 
-      allow write: if isAdmin(); 
+
+    match /eventos/{id} {
+      allow read: if true;
+      allow write: if isAdmin();
     }
-    
-    match /academias/{id} { 
-      allow read: if true; 
-      allow write: if isAdmin(); 
+
+    match /academias/{id} {
+      allow read: if true;
+      allow write: if isAdmin();
     }
-    
-    match /profesores/{id} { 
-      allow read: if true; 
-      allow write: if isAdmin(); 
+
+    match /profesores/{id} {
+      allow read: if true;
+      allow write: if isAdmin();
     }
-    
-    match /exposiciones/{id} { 
-      allow read: if true; 
-      allow write: if isAdmin(); 
+
+    match /exposiciones/{id} {
+      allow read: if true;
+      allow write: if isAdmin();
     }
-    
-    match /locales/{id} { 
-      allow read: if true; 
-      allow write: if isAdmin(); 
+
+    match /locales/{id} {
+      allow read: if true;
+      allow write: if isAdmin();
     }
 
     match /config/{id} {
@@ -71,14 +77,14 @@ service cloud.firestore {
       allow write: if isAdmin();
     }
 
-    // Registro y Reservas
-    match /solicitudes_cursos/{id} { 
-      allow create: if true; 
-      allow read, write: if isAdmin() || isTeacher(); 
+    // Solicitudes de cursos y reservas
+    match /solicitudes_cursos/{id} {
+      allow create: if true;
+      allow read, write: if isAdmin() || isTeacher();
     }
-    
-    match /reservas/{id} { 
-      allow create: if true; 
+
+    match /reservas/{id} {
+      allow create: if true;
       allow read: if isAdmin() || (isSignedIn() && resource.data.uidTitular == request.auth.uid);
       allow update, delete: if isAdmin() || (isSignedIn() && resource.data.uidTitular == request.auth.uid);
     }
@@ -86,19 +92,20 @@ service cloud.firestore {
     // Notificaciones
     match /notificaciones/{id} {
       allow read: if isSignedIn() && (resource.data.userId == request.auth.uid || isAdmin());
-      allow write: if isSignedIn();
+      allow create: if isSignedIn();
+      allow update, delete: if isSignedIn() && (resource.data.userId == request.auth.uid || isAdmin());
     }
 
-    // Sesiones
-    match /cursos/{cursoId}/sesiones/{sId} { 
-      allow read, list: if true; 
-      allow write: if isAdmin(); 
+    // Sesiones — teachers can manage sessions for their own courses
+    match /cursos/{cursoId}/sesiones/{sId} {
+      allow read, list: if true;
+      allow write: if isAdmin() || isTeacherOfCourse(cursoId);
     }
     match /{path=**}/sesiones/{sId} {
       allow read, list: if true;
-      allow write: if isAdmin();
+      allow write: if isAdmin() || isTeacher();
     }
-    
+
     // Socios
     match /socios/{id} {
       allow read: if isSignedIn() && (resource.data.uid == request.auth.uid || isAdmin());
@@ -106,17 +113,26 @@ service cloud.firestore {
       allow update, delete: if isAdmin();
     }
 
-    // Finanzas - solo admin
-    match /finanzas/{id} { 
-      allow read, write: if isAdmin(); 
+    // Finanzas — solo admin
+    match /finanzas/{id} {
+      allow read, write: if isAdmin();
     }
-    
-    match /pagos_mensuales/{id} { 
-      allow read, write: if isAdmin(); 
+
+    match /pagos_mensuales/{id} {
+      allow read, write: if isAdmin();
     }
-    
-    match /pagos_inscripciones/{id} { 
-      allow read, write: if isAdmin(); 
+
+    match /pagos_inscripciones/{id} {
+      allow read, write: if isAdmin();
+    }
+
+    match /caja_eventos/{id} {
+      allow read, write: if isAdmin();
+    }
+
+    // Asistencia a eventos
+    match /asistencia_eventos/{id} {
+      allow read, write: if isAdmin() || isTeacher();
     }
   }
 }

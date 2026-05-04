@@ -83,8 +83,9 @@ service cloud.firestore {
     }
     match /eventos/{id} {
       allow read: if true;
-      allow create, delete: if isAdmin();
-      allow update: if isAdmin()
+      allow create: if isAdmin() && isValidEvento(incoming());
+      allow delete: if isAdmin();
+      allow update: if (isAdmin() && isValidEvento(incoming()))
                     || incoming().diff(existing()).affectedKeys().hasOnly(['aforo_reservado']);
     }
 

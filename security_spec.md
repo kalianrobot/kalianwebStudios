@@ -1,39 +1,72 @@
-# Security Specification - Kalian Club
+# Security Specification - Kalian App
 
-## Data Invariants
-1. **Financial Data Isolation**: Records in `finanzas`, `caja_eventos`, and `pagos_*` collections must only be accessible by users with the `admin` role.
-2. **Identity Integrity**: No user can modify their own `role` field.
-3. **Relational Consistency**: A session cannot be created for a course that does not exist.
-4. **Member Privacy**: PII in the `socios` collection (email, phone, etc.) must only be readable by the owner or an admin. Public profile info can be shared if necessary (though not currently specified).
-5. **Session Control**: Only the assigned teacher of a course or an admin can modify sessions for that course. The 'portero' can only update attendance-related fields if applicable.
-6. **Immutable IDs**: Key fields like `cursoId`, `socioId`, and `fecha` in established records should be immutable.
+## 1. Data Invariants
+- A **Reservation** (`reservas`) cannot exist without a valid `eventoId`.
+- A **Reservation** must specify the number of people, which must be at least 1.
+- An **Event** (`eventos`) must have its `aforo_reservado` field updated atomically when a reservation is made.
+- **Socio** profiles (`socios`) can only be modified by admins, but users can read their own profile (linked by UID).
 
-## The "Dirty Dozen" Payloads (Attacker Payloads)
+## 2. The "Dirty Dozen" Payloads
 
-1. **Privilege Escalation**: 
-   - `PATCH /users/{myUid} { "role": "admin" }` -> Expected: PERMISSION_DENIED
-2. **Financial Data Scraping**:
-   - `GET /caja_eventos` (as authenticated non-admin) -> Expected: PERMISSION_DENIED
-3. **Identity Spoofing**:
-   - `CREATE /socios/DNI123 { "uid": "notMe", ... }` -> Expected: PERMISSION_DENIED
-4. **Shadow Course Update**:
-   - `PATCH /cursos/curso1 { "isVerified": true, "ghostRecord": true }` -> Expected: PERMISSION_DENIED (via strict schema check)
-5. **PII Leakage**:
-   - `GET /socios/OTHER_DNI` (as authenticated non-admin) -> Expected: PERMISSION_DENIED
-6. **Orphaned Session Injection**:
-   - `CREATE /cursos/NON_EXISTENT/sesiones/ses1 { ... }` -> Expected: PERMISSION_DENIED
-7. **Unauthorized Attendance Marking**:
-   - `PATCH /asistencia_eventos/as1` (as authenticated non-portero/non-admin) -> Expected: PERMISSION_DENIED
-8. **Public Registry Poisoning**:
-   - `CREATE /academias/aca1 { ... }` (as non-admin) -> Expected: PERMISSION_DENIED
-9. **Large ID Attack**:
-   - `CREATE /cursos/A_VERY_LONG_ID_EXCEEDING_128_CHARS_JUNK_DATA_... { ... }` -> Expected: PERMISSION_DENIED
-10. **Timestamp Fraud**:
-    - `CREATE /pagos_mensuales/p1 { "fechaActualizacion": "2020-01-01" }` (Old timestamp) -> Expected: PERMISSION_DENIED (Must be server time)
-11. **Admin Lookup Bypass**:
-    - `GET /finanzas/f1` (Signed in but role is null) -> Expected: PERMISSION_DENIED
-12. **Negative Aporto Attack**:
-    - `CREATE /eventos/ev1 { "precio_estandar": -100 }` -> Expected: PERMISSION_DENIED
+### Payload 1: Unauthorized Admin Promotion
+- **Target:** `users/{uid}`
+- **Attack:** Change `role` to 'admin'
+- **Result:** PERMISSION_DENIED
 
-## Test Plan (Draft)
-The test runner `firestore.rules.test.ts` will verify these scenarios using the Firebase Rules Unit Testing library.
+### Payload 2: Ghost Field Injection
+- **Target:** `reservas/{id}`
+- **Attack:** Include `isAdmin: true` in reservation data.
+- **Result:** PERMISSION_DENIED (via `isValidReserva` helper)
+
+### Payload 3: Negative Capacity
+- **Target:** `reservas/{id}`
+- **Attack:** `numPersonas: -10`
+- **Result:** PERMISSION_DENIED
+
+### Payload 4: ID Poisoning
+- **Target:** `eventos/{id}`
+- **Attack:** Create event with 2KB string ID.
+- **Result:** PERMISSION_DENIED (via `isValidId`)
+
+### Payload 5: Aforo Spoofing
+- **Target:** `eventos/{id}`
+- **Attack:** Directly update `aforo_reservado` without creating a reservation.
+- **Result:** PERMISSION_DENIED (via `existsAfter` check in rules)
+
+### Payload 6: Ownership Takeover
+- **Target:** `reservas/{id}`
+- **Attack:** Update `uidTitular` of someone else's reservation.
+- **Result:** PERMISSION_DENIED
+
+### Payload 7: Fake Socio
+- **Target:** `reservas/{id}`
+- **Attack:** Set `esSocio: true` without being a socio.
+- **Result:** PERMISSION_DENIED (relational check)
+
+### Payload 8: Price Manipulation
+- **Target:** `reservas/{id}`
+- **Attack:** Set a lower `totalPagar` than calculated.
+- **Result:** PERMISSION_DENIED (Price validation logic)
+
+### Payload 9: Past Reservation
+- **Target:** `reservas/{id}`
+- **Attack:** Create reservation for an event that happened 1 year ago.
+- **Result:** PERMISSION_DENIED
+
+### Payload 10: Email Spoofing
+- **Target:** `users/{uid}`
+- **Attack:** Set email to an admin email without verification.
+- **Result:** PERMISSION_DENIED
+
+### Payload 11: Mass Scraping
+- **Target:** `reservas` (list)
+- **Attack:** Query all reservations without filtering by UID.
+- **Result:** PERMISSION_DENIED
+
+### Payload 12: Terminal State Bypass
+- **Target:** `reservas/{id}` (update)
+- **Attack:** Change `estado` from 'cancelado' back to 'pendiente'.
+- **Result:** PERMISSION_DENIED
+
+## 3. Test Runner (Mock)
+See `firestore.rules.test.ts` (conceptual).

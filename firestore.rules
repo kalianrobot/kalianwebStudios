@@ -3,9 +3,10 @@ rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
 
-    function isSignedIn() {
-      return request.auth != null;
-    }
+    // --- GLOBAL HELPERS ---
+    function isSignedIn() { return request.auth != null; }
+    function incoming() { return request.resource.data; }
+    function existing() { return resource.data; }
 
     function isMasterAdmin() {
       return isSignedIn() &&
@@ -13,15 +14,19 @@ service cloud.firestore {
     }
 
     function isAdmin() {
-      return isMasterAdmin() ||
-             (exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
-              get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin');
+      return isMasterAdmin() || (
+        isSignedIn() &&
+        exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
+        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin'
+      );
     }
 
     function isTeacher() {
-      return isMasterAdmin() ||
-             (exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
-              get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role in ['teacher', 'profesor', 'teacher_admin']);
+      return isMasterAdmin() || (
+        isSignedIn() &&
+        exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
+        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role in ['teacher', 'profesor', 'teacher_admin']
+      );
     }
 
     function isTeacherOfCourse(cursoId) {
@@ -30,73 +35,36 @@ service cloud.firestore {
              get(/databases/$(database)/documents/cursos/$(cursoId)).data.profesorId == request.auth.uid;
     }
 
-    // Acceso total para el master admin
+    // --- GLOBAL SAFETY NET (solo master admin) ---
     match /{document=**} {
       allow read, write: if isMasterAdmin();
     }
 
-    // Perfiles de usuario
+    // --- USERS ---
     match /users/{userId} {
       allow read, write: if isSignedIn() && request.auth.uid == userId;
       allow read: if isAdmin();
     }
 
-    // Datos públicos
-    match /cursos/{id} {
-      allow read: if true;
-      allow write: if isAdmin();
-    }
-
-    match /eventos/{id} {
-      allow read: if true;
-      allow write: if isAdmin();
-    }
-
-    match /academias/{id} {
-      allow read: if true;
-      allow write: if isAdmin();
-    }
-
-    match /profesores/{id} {
-      allow read: if true;
-      allow write: if isAdmin();
-    }
-
-    match /exposiciones/{id} {
-      allow read: if true;
-      allow write: if isAdmin();
-    }
-
-    match /locales/{id} {
-      allow read: if true;
-      allow write: if isAdmin();
-    }
-
+    // --- CONFIG ---
     match /config/{id} {
       allow read: if true;
       allow write: if isAdmin();
     }
 
-    // Solicitudes de cursos y reservas
-    match /solicitudes_cursos/{id} {
-      allow create: if true;
-      allow read, write: if isAdmin() || isTeacher();
+    // --- CURSOS ---
+    function isValidCurso(data) {
+      return data.titulo is string && data.titulo.size() <= 200;
+    }
+    match /cursos/{id} {
+      allow read: if true;
+      allow create: if isAdmin() && isValidCurso(incoming());
+      allow update: if (isAdmin() && isValidCurso(incoming()))
+                    || (isTeacher() && incoming().diff(existing()).affectedKeys().hasOnly(['alumnos', 'aforo_actual']));
+      allow delete: if isAdmin();
     }
 
-    match /reservas/{id} {
-      allow create: if true;
-      allow read: if isAdmin() || (isSignedIn() && resource.data.uidTitular == request.auth.uid);
-      allow update, delete: if isAdmin() || (isSignedIn() && resource.data.uidTitular == request.auth.uid);
-    }
-
-    // Notificaciones
-    match /notificaciones/{id} {
-      allow read: if isSignedIn() && (resource.data.userId == request.auth.uid || isAdmin());
-      allow create: if isSignedIn();
-      allow update, delete: if isSignedIn() && (resource.data.userId == request.auth.uid || isAdmin());
-    }
-
-    // Sesiones — teachers can manage sessions for their own courses
+    // --- SESIONES ---
     match /cursos/{cursoId}/sesiones/{sId} {
       allow read, list: if true;
       allow write: if isAdmin() || isTeacherOfCourse(cursoId);
@@ -106,31 +74,75 @@ service cloud.firestore {
       allow write: if isAdmin() || isTeacher();
     }
 
-    // Socios
+    // --- EVENTOS ---
+    function isValidEvento(data) {
+      return data.titulo is string && data.titulo.size() <= 200
+          && (!data.keys().hasAny(['aforo_maximo']) || data.aforo_maximo is number)
+          && (!data.keys().hasAny(['aforo_max']) || data.aforo_max is number)
+          && (!data.keys().hasAny(['aforo_reservado']) || data.aforo_reservado is number);
+    }
+    match /eventos/{id} {
+      allow read: if true;
+      allow create, delete: if isAdmin();
+      allow update: if isAdmin()
+                    || incoming().diff(existing()).affectedKeys().hasOnly(['aforo_reservado']);
+    }
+
+    // --- RESERVAS ---
+    function isValidReserva(data) {
+      return data.eventoId is string && data.eventoId.size() <= 128
+          && data.nombreTitular is string && data.nombreTitular.size() <= 200
+          && data.dniTitular is string && data.dniTitular.size() >= 7
+          && data.emailTitular is string
+          && data.numPersonas is number && data.numPersonas >= 1
+          && data.uidTitular is string
+          && (data.uidTitular == 'invitado' || data.uidTitular == request.auth.uid);
+    }
+    match /reservas/{id} {
+      allow create: if isValidReserva(incoming()) &&
+                    (exists(/databases/$(database)/documents/eventos/$(incoming().eventoId)) ||
+                     exists(/databases/$(database)/documents/cursos/$(incoming().eventoId)));
+      allow read: if isAdmin()
+                  || (isSignedIn() && resource.data.uidTitular == request.auth.uid)
+                  || (isSignedIn() && resource.data.get('emailTitular', '').lower() == request.auth.token.get('email', '').lower())
+                  || resource.data.dniTitular != null;
+      allow update: if isAdmin();
+      allow delete: if isAdmin();
+    }
+
+    // --- SOCIOS ---
     match /socios/{id} {
       allow read: if isSignedIn() && (resource.data.uid == request.auth.uid || isAdmin());
       allow create: if isSignedIn();
       allow update, delete: if isAdmin();
     }
 
-    // Finanzas — solo admin
-    match /finanzas/{id} {
-      allow read, write: if isAdmin();
+    // --- OTROS PÚBLICOS ---
+    match /academias/{id}    { allow read: if true; allow write: if isAdmin(); }
+    match /profesores/{id}   { allow read: if true; allow write: if isAdmin(); }
+    match /exposiciones/{id} { allow read: if true; allow write: if isAdmin(); }
+    match /locales/{id}      { allow read: if true; allow write: if isAdmin(); }
+
+    // --- SOLICITUDES CURSOS ---
+    match /solicitudes_cursos/{id} {
+      allow create: if true;
+      allow read, write: if isAdmin() || isTeacher();
     }
 
-    match /pagos_mensuales/{id} {
-      allow read, write: if isAdmin();
+    // --- FINANZAS / CAJA ---
+    match /finanzas/{id}              { allow read, write: if isAdmin(); }
+    match /pagos_mensuales/{id}       { allow read, write: if isAdmin(); }
+    match /pagos_inscripciones/{id}   { allow read, write: if isAdmin(); }
+    match /caja_eventos/{id}          { allow read, write: if isAdmin(); }
+
+    // --- NOTIFICACIONES ---
+    match /notificaciones/{id} {
+      allow read: if isSignedIn() && (resource.data.userId == request.auth.uid || isAdmin());
+      allow create: if isSignedIn();
+      allow update, delete: if isSignedIn() && (resource.data.userId == request.auth.uid || isAdmin());
     }
 
-    match /pagos_inscripciones/{id} {
-      allow read, write: if isAdmin();
-    }
-
-    match /caja_eventos/{id} {
-      allow read, write: if isAdmin();
-    }
-
-    // Asistencia a eventos
+    // --- ASISTENCIA EVENTOS ---
     match /asistencia_eventos/{id} {
       allow read, write: if isAdmin() || isTeacher();
     }

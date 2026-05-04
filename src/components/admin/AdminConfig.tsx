@@ -212,6 +212,13 @@ const AdminConfig = () => {
     const file = e.target.files?.[0];
     if (!file) return;
     
+    // Check for storage initialization
+    if (!storage || !(storage as any).app?.options?.storageBucket) {
+      console.error("Firebase Storage check failed: No storageBucket in config.");
+      alert("⚠️ Error de Configuración: No se ha detectado el bucket de almacenamiento. Por favor, reporta este error.");
+      return;
+    }
+
     setSaving(true);
     try {
       const storageRef = ref(storage, `config/${String(field)}_${Date.now()}`);
@@ -220,9 +227,13 @@ const AdminConfig = () => {
       setConfig(prev => ({ ...prev, [field]: url }));
       setMsg(`✅ Imagen cargada para ${String(field)}`);
       setTimeout(() => setMsg(''), 3000);
-    } catch (err) {
-      console.error(err);
-      alert("Error al subir imagen");
+    } catch (err: any) {
+      console.error("Storage Error:", err);
+      if (err.message?.includes('insufficient permissions')) {
+        alert("❌ Error de Permisos: No tienes autorización para subir archivos a esta carpeta.");
+      } else {
+        alert("Error al subir imagen: " + (err.message || "Error desconocido"));
+      }
     }
     setSaving(false);
   };
@@ -233,9 +244,15 @@ const AdminConfig = () => {
       await setDoc(doc(db, "config", "site"), config);
       setMsg("✅ Configuración guardada correctamente");
       setTimeout(() => setMsg(''), 3000);
-    } catch (err) {
-      console.error(err);
-      alert("Error al guardar");
+    } catch (err: any) {
+      console.error("Save Config Error:", err);
+      if (err.message?.includes('insufficient permissions')) {
+        alert("❌ Error de Permisos: No tienes autorización para guardar la configuración (Base de Datos).");
+      } else if (err.code === 'failed-precondition' || err.message?.includes('blocked')) {
+        alert("⚠️ Error: La petición parece estar bloqueada por el navegador (ej: AdBlocker). Prueba a desactivarlo.");
+      } else {
+        alert("Error al guardar: " + (err.message || "Error desconocido"));
+      }
     }
     setSaving(false);
   };

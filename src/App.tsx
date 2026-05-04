@@ -30,6 +30,7 @@ const TeacherDashboard = lazy(() => import('./components/teacher/TeacherDashboar
 const TeacherLogin = lazy(() => import('./pages/TeacherLogin'));
 
 const ProgramacionPublica = lazy(() => import('./pages/ProgramacionPublica'));
+const EventPage = lazy(() => import('./pages/EventPage'));
 const GaleriaPublica = lazy(() => import('./pages/GaleriaPublica'));
 const AdminSolicitudes = lazy(() => import('./components/admin/AdminSolicitudes'));
 const ControlAcceso = lazy(() => import('./components/admin/ControlAcceso'));
@@ -101,6 +102,7 @@ function AppContent() {
         {/* RUTAS PÚBLICAS */}
         <Route path="/login" element={<LoginSocio />} />
         <Route path="/programacion" element={<ProgramacionPublica />} />
+        <Route path="/eventos/:id" element={<EventPage />} />
         <Route path="/galeria" element={<GaleriaPublica />} />
         <Route path="/newsletter-kalian-privado" element={<NewsletterPage />} />
 

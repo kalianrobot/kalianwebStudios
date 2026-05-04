@@ -34,7 +34,7 @@ const AdminCursos = () => {
     diasSemana: [1], 
     horaInicio: '18:00',
     horaFin: '19:30',
-    sala: 'SALA',
+    sala: 'SALA GRANDE',
     programacionAutomatica: false
   });
 
@@ -50,7 +50,7 @@ const AdminCursos = () => {
   const [cursoSeleccionado, setCursoSeleccionado] = useState<string | null>(null);
   const [gestionandoSesiones, setGestionandoSesiones] = useState<string | null>(null);
   const [sesiones, setSesiones] = useState<DocumentData[]>([]);
-  const [nuevaSesion, setNuevaSesion] = useState({ fecha: '', hora_inicio: '', hora_fin: '', sala: 'SALA', esRecurrente: false });
+  const [nuevaSesion, setNuevaSesion] = useState({ fecha: '', hora_inicio: '', hora_fin: '', sala: 'SALA GRANDE', esRecurrente: false });
   const [conflictos, setConflictos] = useState<{fecha: string, motivo: string}[]>([]);
   const [solicitudes, setSolicitudes] = useState<DocumentData[]>([]);
   const [manualAlumno, setManualAlumno] = useState({ dni: '', nombre: '', email: '' });
@@ -174,8 +174,11 @@ const AdminCursos = () => {
 
       for (const f of fechasAComprobar) {
         const conflictingEvento = eventosExistentes.find(ev => {
-          // Si el evento tiene sala y no es "Toda la Sala", solo choca si es la misma sala
-          const compartenSala = !ev.sala || ev.sala === 'Toda la Sala' || form.sala === 'Toda la Sala' || ev.sala === form.sala;
+          // Si el evento tiene sala y no es "SALA GRANDE", solo choca si es la misma sala (NORMALIZADO)
+          const compartenSala = !ev.sala || 
+                               form.sala === ev.sala || 
+                               ((form.sala === 'SALA GRANDE' || form.sala === 'SALA' || form.sala === 'Toda la Sala') && 
+                                (ev.sala === 'SALA GRANDE' || ev.sala === 'SALA' || ev.sala === 'Toda la Sala'));
           if (!compartenSala) return false;
 
           const startDateTime = new Date(`${f}T${form.horaInicio}`);
@@ -197,7 +200,9 @@ const AdminCursos = () => {
 
         const conflictingSesion = sesionesExistentes.find((s: any) => 
           s.fecha === f && 
-          (form.sala === 'Toda la Sala' || s.sala === 'Toda la Sala' || s.sala === form.sala) && 
+          (s.sala === form.sala || 
+           ((form.sala === 'SALA GRANDE' || form.sala === 'SALA' || form.sala === 'Toda la Sala') && 
+            (s.sala === 'SALA GRANDE' || s.sala === 'SALA' || s.sala === 'Toda la Sala'))) && 
           s.cursoId !== editando &&
           (form.horaInicio < s.hora_fin) && (form.horaFin > s.hora_inicio)
         );
@@ -286,7 +291,10 @@ const AdminCursos = () => {
 
       for (const f of fechasAComprobar) {
         const conflictingEvento = eventosExistentes.find(ev => {
-          const compartenSala = !ev.sala || ev.sala === 'Toda la Sala' || nuevaSesion.sala === 'Toda la Sala' || ev.sala === nuevaSesion.sala;
+          const compartenSala = !ev.sala || 
+                               nuevaSesion.sala === ev.sala || 
+                               ((nuevaSesion.sala === 'SALA GRANDE' || nuevaSesion.sala === 'SALA' || nuevaSesion.sala === 'Toda la Sala') && 
+                                (ev.sala === 'SALA GRANDE' || ev.sala === 'SALA' || ev.sala === 'Toda la Sala'));
           if (!compartenSala) return false;
 
           const startDateTime = new Date(`${f}T${nuevaSesion.hora_inicio}`);
@@ -308,7 +316,9 @@ const AdminCursos = () => {
 
         const conflictingSesion = sesionesExistentes.find((s: any) => 
           s.fecha === f && 
-          (nuevaSesion.sala === 'Toda la Sala' || s.sala === 'Toda la Sala' || s.sala === nuevaSesion.sala) && 
+          (s.sala === nuevaSesion.sala || 
+           ((nuevaSesion.sala === 'SALA GRANDE' || nuevaSesion.sala === 'SALA' || nuevaSesion.sala === 'Toda la Sala') && 
+            (s.sala === 'SALA GRANDE' || s.sala === 'SALA' || s.sala === 'Toda la Sala'))) && 
           (nuevaSesion.hora_inicio < s.hora_fin) && (nuevaSesion.hora_fin > s.hora_inicio)
         );
 
@@ -333,7 +343,7 @@ const AdminCursos = () => {
 
       await batch.commit();
       setMsg(`✅ ${sesionesAGuardar.length} sesiones añadidas`);
-      setNuevaSesion({ fecha: '', hora_inicio: '', hora_fin: '', sala: 'SALA', esRecurrente: false });
+      setNuevaSesion({ fecha: '', hora_inicio: '', hora_fin: '', sala: 'SALA GRANDE', esRecurrente: false });
       fetchSesiones(gestionandoSesiones);
       setTimeout(() => setMsg(''), 3000);
     } catch (err) { 
@@ -465,7 +475,7 @@ const AdminCursos = () => {
           diasSemana: c.diasSemana || [1],
           horaInicio: c.horaInicio || '18:00',
           horaFin: c.horaFin || '19:30',
-          sala: c.sala || 'Sala Grande',
+          sala: c.sala || 'SALA',
           programacionAutomatica: c.programacionAutomatica || false
         });
         window.scrollTo({ top: 0, behavior: 'smooth' });
@@ -1132,9 +1142,9 @@ const AdminCursos = () => {
                   value={form.sala}
                   onChange={e => setForm({...form, sala: e.target.value})}
                 >
-                  <option value="SALA">SALA</option>
+                  <option value="SALA GRANDE">SALA GRANDE</option>
                   <option value="Estudio">Estudio</option>
-                  <option value="local pequeño">local pequeño</option>
+                  <option value="Local Pequeño">Local Pequeño</option>
                 </select>
               </div>
 
@@ -1316,7 +1326,12 @@ const AdminCursos = () => {
                       profesorId: '',
                       profesorNombre: '',
                       descripcion: '',
-                      ventajas: ''
+                      ventajas: '',
+                      diasSemana: [1],
+                      horaInicio: '18:00',
+                      horaFin: '19:30',
+                      sala: 'SALA GRANDE',
+                      programacionAutomatica: false
                     });
                   }}
                   className="bg-slate-200 text-slate-600 px-8 rounded-[2rem] font-black uppercase"
@@ -1438,7 +1453,7 @@ const AdminCursos = () => {
                                 diasSemana: c.diasSemana || [1],
                                 horaInicio: c.horaInicio || '18:00',
                                 horaFin: c.horaFin || '19:30',
-                                sala: c.sala || 'Sala Grande',
+                                sala: c.sala === 'SALA' || c.sala === 'Toda la Sala' ? 'SALA GRANDE' : (c.sala || 'SALA GRANDE'),
                                 programacionAutomatica: c.programacionAutomatica || false
                               });
                               window.scrollTo({ top: 0, behavior: 'smooth' });
@@ -1456,7 +1471,7 @@ const AdminCursos = () => {
                                 fecha: '',
                                 hora_inicio: c.horaInicio || '18:00',
                                 hora_fin: c.horaFin || '19:30',
-                                sala: c.sala || 'Sala Grande',
+                                sala: c.sala === 'SALA' || c.sala === 'Toda la Sala' ? 'SALA GRANDE' : (c.sala || 'SALA GRANDE'),
                                 esRecurrente: false
                               });
                               fetchSesiones(c.id);
@@ -1520,9 +1535,9 @@ const AdminCursos = () => {
                         value={nuevaSesion.sala}
                         onChange={e => setNuevaSesion({...nuevaSesion, sala: e.target.value})}
                       >
-                        <option value="SALA">SALA</option>
+                        <option value="SALA GRANDE">SALA GRANDE</option>
                         <option value="Estudio">Estudio</option>
-                        <option value="local pequeño">local pequeño</option>
+                        <option value="Local Pequeño">Local Pequeño</option>
                       </select>
                     </div>
                   </div>

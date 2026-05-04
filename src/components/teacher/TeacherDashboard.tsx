@@ -22,7 +22,7 @@ const TeacherDashboard = () => {
   const [storageUsage, setStorageUsage] = useState(0);
   const [gestionandoSesiones, setGestionandoSesiones] = useState<string | null>(null);
   const [sesiones, setSesiones] = useState<DocumentData[]>([]);
-  const [nuevaSesion, setNuevaSesion] = useState({ fecha: '', hora_inicio: '', hora_fin: '', sala: 'Sala Grande', esRecurrente: false, diasSemana: [] as number[] });
+  const [nuevaSesion, setNuevaSesion] = useState({ fecha: '', hora_inicio: '', hora_fin: '', sala: 'SALA GRANDE', esRecurrente: false, diasSemana: [] as number[] });
   const [conflictos, setConflictos] = useState<string[]>([]);
   const [msg, setMsg] = useState('');
   const [showConfirmModal, setShowConfirmModal] = useState(false);
@@ -397,7 +397,9 @@ const TeacherDashboard = () => {
         const hasEvento = eventosExistentes.some(ev => ev.fecha.startsWith(f));
         const hasSesion = sesionesExistentes.some((s: any) => 
           s.fecha === f && 
-          s.sala === nuevaSesion.sala && 
+          s.sala === nuevaSesion.sala || 
+          ((nuevaSesion.sala === 'SALA GRANDE' || nuevaSesion.sala === 'SALA' || nuevaSesion.sala === 'Toda la Sala') && 
+           (s.sala === 'SALA GRANDE' || s.sala === 'SALA' || s.sala === 'Toda la Sala')) && 
           (
             (nuevaSesion.hora_inicio >= s.hora_inicio && nuevaSesion.hora_inicio < s.hora_fin) ||
             (nuevaSesion.hora_fin > s.hora_inicio && nuevaSesion.hora_fin <= s.hora_fin)
@@ -424,7 +426,7 @@ const TeacherDashboard = () => {
 
       await batch.commit();
       setMsg(`✅ ${sesionesAGuardar.length} sesiones añadidas`);
-      setNuevaSesion({ fecha: '', hora_inicio: '', hora_fin: '', sala: 'Sala Grande', esRecurrente: false, diasSemana: [] });
+      setNuevaSesion({ fecha: '', hora_inicio: '', hora_fin: '', sala: 'SALA GRANDE', esRecurrente: false, diasSemana: [] });
       fetchSesiones(gestionandoSesiones);
       setTimeout(() => setMsg(''), 3000);
     } catch (err) { 
@@ -800,9 +802,9 @@ const TeacherDashboard = () => {
                         value={nuevaSesion.sala}
                         onChange={e => setNuevaSesion({...nuevaSesion, sala: e.target.value})}
                       >
-                        <option value="Sala Grande">Sala Grande</option>
-                        <option value="Sala Pequeña">Sala Pequeña</option>
+                        <option value="SALA GRANDE">SALA GRANDE</option>
                         <option value="Estudio">Estudio</option>
+                        <option value="Local Pequeño">Local Pequeño</option>
                       </select>
                     </div>
                   </div>

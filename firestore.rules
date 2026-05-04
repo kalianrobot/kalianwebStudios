@@ -137,7 +137,7 @@ service cloud.firestore {
 
     // --- FINANZAS / CAJA ---
     match /finanzas/{id}              { allow read, write: if isAdmin(); }
-    match /pagos_mensuales/{id}       { allow read, write: if isAdmin(); }
+    match /pagos_mensuales/{id}       { allow read: if isAdmin() || isSignedIn(); allow write: if isAdmin(); }
     match /pagos_inscripciones/{id}   { allow read, write: if isAdmin(); }
     match /caja_eventos/{id}          { allow read, write: if isAdmin(); }
 

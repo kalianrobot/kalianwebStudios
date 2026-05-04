@@ -27,6 +27,8 @@ const TeacherDashboard = () => {
   const [msg, setMsg] = useState('');
   const [showConfirmModal, setShowConfirmModal] = useState(false);
   const [confirmingPago, setConfirmingPago] = useState<{ socioId: string, nombre: string } | null>(null);
+  const [mesParaPago, setMesParaPago] = useState<number>(new Date().getMonth() + 1);
+  const [anioParaPago, setAnioParaPago] = useState<number>(new Date().getFullYear());
   const [notificaciones, setNotificaciones] = useState<DocumentData[]>([]);
   const [showNotifs, setShowNotifs] = useState(false);
   const { user, socioData, logoutTeacher } = useAuth();
@@ -139,6 +141,8 @@ const TeacherDashboard = () => {
       if (tipo === 'mensual') {
         if (nuevoEstado) {
           // Mostrar modal de confirmación antes de marcar como pagado
+          setMesParaPago(mesActual);
+          setAnioParaPago(anioActual);
           setConfirmingPago({ socioId, nombre: nombreSocio || 'Alumno' });
           setShowConfirmModal(true);
           return;
@@ -216,29 +220,29 @@ const TeacherDashboard = () => {
   const ejecutarPagoConfirmado = async () => {
     if (!confirmingPago) return;
     const { socioId } = confirmingPago;
-    
+
     try {
-      const pagoId = `${anioActual}_${mesActual}_${socioId}`;
+      const pagoId = `${anioParaPago}_${mesParaPago}_${socioId}`;
       const pagoRef = doc(db, "pagos_mensuales", pagoId);
-      
+
       await setDoc(pagoRef, {
         socioId,
-        mes: mesActual,
-        anio: anioActual,
+        mes: mesParaPago,
+        anio: anioParaPago,
         pagado: true,
-        bloqueado: true, // Bloqueo anti-error
+        bloqueado: true,
         actualizadoPor: user?.uid,
         fechaActualizacion: new Date().toISOString()
       }, { merge: true });
 
       await registrarIngreso({
         monto: 15,
-        concepto: `Cuota Soci@ ${meses[mesActual-1]} ${anioActual}`,
+        concepto: `Cuota Soci@ ${meses[mesParaPago-1]} ${anioParaPago}`,
         categoria: 'Socio',
         metodo: metodoPago,
         socio_id: socioId,
-        mes: mesActual,
-        anio: anioActual
+        mes: mesParaPago,
+        anio: anioParaPago
       });
 
       await syncSocioStatus(socioId);
@@ -744,8 +748,33 @@ const TeacherDashboard = () => {
                 <p className="text-sm text-kalian-cream/70 leading-relaxed">
                   El alumno <span className="text-kalian-gold font-black">{confirmingPago.nombre}</span> ha realizado la aportación a Kalian.
                 </p>
+                <div className="bg-black/40 p-4 rounded-2xl border border-kalian-gold/10 space-y-2">
+                  <p className="text-[9px] font-black text-kalian-gold/40 uppercase tracking-widest">¿A qué mes corresponde este pago?</p>
+                  <div className="flex gap-2 justify-center flex-wrap">
+                    {(() => {
+                      const opts = [];
+                      for (let delta = -1; delta <= 1; delta++) {
+                        let m = mesActual + delta;
+                        let a = anioActual;
+                        if (m < 1) { m = 12; a -= 1; }
+                        if (m > 12) { m = 1; a += 1; }
+                        opts.push({ mes: m, anio: a });
+                      }
+                      return opts.map(({ mes, anio }) => (
+                        <button
+                          key={`${anio}_${mes}`}
+                          type="button"
+                          onClick={() => { setMesParaPago(mes); setAnioParaPago(anio); }}
+                          className={`px-4 py-2 rounded-xl text-[9px] font-black uppercase tracking-widest border transition-all ${mesParaPago === mes && anioParaPago === anio ? 'bg-kalian-gold text-black border-kalian-gold shadow-lg shadow-kalian-gold/20' : 'bg-black/40 border-kalian-gold/20 text-kalian-gold/60 hover:border-kalian-gold/40'}`}
+                        >
+                          {meses[mes - 1]} {anio !== anioActual ? anio : ''}
+                        </button>
+                      ));
+                    })()}
+                  </div>
+                </div>
                 <p className="text-[10px] font-black text-kalian-gold/40 uppercase tracking-widest">
-                  ¿Quieres bloquear este campo para el mes en curso y evitar errores accidentales?
+                  ¿Quieres bloquear este campo para evitar errores accidentales?
                 </p>
               </div>
               <div className="flex flex-col gap-3">

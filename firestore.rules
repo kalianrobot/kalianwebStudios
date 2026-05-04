@@ -112,7 +112,12 @@ service cloud.firestore {
 
     // --- SOCIOS ---
     match /socios/{id} {
-      allow read: if isSignedIn() && (resource.data.uid == request.auth.uid || isAdmin());
+      // Allow querying by uid OR email (PerfilSocio uses both as fallback)
+      allow read: if isSignedIn() && (
+        resource.data.uid == request.auth.uid ||
+        resource.data.email == request.auth.token.email ||
+        isAdmin()
+      );
       allow create: if isSignedIn();
       allow update, delete: if isAdmin();
     }

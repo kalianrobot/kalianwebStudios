@@ -127,11 +127,30 @@
         "precioCupon": { "type": "number", "description": "Precio especial al usar el cupón" },
         "fechaCupon": { "type": "string", "format": "date-time", "description": "Apertura anticipada para poseedores del cupón" },
         "apertura_general": { "type": "string", "format": "date-time" },
-        "aforo_max": { "type": "number" },
-        "aforo_actual": { "type": "number" },
+        "apertura_socios": { "type": "string", "format": "date-time" },
+        "aforo_maximo": { "type": "number" },
+        "aforo_reservado": { "type": "number" },
         "imagenUrl": { "type": "string" },
         "descripcion": { "type": "string" },
         "categoria": { "type": "string" }
+      }
+    },
+    "reservas": {
+      "title": "Reserva",
+      "description": "Reservas de eventos",
+      "type": "object",
+      "properties": {
+        "eventoId": { "type": "string" },
+        "eventoTitulo": { "type": "string" },
+        "dni": { "type": "string" },
+        "nombre": { "type": "string" },
+        "email": { "type": "string" },
+        "numPersonas": { "type": "number" },
+        "totalPagar": { "type": "number" },
+        "fechaReserva": { "type": "string", "format": "date-time" },
+        "uidTitular": { "type": "string", "description": "UID del usuario si estaba logueado" },
+        "cuponUsado": { "type": "string" },
+        "esSocio": { "type": "boolean" }
       }
     },
     "asistencia_eventos": {
@@ -207,6 +226,10 @@
     "/eventos/{eventoId}": {
       "schema": "eventos",
       "description": "Colección de eventos"
+    },
+    "/reservas/{reservaId}": {
+      "schema": "reservas",
+      "description": "Colección de reservas"
     },
     "/asistencia_eventos/{asistenciaId}": {
       "schema": "asistencia_eventos",

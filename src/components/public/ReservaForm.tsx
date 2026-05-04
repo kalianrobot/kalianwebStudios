@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { db, auth } from '../../firebase';
 import { collection, addDoc, query, where, getDocs, doc, getDoc, DocumentData, runTransaction, increment } from 'firebase/firestore';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
 
 interface ReservaFormProps {
@@ -11,13 +11,16 @@ interface ReservaFormProps {
 
 const ReservaForm = ({ item, alCerrar }: ReservaFormProps) => {
   const { socioData, esSocioActivo } = useAuth();
+  const [searchParams] = useSearchParams();
+  const cuponUrl = searchParams.get('cupon') || '';
+  
   const [form, setForm] = useState({ dni: '', nombre: '', email: '', acompañantes: 0 });
   const [mensaje, setMensaje] = useState('');
   const [cargando, setCargando] = useState(false);
   const [resultado, setResultado] = useState<{ ticketID: string, qrUrl: string, nombre: string } | null>(null);
   const [emailEnvio, setEmailEnvio] = useState('');
   const [emailEnviado, setEmailEnviado] = useState(false);
-  const [claveInput, setClaveInput] = useState('');
+  const [claveInput, setClaveInput] = useState(cuponUrl.toUpperCase());
   const [claveValida, setClaveValida] = useState(false);
   const [precioCalculado, setPrecioCalculado] = useState({ total: 0, esSocio: false, esClave: false });
   const navigate = useNavigate();
@@ -116,37 +119,23 @@ const ReservaForm = ({ item, alCerrar }: ReservaFormProps) => {
         const esSocio = aplicadoSocio || !!socioData;
         const usaCuponApertura = item.cupon && claveInput.trim().toUpperCase() === item.cupon.toUpperCase();
 
-        if (esSocio) {
-          if (item.apertura_socios) {
-            const aperturaSocios = new Date(item.apertura_socios);
-            if (ahora < aperturaSocios) {
-              setMensajeBloqueo(`Las reservas para soci@s abren el ${aperturaSocios.toLocaleString('es-ES')}`);
-            } else {
-              setMensajeBloqueo('');
-            }
-          } else {
-            setMensajeBloqueo('');
-          }
-        } else if (usaCuponApertura) {
-          if (item.fechaCupon) {
-            const aperturaCupon = new Date(item.fechaCupon);
-            if (ahora < aperturaCupon) {
-              setMensajeBloqueo(`Las reservas con cupón abren el ${aperturaCupon.toLocaleString('es-ES')}`);
-            } else {
-              setMensajeBloqueo('');
-            }
-          } else {
-            setMensajeBloqueo('');
-          }
+        const fechaSocio = item.apertura_socios ? new Date(item.apertura_socios) : null;
+        const fechaCupon = item.fechaCupon ? new Date(item.fechaCupon) : null;
+        const fechaGral = item.apertura_general ? new Date(item.apertura_general) : null;
+
+        const puedeCupon = usaCuponApertura && (!fechaCupon || ahora >= fechaCupon);
+        const puedeSocio = esSocio && (!fechaSocio || ahora >= fechaSocio);
+        const puedeGral = !fechaGral || ahora >= fechaGral;
+
+        if (puedeCupon || puedeSocio || puedeGral) {
+          setMensajeBloqueo('');
         } else {
-          // Invitado
-          if (item.apertura_general) {
-            const aperturaInv = new Date(item.apertura_general);
-            if (ahora < aperturaInv) {
-              setMensajeBloqueo(`Las reservas para invitados abren el ${aperturaInv.toLocaleString('es-ES')}`);
-            } else {
-              setMensajeBloqueo('');
-            }
+          if (usaCuponApertura && fechaCupon && ahora < fechaCupon) {
+            setMensajeBloqueo(`Las reservas con cupón abren el ${fechaCupon.toLocaleString('es-ES')}`);
+          } else if (esSocio && fechaSocio && ahora < fechaSocio) {
+            setMensajeBloqueo(`Las reservas para soci@s abren el ${fechaSocio.toLocaleString('es-ES')}`);
+          } else if (fechaGral && ahora < fechaGral) {
+            setMensajeBloqueo(`Las reservas para invitados abren el ${fechaGral.toLocaleString('es-ES')}`);
           } else {
             setMensajeBloqueo('');
           }
@@ -154,7 +143,23 @@ const ReservaForm = ({ item, alCerrar }: ReservaFormProps) => {
       }
     };
     calcular();
-  }, [form.dni, form.acompañantes, claveInput, socioData, esCurso, categoriaActividad, precioBase, item.tiene_descuento, item.precio_descuento, item.clave_descuento, item.precio_clave]);
+  }, [form.dni, form.acompañantes, claveInput, socioData, esCurso, categoriaActividad, precioBase, item.tiene_descuento, item.precio_descuento, item.cupon, item.precioCupon, item.fechaCupon, item.apertura_general]);
+
+  const handleFirestoreError = (error: unknown, operationType: string, path: string | null) => {
+    const errInfo = {
+      error: error instanceof Error ? error.message : String(error),
+      authInfo: {
+        userId: auth.currentUser?.uid,
+        email: auth.currentUser?.email,
+        emailVerified: auth.currentUser?.emailVerified,
+        isAnonymous: auth.currentUser?.isAnonymous,
+      },
+      operationType,
+      path
+    };
+    console.error('Firestore Error: ', JSON.stringify(errInfo));
+    return new Error(JSON.stringify(errInfo));
+  };
 
   const enviar = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -179,39 +184,28 @@ const ReservaForm = ({ item, alCerrar }: ReservaFormProps) => {
         const esSocio = precioCalculado.esSocio || !!socioData;
         const usaCuponApertura = item.cupon && claveInput.trim().toUpperCase() === item.cupon.toUpperCase();
         
-        if (esSocio) {
-          if (item.apertura_socios) {
-            const aperturaSocios = new Date(item.apertura_socios);
-            if (ahora < aperturaSocios) {
-              setMensaje(`⚠️ Las reservas para soci@s abren el ${aperturaSocios.toLocaleString('es-ES')}`);
-              setCargando(false);
-              return;
+        const fechaSocio = item.apertura_socios ? new Date(item.apertura_socios) : null;
+        const fechaCupon = item.fechaCupon ? new Date(item.fechaCupon) : null;
+        const fechaGral = item.apertura_general ? new Date(item.apertura_general) : null;
+
+        const puedeCupon = usaCuponApertura && (!fechaCupon || ahora >= fechaCupon);
+        const puedeSocio = esSocio && (!fechaSocio || ahora >= fechaSocio);
+        const puedeGral = !fechaGral || ahora >= fechaGral;
+
+        if (!puedeCupon && !puedeSocio && !puedeGral) {
+          if (usaCuponApertura && fechaCupon) {
+            setMensaje(`⚠️ Las reservas con cupón abren el ${fechaCupon.toLocaleString('es-ES')}`);
+          } else if (esSocio && fechaSocio) {
+            setMensaje(`⚠️ Las reservas para soci@s abren el ${fechaSocio.toLocaleString('es-ES')}`);
+          } else if (fechaGral) {
+            if (item.cupon) {
+                setMensaje(`⚠️ Las reservas para invitados abren el ${fechaGral.toLocaleString('es-ES')}. Si tienes un cupón de acceso anticipado, introdúcelo abajo.`);
+            } else {
+                setMensaje(`⚠️ Las reservas para invitados abren el ${fechaGral.toLocaleString('es-ES')}`);
             }
           }
-        } else if (usaCuponApertura) {
-          if (item.fechaCupon) {
-            const aperturaCupon = new Date(item.fechaCupon);
-            if (ahora < aperturaCupon) {
-              setMensaje(`⚠️ Las reservas con cupón abren el ${aperturaCupon.toLocaleString('es-ES')}`);
-              setCargando(false);
-              return;
-            }
-          }
-        } else {
-          // Invitados (Público general)
-          if (item.apertura_general) {
-            const aperturaInv = new Date(item.apertura_general);
-            if (ahora < aperturaInv) {
-              // Si no es socio ni tiene el cupón de apertura, le decimos que aún no está abierto
-              if (item.cupon) {
-                setMensaje(`⚠️ Las reservas para invitados abren el ${aperturaInv.toLocaleString('es-ES')}. Si tienes un cupón de acceso anticipado, introdúcelo abajo.`);
-              } else {
-                setMensaje(`⚠️ Las reservas para invitados abren el ${aperturaInv.toLocaleString('es-ES')}`);
-              }
-              setCargando(false);
-              return;
-            }
-          }
+          setCargando(false);
+          return;
         }
       }
 
@@ -225,11 +219,18 @@ const ReservaForm = ({ item, alCerrar }: ReservaFormProps) => {
 
       // 1. VALIDACIÓN DE UNICIDAD (Solo si hay DNI)
       if (dniUpper) {
-        const snapDuplicado = await getDocs(query(collection(db, "reservas"), where("eventoId", "==", item.id)));
-        const yaExiste = snapDuplicado.docs.some(d => d.data().dniTitular === dniUpper);
+        let snapDuplicado;
+        try {
+          const q = user 
+            ? query(collection(db, "reservas"), where("eventoId", "==", item.id), where("uidTitular", "==", user.uid))
+            : query(collection(db, "reservas"), where("eventoId", "==", item.id), where("dniTitular", "==", dniUpper));
+          snapDuplicado = await getDocs(q);
+        } catch (err) {
+          throw handleFirestoreError(err, 'list', 'reservas');
+        }
         
-        if (yaExiste) {
-          setMensaje("⚠️ Este DNI ya tiene una reserva para este evento.");
+        if (!snapDuplicado.empty) {
+          setMensaje("⚠️ Ya tienes una reserva previa para este evento.");
           setCargando(false);
           return;
         }
@@ -286,42 +287,54 @@ const ReservaForm = ({ item, alCerrar }: ReservaFormProps) => {
         categoria: categoriaActividad,
         uidTitular: user?.uid || 'invitado',
         dniTitular: dniUpper,
+        nombreTitular: form.nombre,
         emailTitular: form.email,
         ticketID: tID,
         qrUrl: qrUrl,
+        numPersonas: 1 + Number(form.acompañantes),
+        totalPagar: precioCalculado.total,
         fechaReserva: new Date().toISOString(),
         fechaActividad: item.fecha || item.fechaFin || '',
         slots: slots,
         totalPendiente: slots.reduce((acc, s) => acc + (s.estado === 'pendiente' ? s.precio : 0), 0),
         esCurso: esCurso,
         acompañantes: Number(form.acompañantes),
-        asistentes_ingresados: 0
+        asistentes_ingresados: 0,
+        cuponUsado: claveValida ? claveInput : null,
+        esSocio: esSocioReal
       };
 
-      await runTransaction(db, async (transaction) => {
-        const eventRef = doc(db, esCurso ? "cursos" : "eventos", item.id);
-        const eventDoc = await transaction.get(eventRef);
-        
-        if (!eventDoc.exists()) throw new Error("El evento ya no existe.");
-        
-        if (!esCurso) {
-          const eData = eventDoc.data();
-          const currentMax = Number(eData.aforo_maximo || eData.aforo_max || 0);
-          const currentRes = Number(eData.aforo_reservado || 0);
-          const totalNuevos = 1 + Number(form.acompañantes);
+      try {
+        await runTransaction(db, async (transaction) => {
+          const eventRef = doc(db, esCurso ? "cursos" : "eventos", item.id);
+          const eventDoc = await transaction.get(eventRef);
+          
+          if (!eventDoc.exists()) throw new Error("El evento ya no existe.");
+          
+          if (!esCurso) {
+            const eData = eventDoc.data();
+            const currentMax = Number(eData.aforo_maximo || eData.aforo_max || 0);
+            const currentRes = Number(eData.aforo_reservado || 0);
+            const totalNuevos = 1 + Number(form.acompañantes);
 
-          if (currentRes + totalNuevos > currentMax) {
-            throw new Error(`AFORO_FULL|${Math.max(0, currentMax - currentRes)}`);
+            if (currentRes + totalNuevos > currentMax) {
+              throw new Error(`AFORO_FULL|${Math.max(0, currentMax - currentRes)}`);
+            }
+
+            transaction.update(eventRef, {
+              aforo_reservado: increment(totalNuevos)
+            });
           }
 
-          transaction.update(eventRef, {
-            aforo_reservado: increment(totalNuevos)
-          });
+          const newResRef = doc(collection(db, "reservas"));
+          transaction.set(newResRef, reservaData);
+        });
+      } catch (err: any) {
+        if (err.message?.includes("AFORO_FULL") || err.message === "El evento ya no existe.") {
+          throw err;
         }
-
-        const newResRef = doc(collection(db, "reservas"));
-        transaction.set(newResRef, reservaData);
-      });
+        throw handleFirestoreError(err, 'write', `eventos/${item.id} + reservas (transacción)`);
+      }
 
       if (esCurso) {
         setMensaje("✅ Solicitud enviada. Debes pasarte por el local para ultimar los detalles y finalizar tu alta al curso (que será tu alta de socio).");
@@ -474,9 +487,19 @@ const ReservaForm = ({ item, alCerrar }: ReservaFormProps) => {
         </button>
         
         <div className="absolute bottom-6 left-8 right-8 z-10">
-          <div className="flex items-center gap-3 mb-2">
+          <div className="flex flex-wrap items-center gap-3 mb-2">
             <span className="text-[10px] font-black text-kalian-gold uppercase tracking-[0.3em] bg-kalian-gold/10 px-3 py-1 rounded-full border border-kalian-gold/20 backdrop-blur-sm">
               {esCurso ? '📚 CURSO' : '🎟️ EVENTO'}
+            </span>
+            <span 
+              className="text-[10px] font-black text-white uppercase tracking-[0.3em] px-3 py-1 rounded-full border border-white/20 backdrop-blur-sm flex items-center gap-2"
+              style={{ backgroundColor: (item.sala || 'SALA GRANDE') === 'Estudio' ? '#f59e0b44' : ((item.sala || 'SALA GRANDE') === 'Local Pequeño' ? '#10b98144' : '#3b82f644') }}
+            >
+              <div 
+                className="w-2 h-2 rounded-full"
+                style={{ backgroundColor: (item.sala || 'SALA GRANDE') === 'Estudio' ? '#f59e0b' : ((item.sala || 'SALA GRANDE') === 'Local Pequeño' ? '#10b981' : '#3b82f6') }}
+              ></div>
+              {item.sala || 'SALA GRANDE'}
             </span>
             {item.tiene_descuento && (
               <span className="text-[10px] font-black text-emerald-400 uppercase tracking-[0.3em] bg-emerald-400/10 px-3 py-1 rounded-full border border-emerald-400/20 backdrop-blur-sm">
@@ -647,7 +670,7 @@ const ReservaForm = ({ item, alCerrar }: ReservaFormProps) => {
                 {precioCalculado.esClave && (
                 <div className="flex justify-between items-center text-[10px] font-black uppercase text-emerald-400 tracking-[0.2em]">
                   <span>Descuento Cupón</span>
-                  <span>{item.precio_clave}€{esCurso ? '/mes' : ''}</span>
+                  <span>{item.precioCupon}€{esCurso ? '/mes' : ''}</span>
                 </div>
                 )}
                 <div className="flex justify-between items-center pt-4 border-t border-kalian-gold/10">

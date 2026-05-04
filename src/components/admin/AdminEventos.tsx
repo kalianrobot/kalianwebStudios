@@ -21,7 +21,7 @@ ENTRADA HASTA LAS 00:00. RESERVAS DISPONIBLES HASTA COMPLETAR AFORO.`;
     titulo: '', 
     fecha: '', 
     fecha_fin: '',
-    sala: 'SALA',
+    sala: 'SALA GRANDE',
     precio_estandar: '', 
     categoria: 'musica', 
     aforo_maximo: '50',
@@ -84,7 +84,7 @@ ENTRADA HASTA LAS 00:00. RESERVAS DISPONIBLES HASTA COMPLETAR AFORO.`;
           titulo: ev.titulo || '',
           fecha: ev.fecha || '',
           fecha_fin: fechaFin,
-          sala: ev.sala || 'SALA',
+          sala: ev.sala === 'SALA' || ev.sala === 'Toda la Sala' ? 'SALA GRANDE' : (ev.sala || 'SALA GRANDE'),
           precio_estandar: ev.precio_estandar?.toString() || '',
           categoria: ev.categoria || 'musica',
           aforo_maximo: ev.aforo_maximo?.toString() || '50',
@@ -124,8 +124,10 @@ ENTRADA HASTA LAS 00:00. RESERVAS DISPONIBLES HASTA COMPLETAR AFORO.`;
         const evStart = new Date(ev.fecha);
         const evEnd = new Date(ev.fecha_fin || `${ev.fecha.substring(0, 11)}${ev.hora_fin || '23:59'}`);
         
-        // Si comparten sala o uno es "Toda la Sala"
-        const compartenSala = form.sala === 'Toda la Sala' || ev.sala === 'Toda la Sala' || form.sala === ev.sala;
+        // Si comparten sala (considerando SALA GRANDE como Toda la Sala)
+        const compartenSala = form.sala === ev.sala || 
+                             ((form.sala === 'SALA GRANDE' || form.sala === 'SALA' || form.sala === 'Toda la Sala') && 
+                              (ev.sala === 'SALA GRANDE' || ev.sala === 'SALA' || ev.sala === 'Toda la Sala'));
         
         if (compartenSala && (start < evEnd) && (end > evStart)) {
           conflicts.push({ fecha: dateStr, motivo: `Evento: ${ev.titulo}` });
@@ -145,7 +147,9 @@ ENTRADA HASTA LAS 00:00. RESERVAS DISPONIBLES HASTA COMPLETAR AFORO.`;
         const cursoId = d.ref.parent.parent?.id;
         const sStart = new Date(`${s.fecha}T${s.hora_inicio}`);
         const sEnd = new Date(`${s.fecha}T${s.hora_fin}`);
-        const compartenSala = form.sala === 'Toda la Sala' || s.sala === 'Toda la Sala' || form.sala === s.sala;
+        const compartenSala = form.sala === s.sala || 
+                             ((form.sala === 'SALA GRANDE' || form.sala === 'SALA' || form.sala === 'Toda la Sala') && 
+                              (s.sala === 'SALA GRANDE' || s.sala === 'SALA' || s.sala === 'Toda la Sala'));
 
         if (compartenSala && (start < sEnd) && (end > sStart)) {
           const cursoTitulo = cursosMap[cursoId || ''] || "Otro Curso";
@@ -173,6 +177,11 @@ ENTRADA HASTA LAS 00:00. RESERVAS DISPONIBLES HASTA COMPLETAR AFORO.`;
       alert("⚠️ NO SE PUEDE GUARDAR: Se han detectado conflictos de horario en la sala.");
       return;
     }
+    if (form.cupon && (!form.precioCupon || !form.fechaCupon)) {
+      alert("⚠️ Si defines un cupón, debes especificar también el precio y la fecha de apertura para ese cupón.");
+      return;
+    }
+
     setSubiendo(true);
     try {
       let finalImagenUrl = form.imagenUrl;
@@ -211,7 +220,7 @@ ENTRADA HASTA LAS 00:00. RESERVAS DISPONIBLES HASTA COMPLETAR AFORO.`;
         titulo: '', 
         fecha: '', 
         fecha_fin: '',
-        sala: 'SALA',
+        sala: 'SALA GRANDE',
         precio_estandar: '', 
         categoria: 'musica', 
         aforo_maximo: '50', 
@@ -311,10 +320,9 @@ ENTRADA HASTA LAS 00:00. RESERVAS DISPONIBLES HASTA COMPLETAR AFORO.`;
                 value={form.sala}
                 onChange={e => setForm({...form, sala: e.target.value})}
               >
-                <option value="Toda la Sala">Toda la Sala (Evento Grande)</option>
-                <option value="SALA">SALA</option>
+                <option value="SALA GRANDE">SALA GRANDE</option>
                 <option value="Estudio">Estudio</option>
-                <option value="local pequeño">local pequeño</option>
+                <option value="Local Pequeño">Local Pequeño</option>
               </select>
             </div>
             <div className="space-y-2">
@@ -395,6 +403,7 @@ ENTRADA HASTA LAS 00:00. RESERVAS DISPONIBLES HASTA COMPLETAR AFORO.`;
                   className="w-full p-5 bg-black/40 rounded-2xl outline-none border border-emerald-500/10 focus:border-emerald-500 transition-all text-kalian-cream font-bold" 
                   value={form.fechaCupon} 
                   onChange={e => setForm({...form, fechaCupon: e.target.value})} 
+                  required={!!form.cupon}
                 />
               </div>
             </div>
@@ -524,7 +533,7 @@ ENTRADA HASTA LAS 00:00. RESERVAS DISPONIBLES HASTA COMPLETAR AFORO.`;
                       <div>
                         <h3 className="text-3xl kalian-poster-text text-kalian-cream group-hover:text-kalian-gold transition-colors uppercase italic">{ev.titulo}</h3>
                         <p className="text-[10px] text-kalian-gold/80 font-black uppercase tracking-[0.3em] mt-2">
-                          {new Date(ev.fecha).toLocaleString('es-ES', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })} | {ev.categoria.toUpperCase()} | {ev.precio_estandar}€ {ev.tiene_descuento ? `(Soci@s: ${ev.precio_descuento}€)` : '(Sin dto)'} | RESERVADO: {ev.aforo_reservado || 0}/{ev.aforo_maximo} | CHECK-IN: {ev.aforo_actual || 0} | MÁX ACOMP: {ev.max_acompanantes || 4} | {ev.es_publico !== false ? '🟢 PÚBLICO' : '🔴 PRIVADO'}
+                          {new Date(ev.fecha).toLocaleString('es-ES', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })} | {ev.sala === 'SALA' || ev.sala === 'Toda la Sala' ? 'SALA GRANDE' : (ev.sala || 'SALA GRANDE')} | {ev.categoria.toUpperCase()} | {ev.precio_estandar}€ {ev.tiene_descuento ? `(Soci@s: ${ev.precio_descuento}€)` : '(Sin dto)'} | RESERVADO: {ev.aforo_reservado || 0}/{ev.aforo_maximo} | CHECK-IN: {ev.aforo_actual || 0} | MÁX ACOMP: {ev.max_acompanantes || 4} | {ev.es_publico !== false ? '🟢 PÚBLICO' : '🔴 PRIVADO'}
                         </p>
                       </div>
                     </div>
@@ -542,7 +551,7 @@ ENTRADA HASTA LAS 00:00. RESERVAS DISPONIBLES HASTA COMPLETAR AFORO.`;
                             titulo: ev.titulo || '',
                             fecha: ev.fecha || '',
                             fecha_fin: fechaFin,
-                            sala: ev.sala || 'SALA',
+                            sala: ev.sala === 'SALA' || ev.sala === 'Toda la Sala' ? 'SALA GRANDE' : (ev.sala || 'SALA GRANDE'),
                             precio_estandar: ev.precio_estandar?.toString() || '',
                             categoria: ev.categoria || 'musica',
                             aforo_maximo: ev.aforo_maximo?.toString() || '50',
@@ -580,7 +589,7 @@ ENTRADA HASTA LAS 00:00. RESERVAS DISPONIBLES HASTA COMPLETAR AFORO.`;
                             titulo: `${ev.titulo} (COPIA)`,
                             fecha: ev.fecha || '',
                             fecha_fin: fechaFin,
-                            sala: ev.sala || 'SALA',
+                            sala: ev.sala === 'SALA' || ev.sala === 'Toda la Sala' ? 'SALA GRANDE' : (ev.sala || 'SALA GRANDE'),
                             precio_estandar: ev.precio_estandar?.toString() || '',
                             categoria: ev.categoria || 'musica',
                             aforo_maximo: ev.aforo_maximo?.toString() || '50',
@@ -661,7 +670,7 @@ ENTRADA HASTA LAS 00:00. RESERVAS DISPONIBLES HASTA COMPLETAR AFORO.`;
                             titulo: `${ev.titulo} (REPETIR)`,
                             fecha: '',
                             fecha_fin: '',
-                            sala: ev.sala || 'SALA',
+                            sala: ev.sala === 'SALA' || ev.sala === 'Toda la Sala' ? 'SALA GRANDE' : (ev.sala || 'SALA GRANDE'),
                             precio_estandar: ev.precio_estandar?.toString() || '',
                             categoria: ev.categoria || 'musica',
                             aforo_maximo: ev.aforo_maximo?.toString() || '50',

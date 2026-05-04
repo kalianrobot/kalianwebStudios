@@ -186,11 +186,20 @@ const KalianCalendar: React.FC<KalianCalendarProps> = ({ teacherMode = false }) 
       }
 
       // Color coding based on room
-      let bgColor = '#10b981'; // Green (default)
-      if (ev.sala === 'SALA') bgColor = '#3b82f6'; // Blue
-      if (ev.sala === 'Estudio') bgColor = '#f59e0b'; // Orange
-      if (ev.sala === 'local pequeño') bgColor = '#10b981'; // Green
-      if (ev.sala === 'Toda la Sala') bgColor = '#d946ef'; // Fuchsia
+      let bgColor = '#3b82f6'; // Blue (default - SALA GRANDE)
+      const roomRaw = (ev.sala || 'SALA GRANDE').toLowerCase().trim();
+      let displayName = ev.sala || 'SALA GRANDE';
+
+      if (roomRaw.includes('estudio')) {
+        bgColor = '#f59e0b'; // Orange
+        displayName = 'Estudio';
+      } else if (roomRaw.includes('pequeño') || roomRaw === 't.' || roomRaw === 'local t' || roomRaw === 'local pequeño') {
+        bgColor = '#10b981'; // Green
+        displayName = 'Local Pequeño';
+      } else {
+        bgColor = '#3b82f6'; // Blue
+        displayName = 'SALA GRANDE';
+      }
 
       allEvents.push({
         id: ev.id,
@@ -209,7 +218,7 @@ const KalianCalendar: React.FC<KalianCalendarProps> = ({ teacherMode = false }) 
           fecha: typeof start === 'string' ? start.split('T')[0] : '',
           hora_inicio: hasTime ? start.split('T')[1]?.substring(0, 5) : "00:00",
           hora_fin: ev.hora_fin || (hasTime ? "23:59" : "23:59"),
-          sala: ev.sala || 'SALA'
+          sala: displayName
         }
       });
     });
@@ -234,12 +243,20 @@ const KalianCalendar: React.FC<KalianCalendarProps> = ({ teacherMode = false }) 
       const hFin = (sesion.hora_fin || '01:00').padStart(5, '0');
 
       // Color coding based on room
-      let bgColor = '#3b82f6'; // Blue (default)
-      const room = sesion.sala || curso.sala || 'SALA';
-      if (room === 'SALA') bgColor = '#3b82f6'; // Blue
-      if (room === 'Estudio') bgColor = '#f59e0b'; // Orange
-      if (room === 'local pequeño') bgColor = '#10b981'; // Green
-      if (room === 'Toda la Sala') bgColor = '#d946ef'; // Fuchsia
+      const roomRaw = (sesion.sala || curso.sala || 'SALA GRANDE').toLowerCase().trim();
+      let bgColor = '#3b82f6'; // Blue (default - SALA GRANDE)
+      let displayName = sesion.sala || curso.sala || 'SALA GRANDE';
+      
+      if (roomRaw.includes('estudio')) {
+        bgColor = '#f59e0b'; // Orange
+        displayName = 'Estudio';
+      } else if (roomRaw.includes('pequeño') || roomRaw === 't.' || roomRaw === 'local t' || roomRaw === 'local pequeño') {
+        bgColor = '#10b981'; // Green
+        displayName = 'Local Pequeño';
+      } else {
+        bgColor = '#3b82f6'; // Blue
+        displayName = 'SALA GRANDE';
+      }
 
       allEvents.push({
         id: sesion.id,
@@ -258,7 +275,7 @@ const KalianCalendar: React.FC<KalianCalendarProps> = ({ teacherMode = false }) 
           courseName: curso.titulo,
           profesorId: curso.profesorId,
           profesorNombre: profMap[curso.profesorId] || 'Sin asignar',
-          sala: room,
+          sala: displayName,
           fecha: sesion.fecha,
           hora_inicio: hInicio,
           hora_fin: hFin,
@@ -281,8 +298,10 @@ const KalianCalendar: React.FC<KalianCalendarProps> = ({ teacherMode = false }) 
       // Debe ser el mismo día
       if (ep.fecha !== fecha) return false;
 
-      // Debe ser la misma sala O que una de las dos sea "Toda la Sala"
-      const compartenSala = sala === ep.sala || sala === 'Toda la Sala' || ep.sala === 'Toda la Sala';
+      // Debe ser la misma sala O que una de las dos sea "Toda la Sala" o "SALA" (Normalización)
+      const compartenSala = sala === ep.sala || 
+                            ((sala === 'SALA GRANDE' || sala === 'SALA' || sala === 'Toda la Sala') && 
+                             (ep.sala === 'SALA GRANDE' || ep.sala === 'SALA' || ep.sala === 'Toda la Sala'));
       if (!compartenSala) return false;
 
       // Comprobar solape: (nuevaInicio < existenteFin) && (nuevaFin > existenteInicio)
@@ -507,6 +526,22 @@ const KalianCalendar: React.FC<KalianCalendarProps> = ({ teacherMode = false }) 
         </div>
       </div>
 
+      {/* Leyenda de Colores */}
+      <div className="flex flex-wrap items-center gap-6 px-8 py-4 bg-black/40 rounded-[2rem] border border-kalian-gold/10 shadow-xl">
+        <div className="flex items-center gap-3">
+          <div className="w-3 h-3 rounded-full bg-[#3b82f6] shadow-[0_0_10px_rgba(59,130,246,0.5)]"></div>
+          <span className="text-[9px] font-black uppercase tracking-widest text-kalian-cream/60">SALA GRANDE</span>
+        </div>
+        <div className="flex items-center gap-3">
+          <div className="w-3 h-3 rounded-full bg-[#f59e0b] shadow-[0_0_10px_rgba(245,158,11,0.5)]"></div>
+          <span className="text-[9px] font-black uppercase tracking-widest text-kalian-cream/60">Estudio</span>
+        </div>
+        <div className="flex items-center gap-3">
+          <div className="w-3 h-3 rounded-full bg-[#10b981] shadow-[0_0_10px_rgba(16,185,129,0.5)]"></div>
+          <span className="text-[9px] font-black uppercase tracking-widest text-kalian-cream/60">Local Pequeño</span>
+        </div>
+      </div>
+
       {/* Calendario */}
       <div className="bg-black/40 p-6 rounded-[2.5rem] border border-kalian-gold/10 shadow-2xl relative">
         {loading && (
@@ -701,6 +736,9 @@ const EventModal = ({ event, onClose, userRole, userUID, cursos, checkConflictos
   const hora_inicio = event.startStr.includes('T') ? event.startStr.split('T')[1].substring(0, 5) : "00:00";
   const hora_fin = event.endStr?.includes('T') ? event.endStr.split('T')[1].substring(0, 5) : "23:59";
 
+  // Determinar color de la sala
+  const roomColor = sala === 'Estudio' ? '#f59e0b' : (sala === 'Local Pequeño' ? '#10b981' : '#3b82f6');
+
   const [editMode, setEditMode] = useState(false);
   const [form, setForm] = useState({ sala, hora_inicio, hora_fin, fecha });
   const [loading, setLoading] = useState(false);
@@ -783,8 +821,9 @@ const EventModal = ({ event, onClose, userRole, userUID, cursos, checkConflictos
     >
       <motion.div 
         initial={{ scale: 0.9, y: 20 }} animate={{ scale: 1, y: 0 }} exit={{ scale: 0.9, y: 20 }}
-        className="bg-kalian-dark w-full max-w-md rounded-[2.5rem] border border-kalian-gold/20 shadow-2xl overflow-hidden"
+        className="bg-kalian-dark w-full max-w-md rounded-[2.5rem] border border-kalian-gold/20 shadow-2xl overflow-hidden relative"
       >
+        <div className="absolute top-0 left-0 w-full h-1.5" style={{ backgroundColor: roomColor }}></div>
         <div className="p-6 bg-kalian-gold/10 border-b border-kalian-gold/10 flex justify-between items-center">
           <h3 className="text-xl kalian-poster-text text-kalian-gold uppercase italic">
             {type === 'sesion' ? 'Detalle de Clase' : 'Detalle de Evento'}
@@ -823,10 +862,10 @@ const EventModal = ({ event, onClose, userRole, userUID, cursos, checkConflictos
                   </div>
                   <div className="space-y-1">
                     <label className="text-[8px] font-black uppercase text-kalian-gold/40 ml-2">Sala</label>
-                    <select className="w-full bg-black/40 border border-kalian-gold/20 rounded-xl p-3 text-xs text-kalian-cream" value={form.sala} onChange={e => setForm({...form, sala: e.target.value})}>
-                      <option value="SALA">SALA</option>
+                    <select className="w-full bg-black/40 border border-kalian-gold/20 rounded-xl p-3 text-xs text-kalian-cream outline-none focus:border-kalian-gold transition-colors" value={form.sala} onChange={e => setForm({...form, sala: e.target.value})}>
+                      <option value="SALA GRANDE">SALA GRANDE</option>
                       <option value="Estudio">Estudio</option>
-                      <option value="local pequeño">local pequeño</option>
+                      <option value="Local Pequeño">Local Pequeño</option>
                     </select>
                   </div>
                 </div>
@@ -842,7 +881,10 @@ const EventModal = ({ event, onClose, userRole, userUID, cursos, checkConflictos
                   </div>
                   <div className="col-span-2 space-y-1 pt-2 border-t border-white/5">
                     <p className="text-[8px] font-black uppercase text-kalian-gold/40 tracking-widest flex items-center gap-1"><MapPin size={10} /> Sala</p>
-                    <p className="text-sm font-black text-kalian-cream uppercase">{sala}</p>
+                    <div className="flex items-center gap-2">
+                      <div className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: roomColor }}></div>
+                      <p className="text-sm font-black text-kalian-cream uppercase">{sala}</p>
+                    </div>
                   </div>
                 </div>
               )}

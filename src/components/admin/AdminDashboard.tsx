@@ -46,7 +46,7 @@ const AdminDashboard = () => {
   const [migrating, setMigrating] = useState(false);
   const runMigration = async () => {
     if (!isAdmin) return;
-    if (!window.confirm("¿Ejecutar migración de Salas? Esto asignará 'SALA' por defecto a todos los cursos y eventos sin sala especificada.")) return;
+    if (!window.confirm("¿Ejecutar migración de Salas? Esto asignará 'SALA GRANDE' por defecto a todos los cursos y eventos sin sala especificada.")) return;
     
     setMigrating(true);
     try {
@@ -59,7 +59,7 @@ const AdminDashboard = () => {
       cursosSnap.docs.forEach(d => {
         const data = d.data();
         if (!data.sala) {
-          batch.update(doc(db, "cursos", d.id), { sala: "SALA" });
+          batch.update(doc(db, "cursos", d.id), { sala: "SALA GRANDE" });
           count++;
         }
       });
@@ -69,7 +69,7 @@ const AdminDashboard = () => {
       eventosSnap.docs.forEach(d => {
         const data = d.data();
         if (!data.sala) {
-          batch.update(doc(db, "eventos", d.id), { sala: "SALA" });
+          batch.update(doc(db, "eventos", d.id), { sala: "SALA GRANDE" });
           count++;
         }
       });
@@ -80,7 +80,7 @@ const AdminDashboard = () => {
       sesionesSnap.docs.forEach(d => {
         const data = d.data();
         if (!data.sala) {
-          batch.update(d.ref, { sala: "SALA" });
+          batch.update(d.ref, { sala: "SALA GRANDE" });
           count++;
         }
       });

@@ -506,7 +506,7 @@ export const HomeSocio = () => {
             <div className="flex flex-col md:flex-row items-center gap-10 relative z-10">
               <div className="w-32 h-32 flex-shrink-0 rounded-2xl overflow-hidden border border-kalian-gold/20 shadow-2xl">
                 {config?.hubImageUrl ? (
-                  <img src={config.hubImageUrl} alt="Hub" className="w-full h-full object-cover" />
+                  <img src={config.hubImageUrl} alt="Hub" className="w-full h-full object-contain" />
                 ) : (
                   <div className="w-full h-full bg-kalian-gold/10 flex items-center justify-center text-5xl">🏢</div>
                 )}

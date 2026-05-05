@@ -363,7 +363,7 @@ const AdminConfig = () => {
               <p className="text-[10px] font-black text-kalian-gold/40 uppercase tracking-[0.3em] ml-4">Imagen Sección Hub</p>
               <div className="flex items-center gap-4">
                 <div className="w-20 h-20 bg-white/5 rounded-xl border border-kalian-gold/10 flex items-center justify-center overflow-hidden">
-                  {config.hubImageUrl ? <img src={config.hubImageUrl} className="w-full h-full object-cover" /> : '🏢'}
+                  {config.hubImageUrl ? <img src={config.hubImageUrl} className="w-full h-full object-contain" /> : '🏢'}
                 </div>
                 <input type="file" onChange={e => handleUpload(e, 'hubImageUrl')} className="text-xs text-kalian-gold/40" />
               </div>

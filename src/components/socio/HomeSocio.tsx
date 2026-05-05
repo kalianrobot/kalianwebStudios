@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { db } from '../../firebase';
-import { collection, getDocs, query, orderBy, DocumentData, where, doc, getDoc, onSnapshot } from 'firebase/firestore';
-import { Link, useNavigate } from 'react-router-dom';
+import { collection, getDocs, query, orderBy, DocumentData, doc, getDoc, onSnapshot } from 'firebase/firestore';
+import { Link } from 'react-router-dom';
 import { motion, AnimatePresence } from 'motion/react';
 import { useAuth } from '../../context/AuthContext';
 import ReservaForm from '../public/ReservaForm';
@@ -12,7 +12,6 @@ import SectionTitle from '../shared/SectionTitle';
 
 export const HomeSocio = () => {
   const { user } = useAuth();
-  const navigate = useNavigate();
   const [eventos, setEventos] = useState<DocumentData[]>([]);
   const [cursos, setCursos] = useState<DocumentData[]>([]);
   const [locales, setLocales] = useState<DocumentData[]>([]);
@@ -36,30 +35,6 @@ export const HomeSocio = () => {
   const [errorSeleccion, setErrorSeleccion] = useState<string | null>(null);
   const cursosListRef = useRef<HTMLDivElement>(null);
 
-  const [cuponGlobal, setCuponGlobal] = useState('');
-  const [buscandoCupon, setBuscandoCupon] = useState(false);
-  const [errorCupon, setErrorCupon] = useState('');
-
-  const handleAccederCupon = async () => {
-    if (!cuponGlobal.trim()) return;
-    setBuscandoCupon(true);
-    setErrorCupon('');
-    try {
-      const q = query(collection(db, "eventos"), where("cupon", "==", cuponGlobal.trim().toUpperCase()));
-      const snap = await getDocs(q);
-      if (!snap.empty) {
-        const evId = snap.docs[0].id;
-        navigate(`/eventos/${evId}?cupon=${cuponGlobal.trim().toUpperCase()}`);
-      } else {
-        setErrorCupon('⚠️ Cupón no válido o evento no disponible para preventa.');
-      }
-    } catch (err) {
-      console.error(err);
-      setErrorCupon('Error al buscar cupón');
-    } finally {
-      setBuscandoCupon(false);
-    }
-  };
 
   const formatMeses = (inicio: string, fin: string) => {
     const meses = ["Enero", "Febrero", "Marzo", "Abril", "Mayo", "Junio", "Julio", "Agosto", "Septiembre", "Octubre", "Noviembre", "Diciembre"];
@@ -235,40 +210,6 @@ export const HomeSocio = () => {
         <section className="space-y-12">
           <SectionTitle title="PRÓXIMOS" subtitle="EVENTOS" color={config?.titleColor} />
           
-          {/* ACCESO POR CUPÓN GLOBAL */}
-          <motion.div 
-            initial={{ opacity: 0, y: 20 }}
-            whileInView={{ opacity: 1, y: 0 }}
-            viewport={{ once: true }}
-            className="max-w-xl mx-auto bg-emerald-500/5 border border-emerald-500/20 p-8 rounded-[2.5rem] text-center space-y-6 shadow-2xl shadow-emerald-500/5"
-          >
-            <div className="space-y-2">
-              <h4 className="text-[10px] font-black text-emerald-500 uppercase tracking-[0.4em]">¿Tienes un cupón de acceso anticipado?</h4>
-              <p className="text-kalian-cream/40 text-[9px] font-bold uppercase tracking-widest">Introduce tu código para acceder a preventas y precios especiales</p>
-            </div>
-            
-            <div className="flex gap-2">
-              <input 
-                type="text" 
-                placeholder="INTRODUCIR CÓDIGO" 
-                className="flex-1 bg-black/40 border border-emerald-500/20 rounded-2xl p-5 text-center font-black uppercase text-emerald-500 outline-none focus:border-emerald-500 transition-all placeholder:text-emerald-500/20"
-                value={cuponGlobal}
-                onChange={e => setCuponGlobal(e.target.value.toUpperCase())}
-                onKeyDown={e => e.key === 'Enter' && handleAccederCupon()}
-              />
-              <button 
-                onClick={handleAccederCupon}
-                disabled={buscandoCupon || !cuponGlobal.trim()}
-                className="bg-emerald-500 text-black px-8 rounded-2xl font-black uppercase text-[10px] tracking-widest hover:bg-white transition-all disabled:opacity-50 disabled:cursor-not-allowed"
-              >
-                {buscandoCupon ? 'BUSCANDO...' : 'ACCEDER →'}
-              </button>
-            </div>
-            {errorCupon && (
-              <p className="text-red-500 text-[10px] font-black uppercase tracking-widest animate-pulse">{errorCupon}</p>
-            )}
-          </motion.div>
-
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
             {eventos.map(ev => (
               <EventCard 

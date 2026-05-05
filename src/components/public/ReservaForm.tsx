@@ -559,12 +559,12 @@ const ReservaForm = ({ item, alCerrar }: ReservaFormProps) => {
                 <p className="text-kalian-cream/60 font-bold text-xs">
                   {mensajeBloqueo}
                 </p>
-                {!socioData && item.cupon && (
+                {item.cupon && (
                   <div className="pt-4 space-y-2">
                     <p className="text-[10px] font-black text-emerald-400/60 uppercase tracking-widest">¿Tienes un cupón de acceso anticipado?</p>
-                    <input 
-                      type="text" 
-                      placeholder="INTRODUCIR CUPÓN" 
+                    <input
+                      type="text"
+                      placeholder="INTRODUCIR CUPÓN"
                       className="w-full p-4 bg-emerald-500/5 rounded-xl border border-emerald-500/10 text-center font-black uppercase text-emerald-500 outline-none focus:border-emerald-500 transition-all"
                       value={claveInput}
                       onChange={e => setClaveInput(e.target.value.toUpperCase())}

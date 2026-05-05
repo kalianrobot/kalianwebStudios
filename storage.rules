@@ -34,49 +34,53 @@ service firebase.storage {
       );
     }
 
+    function isImage() {
+      return request.resource.contentType.matches('image/.*');
+    }
+
     // Site config images (logo, hero, gallery, hub)
     match /config/{fileName} {
       allow read: if true;
-      allow write: if isAdmin() && request.resource.size < 10 * 1024 * 1024;
+      allow write: if isAdmin() && isImage() && request.resource.size < 10 * 1024 * 1024;
       allow delete: if isAdmin();
     }
 
     // Event posters — shown publicly on landing page and socio portal
     match /eventos/{fileName} {
       allow read: if true;
-      allow write: if isAdmin() && request.resource.size < 10 * 1024 * 1024;
+      allow write: if isAdmin() && isImage() && request.resource.size < 10 * 1024 * 1024;
       allow delete: if isAdmin();
     }
 
     // Academia images
     match /academias/{fileName} {
       allow read: if true;
-      allow write: if isAdmin() && request.resource.size < 5 * 1024 * 1024;
+      allow write: if isAdmin() && isImage() && request.resource.size < 5 * 1024 * 1024;
       allow delete: if isAdmin();
     }
 
     // Professor profile images
     match /profesores/{fileName} {
       allow read: if true;
-      allow write: if isAdmin() && request.resource.size < 5 * 1024 * 1024;
+      allow write: if isAdmin() && isImage() && request.resource.size < 5 * 1024 * 1024;
       allow delete: if isAdmin();
     }
 
     // Exhibition images
     match /exposiciones/{fileName} {
       allow read: if true;
-      allow write: if isAdmin() && request.resource.size < 10 * 1024 * 1024;
+      allow write: if isAdmin() && isImage() && request.resource.size < 10 * 1024 * 1024;
       allow delete: if isAdmin();
     }
 
     // Local/space images
     match /locales/{fileName} {
       allow read: if true;
-      allow write: if isAdmin() && request.resource.size < 5 * 1024 * 1024;
+      allow write: if isAdmin() && isImage() && request.resource.size < 5 * 1024 * 1024;
       allow delete: if isAdmin();
     }
 
-    // Course materials: restricted to authenticated members
+    // Course materials: any file type allowed (PDFs, videos, etc.)
     match /cursos/{cursoId}/{fileName} {
       allow read: if isMember() || isTeacherOf(cursoId);
       allow write: if (isTeacherOf(cursoId) || isAdmin()) &&

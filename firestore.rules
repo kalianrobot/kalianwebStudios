@@ -107,8 +107,12 @@ service cloud.firestore {
                   || (isSignedIn() && resource.data.uidTitular == request.auth.uid)
                   || (isSignedIn() && resource.data.get('emailTitular', '').lower() == request.auth.token.get('email', '').lower())
                   || resource.data.dniTitular != null;
-      allow update: if isAdmin();
-      allow delete: if isAdmin();
+      allow update: if isAdmin()
+                    || (isSignedIn()
+                        && resource.data.uidTitular == request.auth.uid
+                        && incoming().diff(existing()).affectedKeys().hasOnly(['acompañantes']));
+      allow delete: if isAdmin()
+                    || (isSignedIn() && resource.data.uidTitular == request.auth.uid);
     }
 
     // --- SOCIOS ---

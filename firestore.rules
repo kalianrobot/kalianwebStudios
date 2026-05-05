@@ -42,8 +42,14 @@ service cloud.firestore {
 
     // --- USERS ---
     match /users/{userId} {
-      allow read, write: if isSignedIn() && request.auth.uid == userId;
-      allow read: if isAdmin();
+      // Users can read their own profile but cannot self-assign roles
+      allow read: if (isSignedIn() && request.auth.uid == userId) || isAdmin();
+      allow create: if isSignedIn() && request.auth.uid == userId
+                    && !incoming().keys().hasAny(['role']);
+      allow update: if (isSignedIn() && request.auth.uid == userId
+                        && !incoming().diff(existing()).affectedKeys().hasAny(['role']))
+                    || isAdmin();
+      allow delete: if isAdmin();
     }
 
     // --- CONFIG ---

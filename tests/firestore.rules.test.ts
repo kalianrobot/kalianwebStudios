@@ -360,6 +360,40 @@ describe('colecciones públicas', () => {
 });
 
 // ══════════════════════════════════════════════════════════════════════════
+// USERS — protección contra escalada de privilegios
+// ══════════════════════════════════════════════════════════════════════════
+describe('users / privilege escalation', () => {
+  it('socio NO puede asignarse rol admin', async () => {
+    await assertFails(updateDoc(doc(db(socioCtx()), 'users', 'socio-uid'), {
+      role: 'admin',
+    }));
+  });
+
+  it('socio NO puede crear su propio perfil con role=admin', async () => {
+    await assertFails(setDoc(doc(db(socioCtx()), 'users', 'socio-uid'), {
+      email: 'jose@test.es',
+      role: 'admin',
+    }));
+  });
+
+  it('socio puede actualizar campos propios sin tocar role', async () => {
+    await assertSucceeds(updateDoc(doc(db(socioCtx()), 'users', 'socio-uid'), {
+      nombre: 'Jose Actualizado',
+    }));
+  });
+
+  it('admin puede cambiar el rol de otro usuario', async () => {
+    await assertSucceeds(updateDoc(doc(db(adminCtx()), 'users', 'socio-uid'), {
+      role: 'socio',
+    }));
+  });
+
+  it('socio NO puede leer el perfil de otro usuario', async () => {
+    await assertFails(getDoc(doc(db(socioCtx()), 'users', 'admin-uid')));
+  });
+});
+
+// ══════════════════════════════════════════════════════════════════════════
 // MASTER ADMIN — acceso total
 // ══════════════════════════════════════════════════════════════════════════
 describe('master admin', () => {

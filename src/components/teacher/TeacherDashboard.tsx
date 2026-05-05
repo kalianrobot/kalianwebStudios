@@ -362,7 +362,7 @@ const TeacherDashboard = () => {
         const end = new Date(curso.fechaFin);
         
         nuevaSesion.diasSemana.forEach(targetDay => {
-          let current = new Date(nuevaSesion.fecha);
+          const current = new Date(nuevaSesion.fecha);
           const targetDayJs = targetDay === 7 ? 0 : targetDay;
 
           // Ajustar al primer día de la semana deseado desde la fecha seleccionada

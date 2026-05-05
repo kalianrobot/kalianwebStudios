@@ -81,7 +81,7 @@ const PerfilSocio = () => {
           const snapResUid = await getDocs(qResUid);
           const hoy = new Date().toISOString().split('T')[0];
 
-          let todasLasReservas: any[] = snapResUid.docs.map(d => ({ id: d.id, ...d.data() }));
+          const todasLasReservas: any[] = snapResUid.docs.map(d => ({ id: d.id, ...d.data() }));
 
           // Fallback por DNI
           if (sData.dni) {

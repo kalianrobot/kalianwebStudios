@@ -70,7 +70,7 @@ const KalianCalendar: React.FC<KalianCalendarProps> = ({ teacherMode = false }) 
 
     let unsubEventos = () => {};
     let unsubCursos = () => {};
-    let unsubSesiones = () => {};
+    const unsubSesiones = () => {};
     let unsubProf = () => {};
     let unsubFallback = () => {};
     let unsubMulti = () => {};

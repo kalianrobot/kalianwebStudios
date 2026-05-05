@@ -127,7 +127,7 @@ const AdminCursos = () => {
       today.setHours(0, 0, 0, 0);
 
       form.diasSemana.forEach(targetDay => {
-        let current = new Date(form.fechaInicio);
+        const current = new Date(form.fechaInicio);
         const targetDayJs = targetDay === 7 ? 0 : targetDay;
 
         while (current.getDay() !== targetDayJs) {
@@ -245,7 +245,7 @@ const AdminCursos = () => {
       const fechasAComprobar: string[] = [];
 
       if (nuevaSesion.esRecurrente) {
-        let current = new Date(nuevaSesion.fecha);
+        const current = new Date(nuevaSesion.fecha);
         const end = new Date(curso.fechaFin);
         
         while (current <= end) {
@@ -750,7 +750,7 @@ const AdminCursos = () => {
         const end = new Date(form.fechaFin);
         
         form.diasSemana.forEach(targetDay => {
-          let current = new Date(form.fechaInicio);
+          const current = new Date(form.fechaInicio);
           const targetDayJs = targetDay === 7 ? 0 : targetDay;
 
           while (current.getDay() !== targetDayJs) {

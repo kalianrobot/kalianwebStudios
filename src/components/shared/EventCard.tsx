@@ -58,19 +58,6 @@ const EventCard: React.FC<EventCardProps> = ({
             <div className="w-12 h-1 bg-kalian-gold/30 group-hover:w-full transition-all duration-500"></div>
           </div>
 
-          <div className="flex flex-wrap gap-3">
-            <div className="space-y-1">
-              <p className="text-[9px] font-black text-kalian-gold/40 uppercase tracking-[0.3em]">Sala</p>
-              <div className="flex items-center gap-2">
-                <div 
-                  className="w-2.5 h-2.5 rounded-full" 
-                  style={{ backgroundColor: (event.sala || 'SALA GRANDE') === 'Estudio' ? '#f59e0b' : ((event.sala || 'SALA GRANDE') === 'Local Pequeño' ? '#10b981' : '#3b82f6') }}
-                ></div>
-                <p className="font-bold text-kalian-cream/80 uppercase text-[10px] tracking-widest">{event.sala || 'SALA GRANDE'}</p>
-              </div>
-            </div>
-          </div>
-
           <div className="space-y-1">
             <p className="text-[9px] font-black text-kalian-gold/40 uppercase tracking-[0.3em]">Fecha y Hora</p>
             <p className="font-bold text-kalian-cream/80 uppercase text-sm tracking-widest">

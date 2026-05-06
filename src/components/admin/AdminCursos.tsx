@@ -461,7 +461,7 @@ const AdminCursos = () => {
         setEditando(c.id);
         setForm({
           titulo: c.titulo || '',
-          categoria: c.categoria || (academias.length > 0 ? academias[0].id : ''),
+          categoria: c.categoria || (academias.length > 0 ? academias[0].nombre : ''),
           subcategoria: c.subcategoria || '',
           modalidades: c.modalidades || [{ tipo: 'presencial', frecuencia: 'semanal', precio: '' }],
           fechaInicio: c.fechaInicio || '2025-09-01',
@@ -781,12 +781,12 @@ const AdminCursos = () => {
       setMsg(editando ? "✅ Curso actualizado" : "✅ Curso creado");
       
       setTimeout(() => setMsg(''), 3000);
-      setForm({ 
-        titulo: '', 
-        categoria: academias.length > 0 ? academias[0].id : '', 
+      setForm({
+        titulo: '',
+        categoria: academias.length > 0 ? academias[0].nombre : '',
         subcategoria: '',
         modalidades: [{ tipo: 'presencial', frecuencia: 'semanal', precio: '' }],
-        fechaInicio: '2025-09-01', 
+        fechaInicio: '2025-09-01',
         fechaFin: '2026-06-30', 
         aforo_disponible: true, 
         horario: '',
@@ -1314,9 +1314,9 @@ const AdminCursos = () => {
                   type="button"
                   onClick={() => {
                     setEditando(null);
-                    setForm({ 
-                      titulo: '', 
-                      categoria: academias.length > 0 ? academias[0].id : '', 
+                    setForm({
+                      titulo: '',
+                      categoria: academias.length > 0 ? academias[0].nombre : '',
                       subcategoria: '',
                       modalidades: [{ tipo: 'presencial', frecuencia: 'semanal', precio: '' }],
                       fechaInicio: '2025-09-01', 

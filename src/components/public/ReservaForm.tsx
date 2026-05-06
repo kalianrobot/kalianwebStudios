@@ -491,16 +491,6 @@ const ReservaForm = ({ item, alCerrar }: ReservaFormProps) => {
             <span className="text-[10px] font-black text-kalian-gold uppercase tracking-[0.3em] bg-kalian-gold/10 px-3 py-1 rounded-full border border-kalian-gold/20 backdrop-blur-sm">
               {esCurso ? '📚 CURSO' : '🎟️ EVENTO'}
             </span>
-            <span 
-              className="text-[10px] font-black text-white uppercase tracking-[0.3em] px-3 py-1 rounded-full border border-white/20 backdrop-blur-sm flex items-center gap-2"
-              style={{ backgroundColor: (item.sala || 'SALA GRANDE') === 'Estudio' ? '#f59e0b44' : ((item.sala || 'SALA GRANDE') === 'Local Pequeño' ? '#10b98144' : '#3b82f644') }}
-            >
-              <div 
-                className="w-2 h-2 rounded-full"
-                style={{ backgroundColor: (item.sala || 'SALA GRANDE') === 'Estudio' ? '#f59e0b' : ((item.sala || 'SALA GRANDE') === 'Local Pequeño' ? '#10b981' : '#3b82f6') }}
-              ></div>
-              {item.sala || 'SALA GRANDE'}
-            </span>
             {item.tiene_descuento && (
               <span className="text-[10px] font-black text-emerald-400 uppercase tracking-[0.3em] bg-emerald-400/10 px-3 py-1 rounded-full border border-emerald-400/20 backdrop-blur-sm">
                 Dto. {getNombreCategoria(categoriaActividad)}

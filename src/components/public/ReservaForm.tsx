@@ -488,9 +488,6 @@ const ReservaForm = ({ item, alCerrar }: ReservaFormProps) => {
         
         <div className="absolute bottom-6 left-8 right-8 z-10">
           <div className="flex flex-wrap items-center gap-3 mb-2">
-            <span className="text-[10px] font-black text-kalian-gold uppercase tracking-[0.3em] bg-kalian-gold/10 px-3 py-1 rounded-full border border-kalian-gold/20 backdrop-blur-sm">
-              {esCurso ? '📚 CURSO' : '🎟️ EVENTO'}
-            </span>
             {item.tiene_descuento && (
               <span className="text-[10px] font-black text-emerald-400 uppercase tracking-[0.3em] bg-emerald-400/10 px-3 py-1 rounded-full border border-emerald-400/20 backdrop-blur-sm">
                 Dto. {getNombreCategoria(categoriaActividad)}

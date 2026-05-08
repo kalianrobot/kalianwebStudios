@@ -70,7 +70,6 @@ ENTRADA HASTA LAS 00:00. RESERVAS DISPONIBLES HASTA COMPLETAR AFORO.`;
   useEffect(() => {
     const editId = searchParams.get('edit');
     if (editId && eventos.length > 0) {
-      console.log("AdminEventos: Modo edición detectado para:", editId);
       const ev = eventos.find(e => e.id === editId);
       if (ev) {
         setEditando(ev.id);

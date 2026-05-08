@@ -31,7 +31,6 @@ const NewsletterForm = () => {
       }
 
       // 2. Guardar en Firestore
-      console.log("Guardando en Firestore...");
       const docRef = await addDoc(collection(db, "newsletter_subscribers"), {
         nombre: form.nombre,
         email: form.email,
@@ -40,14 +39,11 @@ const NewsletterForm = () => {
         ip: ip,
         acepto_terminos: true
       });
-      console.log("Documento guardado con ID:", docRef.id);
 
       // 3. Petición a Brevo API
       const BREVO_API_KEY = import.meta.env.VITE_BREVO_API_KEY;
-      console.log("Brevo API Key presente:", !!BREVO_API_KEY);
       
       if (BREVO_API_KEY) {
-        console.log("Enviando a Brevo...");
         const brevoRes = await fetch('https://api.brevo.com/v3/contacts', {
           method: 'POST',
           headers: {
@@ -70,7 +66,6 @@ const NewsletterForm = () => {
           // Si el contacto ya existe, Brevo devuelve un 400 con un código específico
           if (brevoRes.status === 400 && brevoError.code === 'duplicate_parameter') {
             // No lo tratamos como error crítico para el usuario
-            console.log("El contacto ya existe en Brevo");
           } else {
             throw new Error(brevoError.message || "Error al conectar con el servicio de email");
           }

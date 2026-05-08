@@ -76,7 +76,6 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
       setLoading(true);
       if (firebaseUser) {
-        console.log("Auth: Login detectado para:", firebaseUser.email, "UID:", firebaseUser.uid);
         setUser(firebaseUser);
         try {
           // 1. Prioridad Master Admin
@@ -86,7 +85,6 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
           let currentRole: any = isMaster ? 'admin' : 'invitado';
           
           if (isMaster) {
-            console.log("Auth: Master Admin Identificado (Estado Forzado)");
             setIsAdmin(true);
             setIsTeacher(false);
             setIsPortero(false);
@@ -103,10 +101,8 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
               const data = userSnap.data();
               setUserData(data);
               currentRole = data.role || (isMaster ? 'admin' : 'invitado');
-              console.log("Auth: Usuario en DB con rol:", currentRole);
             } else if (isMaster || !userSnap) {
               const initialRole = isMaster ? 'admin' : 'invitado';
-              console.log("Auth: Intentando crear perfil inicial...");
               const newUserData = {
                 uid: firebaseUser.uid,
                 email: emailLower,
@@ -136,7 +132,6 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
 
           // 4. Carga de datos de Socio (Background)
           if (!isMaster) {
-            console.log("Auth: Buscando datos de socio para:", firebaseUser.uid);
             const q = query(collection(db, "socios"), where("uid", "==", firebaseUser.uid));
             getDocs(q).then(snap => {
               if (!snap.empty) {
@@ -153,7 +148,6 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
           console.error("Auth: Error en carga de sesión:", error.message);
         }
       } else {
-        console.log("Auth: No hay usuario autenticado.");
         setUser(null);
         setSocioData(null);
         setUserData(null);
@@ -162,7 +156,6 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         setIsPortero(false);
       }
       setLoading(false);
-      console.log("Auth: Carga completa.");
     });
 
     return () => unsubscribe();

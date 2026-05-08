@@ -36,7 +36,6 @@ export const registrarIngreso = async (data: IngresoData) => {
         deletedAt: null
       });
     }
-    console.log("✅ Ingreso registrado en finanzas:", data.concepto);
   } catch (error) {
     console.error("❌ Error al registrar ingreso en finanzas:", error);
     throw error;

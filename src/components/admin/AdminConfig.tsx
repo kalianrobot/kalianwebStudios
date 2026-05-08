@@ -25,7 +25,6 @@ const AdminConfig = () => {
   const [mantenimientoLog, setMantenimientoLog] = useState<string[]>([]);
 
   const addLog = (msg: string) => {
-    console.log(`[Mantenimiento] ${msg}`);
     setMantenimientoLog(prev => [`[${new Date().toLocaleTimeString()}] ${msg}`, ...prev].slice(0, 20));
   };
 

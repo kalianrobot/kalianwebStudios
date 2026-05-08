@@ -54,13 +54,11 @@ export const syncSocioStatus = async (socioId: string) => {
         estado: 'inactivo',
         membresias: {} // Limpiamos categorías para que no salgan en el carnet
       });
-      console.log(`Socio ${socioId} marcado como INACTIVO`);
       return 'inactivo';
     } else if (shouldBeActive && socio.estado !== 'activo') {
       await updateDoc(socioRef, {
         estado: 'activo'
       });
-      console.log(`Socio ${socioId} marcado como ACTIVO`);
       return 'activo';
     }
     

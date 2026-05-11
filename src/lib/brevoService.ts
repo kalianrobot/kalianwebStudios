@@ -1,12 +1,20 @@
 /**
  * Brevo Service for sending transactional emails.
+ *
+ * SECURITY (A2): este módulo se ejecuta en el cliente y por tanto la clave
+ * `VITE_BREVO_API_KEY` se incrusta en el bundle público. Cualquiera puede
+ * extraerla desde DevTools y enviar correos en nombre del dominio. La solución
+ * correcta es mover estos envíos a una Cloud Function HTTPS callable que
+ * reciba `email`, `nombre`, `uid` y use la API key sólo en el entorno del
+ * servidor. Mientras tanto se mantiene esta versión como compatibilidad.
  */
 
 const BREVO_API_KEY = import.meta.env.VITE_BREVO_API_KEY;
+const isDev = import.meta.env.DEV;
 
 export const sendWelcomeEmail = async (email: string, nombre: string, activationLink: string) => {
   if (!BREVO_API_KEY) {
-    console.warn("BREVO_API_KEY is not defined in environment variables.");
+    if (isDev) console.warn("BREVO_API_KEY is not defined in environment variables.");
     return;
   }
 
@@ -87,11 +95,13 @@ export const sendWelcomeEmail = async (email: string, nombre: string, activation
 
 export const sendMembershipUpdateEmail = async (email: string, nombre: string, uid: string, membresias: Record<string, string>) => {
   if (!BREVO_API_KEY) {
-    console.warn("BREVO_API_KEY is not defined.");
+    if (isDev) console.warn("BREVO_API_KEY is not defined.");
     return;
   }
 
-  const qrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${uid}`;
+  // B11: ya no enviamos el UID a un servicio QR de terceros (filtración de identificadores).
+  // El carnet con el QR se genera en cliente al iniciar sesión.
+  const carnetUrl = `https://kalian.es/perfil`;
   const hoy = new Date().toISOString().split('T')[0];
   
   const membresiasHtml = Object.entries(membresias)
@@ -136,7 +146,7 @@ export const sendMembershipUpdateEmail = async (email: string, nombre: string, u
               .content { padding: 40px; text-align: center; }
               .footer { padding: 30px; text-align: center; background-color: #000; border-top: 1px solid #D4AF3733; font-size: 10px; color: #666; }
               h1 { color: #D4AF37; font-size: 32px; font-weight: 900; text-transform: uppercase; margin: 0; font-style: italic; letter-spacing: -1px; }
-              .qr-box { background-color: #FFFFFF; padding: 20px; display: inline-block; border-radius: 24px; margin: 30px 0; }
+              .btn { display: inline-block; background-color: #D4AF37; color: #000; padding: 18px 36px; text-decoration: none; border-radius: 0; font-weight: 900; text-transform: uppercase; letter-spacing: 2px; font-size: 13px; }
               .accent { color: #D4AF37; font-weight: 700; }
               .membresias-container { max-width: 400px; margin: 0 auto; padding-top: 20px; }
             </style>
@@ -148,13 +158,13 @@ export const sendMembershipUpdateEmail = async (email: string, nombre: string, u
               </div>
               <div class="content">
                 <p>Hola <span class="accent">${nombre}</span>,</p>
-                <p>Tu membresía en Kalian ha sido actualizada. Aquí tienes tu carnet digital actualizado para acceder al centro:</p>
-                
-                <div class="qr-box">
-                  <img src="${qrUrl}" width="200" height="200" style="display: block;">
+                <p>Tu membresía en Kalian ha sido actualizada. Accede a tu carnet digital con QR para entrar al centro:</p>
+
+                <div style="margin: 40px 0;">
+                  <a href="${carnetUrl}" class="btn">VER MI CARNET</a>
                 </div>
-                
-                <p style="font-size: 10px; color: #666; text-transform: uppercase; letter-spacing: 2px; margin-bottom: 40px;">UID: ${uid}</p>
+
+                <p style="font-size: 10px; color: #666; text-transform: uppercase; letter-spacing: 2px; margin-bottom: 40px;">Identificador socio: ${uid.substring(0, 8)}…</p>
                 
                 <div class="membresias-container">
                   <p style="font-size: 12px; font-weight: 900; text-transform: uppercase; color: #D4AF37; margin-bottom: 15px; text-align: left; letter-spacing: 1px;">Tus Membresías Activas:</p>

@@ -2,6 +2,9 @@ import React, { useState } from 'react';
 import { db } from '../../firebase';
 import { collection, addDoc, serverTimestamp } from 'firebase/firestore';
 
+const isDev = import.meta.env.DEV;
+const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
 const NewsletterForm = () => {
   const [form, setForm] = useState({ nombre: '', email: '', interes: 'musica' });
   const [aceptado, setAceptado] = useState(false);
@@ -12,6 +15,17 @@ const NewsletterForm = () => {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!aceptado) return;
+
+    const nombre = form.nombre.trim();
+    const email = form.email.trim().toLowerCase();
+    if (nombre.length === 0 || nombre.length > 100) {
+      setError('Nombre no válido.');
+      return;
+    }
+    if (!EMAIL_RE.test(email) || email.length > 100) {
+      setError('Email no válido.');
+      return;
+    }
 
     setCargando(true);
     setError('');
@@ -26,28 +40,24 @@ const NewsletterForm = () => {
         clearTimeout(timeoutId);
         const ipData = await ipRes.json();
         ip = ipData.ip;
-      } catch (e) { 
-        console.warn("No se pudo obtener la IP:", e); 
+      } catch (e) {
+        if (isDev) console.warn("No se pudo obtener la IP:", e);
       }
 
       // 2. Guardar en Firestore
-      console.log("Guardando en Firestore...");
-      const docRef = await addDoc(collection(db, "newsletter_subscribers"), {
-        nombre: form.nombre,
-        email: form.email,
+      await addDoc(collection(db, "newsletter_subscribers"), {
+        nombre,
+        email,
         interes: form.interes,
         fecha: serverTimestamp(),
-        ip: ip,
+        ip,
         acepto_terminos: true
       });
-      console.log("Documento guardado con ID:", docRef.id);
 
       // 3. Petición a Brevo API
       const BREVO_API_KEY = import.meta.env.VITE_BREVO_API_KEY;
-      console.log("Brevo API Key presente:", !!BREVO_API_KEY);
-      
+
       if (BREVO_API_KEY) {
-        console.log("Enviando a Brevo...");
         const brevoRes = await fetch('https://api.brevo.com/v3/contacts', {
           method: 'POST',
           headers: {
@@ -56,9 +66,9 @@ const NewsletterForm = () => {
             'content-type': 'application/json'
           },
           body: JSON.stringify({
-            email: form.email,
+            email,
             attributes: {
-              NOMBRE: form.nombre,
+              NOMBRE: nombre,
               INTERES: form.interes.toUpperCase()
             },
             updateEnabled: true
@@ -70,9 +80,8 @@ const NewsletterForm = () => {
           // Si el contacto ya existe, Brevo devuelve un 400 con un código específico
           if (brevoRes.status === 400 && brevoError.code === 'duplicate_parameter') {
             // No lo tratamos como error crítico para el usuario
-            console.log("El contacto ya existe en Brevo");
           } else {
-            throw new Error(brevoError.message || "Error al conectar con el servicio de email");
+            throw new Error("Error al conectar con el servicio de email");
           }
         }
       }
@@ -80,8 +89,8 @@ const NewsletterForm = () => {
       setExito(true);
       setForm({ nombre: '', email: '', interes: 'musica' });
     } catch (err: any) {
-      console.error("Error en suscripción:", err);
-      setError(err.message || "Hubo un problema al procesar tu suscripción. Inténtalo de nuevo.");
+      if (isDev) console.error("Error en suscripción:", err);
+      setError("Hubo un problema al procesar tu suscripción. Inténtalo de nuevo.");
     } finally {
       setCargando(false);
     }

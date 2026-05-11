@@ -21,6 +21,8 @@ interface AuthContextType {
   esSocioActivo: (categoria: string) => boolean;
 }
 
+const isDev = import.meta.env.DEV;
+
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 export const useAuth = () => {
@@ -76,54 +78,51 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
       setLoading(true);
       if (firebaseUser) {
-        console.log("Auth: Login detectado para:", firebaseUser.email, "UID:", firebaseUser.uid);
+        if (isDev) console.log("Auth: Login detectado");
         setUser(firebaseUser);
         try {
-          // 1. Prioridad Master Admin
           const emailLower = firebaseUser.email?.toLowerCase() || '';
           const isMaster = emailLower === "kalianrobot@gmail.com";
-          
+
           let currentRole: any = isMaster ? 'admin' : 'invitado';
-          
+
           if (isMaster) {
-            console.log("Auth: Master Admin Identificado (Estado Forzado)");
             setIsAdmin(true);
             setIsTeacher(false);
             setIsPortero(false);
-            setLoading(false);
           }
 
-          // 2. Carga de perfil en /users/
+          // Carga de perfil en /users/
           const userRef = doc(db, "users", firebaseUser.uid);
           let userSnap = null;
           try {
             userSnap = await getDoc(userRef);
-            
+
             if (userSnap && userSnap.exists()) {
               const data = userSnap.data();
               setUserData(data);
               currentRole = data.role || (isMaster ? 'admin' : 'invitado');
-              console.log("Auth: Usuario en DB con rol:", currentRole);
             } else if (isMaster || !userSnap) {
-              const initialRole = isMaster ? 'admin' : 'invitado';
-              console.log("Auth: Intentando crear perfil inicial...");
+              // El rol queda en 'invitado' siempre por reglas (C1). El master se
+              // resuelve por email, no por el campo role almacenado.
               const newUserData = {
                 uid: firebaseUser.uid,
                 email: emailLower,
-                nombre: firebaseUser.displayName || (isMaster ? "Admin Maestro" : "Usuario Nuevo"),
-                role: initialRole,
+                nombre: firebaseUser.displayName || "Usuario Nuevo",
+                role: 'invitado',
                 createdAt: new Date().toISOString()
               };
               setUserData(newUserData);
-              currentRole = initialRole;
-              setDoc(userRef, newUserData, { merge: true }).catch(err => console.warn("Error creating profile doc:", err));
+              currentRole = isMaster ? 'admin' : 'invitado';
+              setDoc(userRef, newUserData, { merge: true }).catch(err => {
+                if (isDev) console.warn("Error creating profile doc:", err);
+              });
             }
           } catch (e: any) {
-            console.warn("Auth: Error controlado en perfil:", e.message);
+            if (isDev) console.warn("Auth: Error controlado en perfil:", e.message);
             if (isMaster) currentRole = 'admin';
           }
 
-          // 3. Estabilizar estados booleanos y rol final
           if (isMaster) {
             setIsAdmin(true);
             setIsTeacher(false);
@@ -134,9 +133,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
             setIsPortero(currentRole === 'portero');
           }
 
-          // 4. Carga de datos de Socio (Background)
           if (!isMaster) {
-            console.log("Auth: Buscando datos de socio para:", firebaseUser.uid);
             const q = query(collection(db, "socios"), where("uid", "==", firebaseUser.uid));
             getDocs(q).then(snap => {
               if (!snap.empty) {
@@ -145,15 +142,14 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
                 syncSocioStatus(sId).then(async () => {
                   const updatedSnap = await getDoc(doc(db, "socios", sId));
                   if (updatedSnap.exists()) setSocioData(updatedSnap.data());
-                }).catch(e => console.error("Sync error:", e));
+                }).catch(e => { if (isDev) console.error("Sync error:", e); });
               }
-            }).catch(e => console.warn("Socio data fetch error:", e));
+            }).catch(e => { if (isDev) console.warn("Socio data fetch error:", e); });
           }
         } catch (error: any) {
-          console.error("Auth: Error en carga de sesión:", error.message);
+          if (isDev) console.error("Auth: Error en carga de sesión:", error.message);
         }
       } else {
-        console.log("Auth: No hay usuario autenticado.");
         setUser(null);
         setSocioData(null);
         setUserData(null);
@@ -162,7 +158,6 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         setIsPortero(false);
       }
       setLoading(false);
-      console.log("Auth: Carga completa.");
     });
 
     return () => unsubscribe();

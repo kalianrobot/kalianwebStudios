@@ -29,23 +29,40 @@ service cloud.firestore {
       );
     }
 
+    function isPortero() {
+      return isMasterAdmin() || (
+        isSignedIn() &&
+        exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
+        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'portero'
+      );
+    }
+
     // --- GLOBAL SAFETY NET (solo master admin) ---
     match /{document=**} {
       allow read, write: if isMasterAdmin();
     }
 
     // --- USERS ---
+    // C1: el campo 'role' sólo puede ser modificado por un admin. El usuario puede crear y
+    // mantener su propio perfil pero nunca tocar 'role'.
     match /users/{userId} {
-      // Cada usuario puede leer y escribir su propio doc (necesario para crear el perfil inicial)
-      allow read, write: if isSignedIn() && request.auth.uid == userId;
-      allow read: if isAdmin();
+      allow read: if isSignedIn() && (request.auth.uid == userId || isAdmin());
+      allow create: if isSignedIn() && request.auth.uid == userId
+                    && (!incoming().keys().hasAny(['role']) || incoming().role == 'invitado');
+      allow update: if isSignedIn() && request.auth.uid == userId
+                    && !incoming().diff(existing()).affectedKeys().hasAny(['role']);
+      allow write: if isAdmin();
     }
 
-    // --- CONFIG (lectura pública, escritura solo admin) ---
-    // FIX: antes isAdmin() podía fallar si users/{uid} no existía aún → error en lectura pública
+    // --- CONFIG público (lectura abierta, escritura admin) ---
     match /config/{id} {
       allow read: if true;
       allow write: if isAdmin();
+    }
+
+    // --- CONFIGURACION interna (lectura/escritura sólo admin) ---
+    match /configuracion/{id} {
+      allow read, write: if isAdmin();
     }
 
     // --- CURSOS ---
@@ -77,39 +94,59 @@ service cloud.firestore {
           && (!data.keys().hasAny(['aforo_max']) || data.aforo_max is number)
           && (!data.keys().hasAny(['aforo_reservado']) || data.aforo_reservado is number);
     }
+    // C4: una actualización pública sólo puede aumentar 'aforo_reservado' en pasos acotados
+    // y nunca por encima del aforo máximo. Bloquea reset a 0 / valores arbitrarios.
+    function isSafeAforoUpdate() {
+      return incoming().diff(existing()).affectedKeys().hasOnly(['aforo_reservado'])
+          && incoming().aforo_reservado is number
+          && incoming().aforo_reservado >= existing().get('aforo_reservado', 0)
+          && incoming().aforo_reservado <= existing().get('aforo_reservado', 0) + 20
+          && incoming().aforo_reservado <= existing().get('aforo_maximo', existing().get('aforo_max', 9999));
+    }
     match /eventos/{id} {
       allow read: if true;
       allow create, delete: if isAdmin();
-      allow update: if isAdmin()
-                    || incoming().diff(existing()).affectedKeys().hasOnly(['aforo_reservado']);
+      allow update: if (isAdmin() && isValidEvento(incoming()))
+                    || isSafeAforoUpdate();
     }
 
     // --- RESERVAS ---
     function isValidReserva(data) {
       return data.eventoId is string && data.eventoId.size() <= 128
-          && data.nombreTitular is string && data.nombreTitular.size() <= 200
-          && data.dniTitular is string && data.dniTitular.size() >= 7
-          && data.emailTitular is string
-          && data.numPersonas is number && data.numPersonas >= 1
+          && data.nombreTitular is string && data.nombreTitular.size() > 0 && data.nombreTitular.size() <= 200
+          && data.dniTitular is string && data.dniTitular.size() >= 7 && data.dniTitular.size() <= 20
+          && data.emailTitular is string && data.emailTitular.size() <= 100
+          && data.numPersonas is number && data.numPersonas >= 1 && data.numPersonas <= 20
           && data.uidTitular is string
           && (data.uidTitular == 'invitado' || data.uidTitular == request.auth.uid);
     }
     match /reservas/{id} {
+      // C3: se mantiene el flujo de invitado pero con validación más estricta del payload
       allow create: if isValidReserva(incoming()) &&
                     (exists(/databases/$(database)/documents/eventos/$(incoming().eventoId)) ||
                      exists(/databases/$(database)/documents/cursos/$(incoming().eventoId)));
+      // C2: SIN la cláusula 'dniTitular != null' que permitía lectura pública total
       allow read: if isAdmin()
+                  || isPortero()
                   || (isSignedIn() && resource.data.uidTitular == request.auth.uid)
-                  || (isSignedIn() && resource.data.get('emailTitular', '').lower() == request.auth.token.get('email', '').lower())
-                  || resource.data.dniTitular != null;
-      allow update: if isAdmin();
+                  || (isSignedIn() && resource.data.get('emailTitular', '').lower() == request.auth.token.get('email', '').lower());
+      allow update: if isAdmin() || isPortero();
       allow delete: if isAdmin();
     }
 
     // --- SOCIOS ---
+    // A4: cualquier signed-in podía crear un socio con cualquier uid; ahora se exige
+    // coincidencia con request.auth.uid y forma mínima válida.
+    function isValidSocioCreate(data) {
+      return data.uid is string && data.uid == request.auth.uid
+          && data.dni is string && data.dni.size() > 0 && data.dni.size() <= 20
+          && data.nombre is string && data.nombre.size() > 0 && data.nombre.size() <= 200
+          && data.email is string && data.email.size() <= 100;
+    }
     match /socios/{id} {
-      allow read: if isSignedIn() && (resource.data.uid == request.auth.uid || isAdmin());
-      allow create: if isSignedIn();
+      allow read: if (isSignedIn() && resource.data.uid == request.auth.uid)
+                  || isAdmin() || isPortero();
+      allow create: if isAdmin() || (isSignedIn() && isValidSocioCreate(incoming()));
       allow update, delete: if isAdmin();
     }
 
@@ -120,22 +157,49 @@ service cloud.firestore {
     match /locales/{id}      { allow read: if true; allow write: if isAdmin(); }
 
     // --- SOLICITUDES CURSOS ---
+    // A3/A7: alta pública con validación de forma y longitudes
+    function isValidSolicitud(data) {
+      return data.keys().hasAll(['nombre', 'email'])
+          && data.nombre is string && data.nombre.size() > 0 && data.nombre.size() <= 200
+          && data.email is string && data.email.size() <= 100 && data.email.matches('.+@.+\\..+')
+          && (!data.keys().hasAny(['mensaje']) || (data.mensaje is string && data.mensaje.size() <= 2000))
+          && (!data.keys().hasAny(['telefono']) || (data.telefono is string && data.telefono.size() <= 30))
+          && (!data.keys().hasAny(['dni']) || (data.dni is string && data.dni.size() <= 20))
+          && (!data.keys().hasAny(['cursoId']) || (data.cursoId is string && data.cursoId.size() <= 128))
+          && (!data.keys().hasAny(['cursoTitulo']) || (data.cursoTitulo is string && data.cursoTitulo.size() <= 200));
+    }
     match /solicitudes_cursos/{id} {
-      allow create: if true;
+      allow create: if isValidSolicitud(incoming());
       allow read, write: if isAdmin() || isTeacher();
+    }
+
+    // --- NEWSLETTER ---
+    // A8: faltaba regla; se añade alta pública validada y lectura sólo admin
+    function isValidNewsletter(data) {
+      return data.keys().hasAll(['nombre', 'email', 'acepto_terminos'])
+          && data.nombre is string && data.nombre.size() > 0 && data.nombre.size() <= 100
+          && data.email is string && data.email.size() <= 100 && data.email.matches('.+@.+\\..+')
+          && data.acepto_terminos == true
+          && (!data.keys().hasAny(['interes']) || (data.interes is string && data.interes.size() <= 50));
+    }
+    match /newsletter_subscribers/{id} {
+      allow create: if isValidNewsletter(incoming());
+      allow read, update, delete: if isAdmin();
     }
 
     // --- FINANZAS / CAJA ---
     match /finanzas/{id}              { allow read, write: if isAdmin(); }
     match /pagos_mensuales/{id}       { allow read, write: if isAdmin(); }
     match /pagos_inscripciones/{id}   { allow read, write: if isAdmin(); }
-    match /caja_eventos/{id}          { allow read, write: if isAdmin(); }
-    match /asistencia_eventos/{id}    { allow read, create: if isAdmin(); }
+    match /caja_eventos/{id}          { allow read, write: if isAdmin() || isPortero(); }
+    match /asistencia_eventos/{id}    { allow read, create: if isAdmin() || isPortero(); }
 
     // --- NOTIFICACIONES ---
+    // A5: cualquier signed-in podía sobreescribir/borrar notificaciones de otros. Restringido al dueño.
     match /notificaciones/{id} {
       allow read: if isSignedIn() && (resource.data.userId == request.auth.uid || isAdmin());
-      allow write: if isSignedIn();
+      allow create: if isSignedIn() && incoming().userId == request.auth.uid;
+      allow update, delete: if isSignedIn() && existing().userId == request.auth.uid;
     }
   }
 }

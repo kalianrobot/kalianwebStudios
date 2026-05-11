@@ -46,29 +46,19 @@ const ControlAcceso = ({ isPuertaMode = false }: { isPuertaMode?: boolean }) => 
         aspectRatio: 1.0
       };
 
-      html5QrCode.start(
-        { facingMode: "environment" }, 
-        config,
-        (decodedText) => {
-          setBusqueda(decodedText);
-          setMostrarScanner(false);
-          // Disparar búsqueda automática al escanear
-          setTimeout(() => {
-            const btn = document.getElementById('search-btn');
-            btn?.click();
-          }, 100);
-        },
-        () => {}
-      ).catch(() => {
-        html5QrCode.start({ facingMode: "user" }, config, (decodedText) => {
-          setBusqueda(decodedText);
-          setMostrarScanner(false);
-          setTimeout(() => {
-            const btn = document.getElementById('search-btn');
-            btn?.click();
-          }, 100);
-        }, () => {}).catch(e => console.error("Scanner error", e));
-      });
+      const onScan = (decodedText: string) => {
+        setBusqueda(decodedText);
+        setMostrarScanner(false);
+        // B3: en lugar de manipular el DOM con setTimeout(btn.click), invocamos la
+        // búsqueda directamente con el valor escaneado (no dependemos del state).
+        buscarReserva(decodedText);
+      };
+
+      html5QrCode.start({ facingMode: "environment" }, config, onScan, () => {})
+        .catch(() => {
+          html5QrCode.start({ facingMode: "user" }, config, onScan, () => {})
+            .catch(e => { if (import.meta.env.DEV) console.error("Scanner error", e); });
+        });
 
       return () => {
         if (scannerRef.current) {
@@ -104,28 +94,29 @@ const ControlAcceso = ({ isPuertaMode = false }: { isPuertaMode?: boolean }) => 
     return () => unsubscribe();
   }, [eventoSeleccionado]);
 
-  const buscarReserva = async () => {
-    if (!busqueda || !eventoSeleccionado) return;
+  const buscarReserva = async (override?: string) => {
+    const raw = (override ?? busqueda).trim();
+    if (!raw || !eventoSeleccionado) return;
     setCargando(true);
     setMsg('');
     setReservaEncontrada(null);
     setSocioEncontrado(null);
-    
+
     try {
-      const term = busqueda.trim().toUpperCase();
-      
+      const term = raw.toUpperCase();
+
       // 1. Buscar por ticketID o DNI en reservas
       const q = query(
-        collection(db, "reservas"), 
+        collection(db, "reservas"),
         where("eventoId", "==", eventoSeleccionado.id)
       );
       const snap = await getDocs(q);
       const todas = snap.docs.map(d => ({ id: d.id, ...d.data() })) as any[];
-      
-      const encontrada = todas.find(r => 
-        r.ticketID === term || 
+
+      const encontrada = todas.find(r =>
+        r.ticketID === term ||
         r.dniTitular === term ||
-        r.uidTitular === busqueda ||
+        r.uidTitular === raw ||
         (r.ticketID && `KALIAN-RES-${r.ticketID}` === term)
       );
 
@@ -146,7 +137,7 @@ const ControlAcceso = ({ isPuertaMode = false }: { isPuertaMode?: boolean }) => 
       // 2. Si no hay reserva, buscar si es un socio (Carnet QR)
       let socioSnap = await getDoc(doc(db, "socios", term));
       if (!socioSnap.exists()) {
-        const qSocio = query(collection(db, "socios"), where("uid", "==", busqueda.trim()));
+        const qSocio = query(collection(db, "socios"), where("uid", "==", raw));
         const snapSocio = await getDocs(qSocio);
         if (!snapSocio.empty) socioSnap = snapSocio.docs[0];
       }
@@ -595,9 +586,8 @@ const ControlAcceso = ({ isPuertaMode = false }: { isPuertaMode?: boolean }) => 
                         onKeyPress={(e) => e.key === 'Enter' && buscarReserva()}
                         className="flex-1 bg-black/5 border border-black/10 rounded-2xl px-6 py-4 font-bold uppercase tracking-widest text-sm focus:outline-none focus:border-kalian-gold transition-all"
                       />
-                      <button 
-                        id="search-btn"
-                        onClick={buscarReserva}
+                      <button
+                        onClick={() => buscarReserva()}
                         disabled={cargando}
                         className="bg-black text-kalian-gold px-6 rounded-2xl kalian-poster-text text-xl hover:bg-kalian-gold hover:text-black transition-all"
                       >

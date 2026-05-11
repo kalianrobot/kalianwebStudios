@@ -1,1 +1,12 @@
-[{"origin": ["*"],"method": ["GET", "POST", "PUT", "DELETE", "HEAD"],"maxAgeSeconds": 3600}]
+[
+  {
+    "origin": [
+      "https://kalian.es",
+      "https://www.kalian.es",
+      "https://kalianhkg-886a6.web.app",
+      "https://kalianhkg-886a6.firebaseapp.com"
+    ],
+    "method": ["GET", "POST", "PUT", "DELETE", "HEAD"],
+    "maxAgeSeconds": 3600
+  }
+]

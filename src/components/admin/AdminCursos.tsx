@@ -17,21 +17,22 @@ const AdminCursos = () => {
   const [msg, setMsg] = useState('');
   const [nuevaSubcat, setNuevaSubcat] = useState('');
   const [mostrandoNuevaSubcat, setMostrandoNuevaSubcat] = useState(false);
-  const [form, setForm] = useState({ 
-    titulo: '', 
-    categoria: '', 
+  const [form, setForm] = useState({
+    titulo: '',
+    categoria: '',
     subcategoria: '',
+    emoji: '🎸',
     modalidades: [{ tipo: 'presencial', frecuencia: 'semanal', precio: '' }],
-    fechaInicio: '2025-09-01', 
-    fechaFin: '2026-06-30', 
-    aforo_disponible: true, 
+    fechaInicio: '2025-09-01',
+    fechaFin: '2026-06-30',
+    aforo_disponible: true,
     horario: '',
     profesorId: '',
     profesorNombre: '',
     descripcion: '',
     ventajas: '',
     // Nuevos campos
-    diasSemana: [1], 
+    diasSemana: [1],
     horaInicio: '18:00',
     horaFin: '19:30',
     sala: 'SALA GRANDE',
@@ -463,6 +464,7 @@ const AdminCursos = () => {
           titulo: c.titulo || '',
           categoria: c.categoria || (academias.length > 0 ? academias[0].id : ''),
           subcategoria: c.subcategoria || '',
+          emoji: c.emoji || '🎸',
           modalidades: c.modalidades || [{ tipo: 'presencial', frecuencia: 'semanal', precio: '' }],
           fechaInicio: c.fechaInicio || '2025-09-01',
           fechaFin: c.fechaFin || '2026-06-30',
@@ -781,14 +783,15 @@ const AdminCursos = () => {
       setMsg(editando ? "✅ Curso actualizado" : "✅ Curso creado");
       
       setTimeout(() => setMsg(''), 3000);
-      setForm({ 
-        titulo: '', 
-        categoria: academias.length > 0 ? academias[0].id : '', 
+      setForm({
+        titulo: '',
+        categoria: academias.length > 0 ? academias[0].id : '',
         subcategoria: '',
+        emoji: '🎸',
         modalidades: [{ tipo: 'presencial', frecuencia: 'semanal', precio: '' }],
-        fechaInicio: '2025-09-01', 
-        fechaFin: '2026-06-30', 
-        aforo_disponible: true, 
+        fechaInicio: '2025-09-01',
+        fechaFin: '2026-06-30',
+        aforo_disponible: true,
         horario: '',
         profesorId: '',
         profesorNombre: '',
@@ -968,9 +971,23 @@ const AdminCursos = () => {
           <form onSubmit={guardar} className="bg-white p-10 rounded-[3rem] shadow-2xl space-y-5 h-fit border-t-[12px] border-slate-900 text-slate-900">
             <h2 className="text-xl font-black uppercase italic mb-4">{editando ? 'Editar Curso' : 'Nuevo Curso'}</h2>
             
-            <div className="space-y-1">
-              <label className="text-[9px] font-black uppercase text-slate-400 ml-4">Nombre del Curso</label>
-              <input type="text" placeholder="Nombre del Curso" className="w-full p-5 bg-slate-50 rounded-2xl outline-none focus:ring-2 ring-indigo-500 border border-slate-200 text-slate-900" value={form.titulo} onChange={e => setForm({...form, titulo: e.target.value})} required />
+            <div className="grid grid-cols-[auto,1fr] gap-3 items-end">
+              <div className="space-y-1">
+                <label className="text-[9px] font-black uppercase text-slate-400 ml-2">Emoji</label>
+                <input
+                  type="text"
+                  placeholder="🎸"
+                  maxLength={4}
+                  className="w-20 p-5 bg-slate-50 rounded-2xl outline-none focus:ring-2 ring-indigo-500 border border-slate-200 text-center text-2xl"
+                  value={form.emoji}
+                  onChange={e => setForm({ ...form, emoji: e.target.value })}
+                  title="Pega cualquier emoji (Win + . o Ctrl + Cmd + Espacio)"
+                />
+              </div>
+              <div className="space-y-1">
+                <label className="text-[9px] font-black uppercase text-slate-400 ml-4">Nombre del Curso</label>
+                <input type="text" placeholder="Nombre del Curso" className="w-full p-5 bg-slate-50 rounded-2xl outline-none focus:ring-2 ring-indigo-500 border border-slate-200 text-slate-900" value={form.titulo} onChange={e => setForm({...form, titulo: e.target.value})} required />
+              </div>
             </div>
 
             {/* Herramienta de Renombrado Quirúrgico (UID) */}

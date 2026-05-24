@@ -3,6 +3,7 @@ import { db, auth } from '../../firebase';
 import { collection, addDoc, query, where, getDocs, doc, getDoc, DocumentData, runTransaction, increment } from 'firebase/firestore';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
+import { useLanguage } from '../../context/LanguageContext';
 
 interface ReservaFormProps {
   item: any; // Evento o Curso
@@ -11,6 +12,7 @@ interface ReservaFormProps {
 
 const ReservaForm = ({ item, alCerrar }: ReservaFormProps) => {
   const { socioData, esSocioActivo } = useAuth();
+  const { t } = useLanguage();
   const [searchParams] = useSearchParams();
   const cuponUrl = searchParams.get('cupon') || '';
   
@@ -520,7 +522,7 @@ const ReservaForm = ({ item, alCerrar }: ReservaFormProps) => {
             <div className="absolute top-0 right-0 w-24 h-24 bg-kalian-gold/5 rounded-full blur-2xl -mr-12 -mt-12"></div>
             <h3 className="text-[10px] font-black text-kalian-gold uppercase tracking-[0.5em] mb-6 flex items-center gap-3">
               <span className="w-2 h-2 bg-kalian-gold rounded-full animate-pulse"></span>
-              IMPORTANTE
+              {t('event.important')}
             </h3>
             <ul className="space-y-4">
               {item.reglas.split('\n').filter((r: string) => r.trim()).map((regla: string, idx: number) => (
@@ -536,7 +538,7 @@ const ReservaForm = ({ item, alCerrar }: ReservaFormProps) => {
         {/* BLOQUE DESCRIPCIÓN */}
         {item.descripcion && (
           <div className="px-4">
-            <h3 className="text-[10px] font-black text-kalian-gold/40 uppercase tracking-[0.5em] mb-4">Descripción del evento</h3>
+            <h3 className="text-[10px] font-black text-kalian-gold/40 uppercase tracking-[0.5em] mb-4">{t('event.description')}</h3>
             <p className="text-sm text-kalian-cream/70 font-medium leading-relaxed whitespace-pre-line">
               {item.descripcion}
             </p>
@@ -554,7 +556,7 @@ const ReservaForm = ({ item, alCerrar }: ReservaFormProps) => {
             {mensajeBloqueo && (
               <div className="bg-red-500/10 border border-red-500/20 p-8 rounded-[2.5rem] text-center space-y-4">
                 <p className="text-red-500 font-black kalian-poster-text text-xl italic uppercase leading-none">
-                  ⚠️ ACCESO RESTRINGIDO TEMPORALMENTE
+                  ⚠️ {t('event.accessRestricted')}
                 </p>
                 <p className="text-kalian-cream/60 font-bold text-xs">
                   {mensajeBloqueo}

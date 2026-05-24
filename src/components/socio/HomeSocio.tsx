@@ -4,6 +4,7 @@ import { collection, getDocs, query, orderBy, DocumentData, where, doc, getDoc, 
 import { Link, useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'motion/react';
 import { useAuth } from '../../context/AuthContext';
+import { useLanguage } from '../../context/LanguageContext';
 import ReservaForm from '../public/ReservaForm';
 import LegalModal from '../public/LegalModal';
 import KalianHeader from '../shared/KalianHeader';
@@ -12,6 +13,7 @@ import SectionTitle from '../shared/SectionTitle';
 
 export const HomeSocio = () => {
   const { user } = useAuth();
+  const { t } = useLanguage();
   const navigate = useNavigate();
   const [eventos, setEventos] = useState<DocumentData[]>([]);
   const [cursos, setCursos] = useState<DocumentData[]>([]);
@@ -186,9 +188,9 @@ export const HomeSocio = () => {
     const aperturaSocios = ev.apertura_socios ? new Date(ev.apertura_socios) : null;
 
     if (aperturaSocios && hoy < aperturaSocios) {
-      return `Apertura Soci@s: ${aperturaSocios.toLocaleDateString()}`;
+      return `${t('home.openMembers')}: ${aperturaSocios.toLocaleDateString()}`;
     }
-    return "Próximamente";
+    return t('home.soon');
   };
 
   const enviarSolicitud = async (e: React.FormEvent) => {
@@ -426,7 +428,7 @@ export const HomeSocio = () => {
                         >
                           <div className="flex items-center gap-10 w-full md:w-auto">
                             <div className="w-24 h-24 rounded-[2rem] flex items-center justify-center text-5xl border border-kalian-gold/10 bg-kalian-gold/10">
-                              {academias.find(a => a.id === c.categoria || a.nombre === c.categoria)?.nombre?.toLowerCase().includes('danza') ? '💃' : '🎸'}
+                              {c.emoji || (academias.find(a => a.id === c.categoria || a.nombre === c.categoria)?.nombre?.toLowerCase().includes('danza') ? '💃' : '🎸')}
                             </div>
                             <div>
                               <h3 className="text-4xl kalian-poster-text text-kalian-cream group-hover:text-kalian-gold transition-colors leading-tight uppercase italic">{c.titulo}</h3>
@@ -458,7 +460,7 @@ export const HomeSocio = () => {
                 ) : (
                   <div className="col-span-full bg-kalian-gold/5 border border-kalian-gold/10 border-dashed rounded-[3rem] p-20 text-center space-y-6">
                     <div className="text-6xl mb-4 opacity-40">⏳</div>
-                    <h3 className="text-3xl kalian-poster-text text-kalian-gold/40 uppercase italic tracking-widest">Próximamente más cursos en esta sección</h3>
+                    <h3 className="text-3xl kalian-poster-text text-kalian-gold/40 uppercase italic tracking-widest">{t('home.noMoreCourses')}</h3>
                     <p className="text-kalian-gold/20 font-black uppercase text-xs tracking-[0.5em]">Estamos actualizando nuestra oferta académica</p>
                   </div>
                 )}
@@ -502,7 +504,7 @@ export const HomeSocio = () => {
               ) : (
                 <div className="h-full flex flex-col items-center justify-center p-20 text-center space-y-6">
                   <div className="text-6xl opacity-20">🖼️</div>
-                  <h3 className="text-3xl kalian-poster-text text-kalian-gold/40 uppercase italic">Próximamente nueva exposición</h3>
+                  <h3 className="text-3xl kalian-poster-text text-kalian-gold/40 uppercase italic">{t('home.noExpoSoon')}</h3>
                   <Link to="/galeria" className="text-kalian-gold font-black uppercase text-[10px] tracking-[0.4em] hover:text-white transition-colors">EXPLORAR ARCHIVO →</Link>
                 </div>
               )}
@@ -511,7 +513,7 @@ export const HomeSocio = () => {
             {/* PRÓXIMAS EXPOSICIONES (LISTA) */}
             <div className="space-y-6">
               <div className="flex items-center justify-between px-4">
-                <h4 className="text-[10px] font-black text-kalian-gold uppercase tracking-[0.4em]">Próximamente</h4>
+                <h4 className="text-[10px] font-black text-kalian-gold uppercase tracking-[0.4em]">{t('home.soon')}</h4>
                 <Link to="/galeria" className="text-[8px] font-black text-kalian-cream/40 uppercase tracking-widest hover:text-kalian-gold transition-colors">Ver todas</Link>
               </div>
               
@@ -571,9 +573,9 @@ export const HomeSocio = () => {
                 )}
               </div>
               <div className="space-y-4 text-center md:text-left">
-                <h3 className="text-3xl kalian-poster-text text-kalian-cream uppercase italic">¿Buscas un espacio para ensayar / crear / diseñar…?</h3>
+                <h3 className="text-3xl kalian-poster-text text-kalian-cream uppercase italic">{t('hub.spaceQuery')}</h3>
                 <p className="text-kalian-cream/60 text-sm max-w-md leading-relaxed">
-                  Consulta la disponibilidad actual para unirte a nuestra comunidad.
+                  {t('hub.spaceSubtitle')}
                 </p>
               </div>
             </div>
@@ -596,8 +598,8 @@ export const HomeSocio = () => {
           <div className="bg-black/40 border border-kalian-gold/10 rounded-[3rem] p-12 text-center space-y-8 shadow-2xl relative overflow-hidden group">
             <div className="absolute inset-0 bg-kalian-gold/5 opacity-0 group-hover:opacity-100 transition-opacity duration-700"></div>
             <div className="relative z-10 space-y-4">
-              <h2 className="text-4xl kalian-poster-text text-kalian-gold uppercase italic">¿Necesitas <span className="text-kalian-cream">Ayuda?</span></h2>
-              <p className="text-kalian-gold/40 text-[10px] font-black uppercase tracking-[0.4em]">Estamos a tu disposición para cualquier consulta</p>
+              <h2 className="text-4xl kalian-poster-text text-kalian-gold uppercase italic">{t('home.contact')}</h2>
+              <p className="text-kalian-gold/40 text-[10px] font-black uppercase tracking-[0.4em]">{t('home.contactSubtitle')}</p>
             </div>
             
             <div className="relative z-10 flex flex-col items-center gap-6">
@@ -648,7 +650,7 @@ export const HomeSocio = () => {
                   {/* BLOQUE IMPORTANTE */}
                   <div className="bg-kalian-gold/10 p-8 rounded-[2rem] border border-kalian-gold/20 shadow-inner">
                     <p className="text-[12px] font-black text-kalian-gold uppercase tracking-[0.4em] mb-4 flex items-center gap-2">
-                      <span className="text-xl">★</span> IMPORTANTE
+                      <span className="text-xl">★</span> {t('course.important')}
                     </p>
                     <p className="text-sm text-kalian-cream/90 italic leading-relaxed">
                       {cursoDetalle.ventajas || `Este curso incluye el alta como soci@ de la asociación KALIAN y acceso a descuentos en actividades de la misma categoría.`}

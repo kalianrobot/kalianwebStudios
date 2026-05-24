@@ -27,11 +27,35 @@ const translations: Translations = {
   'home.gallery': { es: 'KALIAN GALLERY', eu: 'KALIAN GALERIA' },
   'home.hub': { es: 'KALIAN HUB', eu: 'KALIAN HUB' },
   'home.contact': { es: '¿Necesitas Ayuda?', eu: 'Laguntza behar duzu?' },
+  'home.contactSubtitle': { es: 'Estamos a tu disposición para cualquier consulta', eu: 'Zure eskura gaude edozein zalantza argitzeko' },
   'home.viewGallery': { es: 'VER GALERÍA COMPLETA →', eu: 'IKUSI GALERIA OSOA →' },
   'home.reserve': { es: 'Reservar Plaza', eu: 'Lekua Erreserbatu' },
   'home.soon': { es: 'Próximamente', eu: 'Laster' },
   'home.openReservations': { es: 'Apertura reservas', eu: 'Erreserben irekiera' },
+  'home.openMembers': { es: 'Apertura Soci@s', eu: 'Bazkideen Irekiera' },
+  'home.openGeneral': { es: 'Apertura General', eu: 'Sarrera Orokorra' },
   'home.discount': { es: 'Descuento Soci@s', eu: 'Bazkide Deskontua' },
+  'home.bookingArtists': { es: 'CONTRATACIÓN DE ARTISTAS', eu: 'ARTISTAK KONTRATATZEA' },
+  'home.bookingArtistsSubtitle': { es: 'Estamos preparando nuestra plataforma de booking', eu: 'Booking plataforma prestatzen ari gara' },
+  'home.noMoreCourses': { es: 'Próximamente más cursos en esta sección', eu: 'Laster ikastaro gehiago atal honetan' },
+  'home.noExpoSoon': { es: 'Próximamente nueva exposición', eu: 'Laster erakusketa berria' },
+
+  // Hub
+  'hub.spaceQuery': { es: '¿Buscas un espacio para ensayar / crear / diseñar…?', eu: 'Espazio bat behar duzu entseatzeko / sortzeko / diseinatzeko…?' },
+  'hub.spaceSubtitle': { es: 'Consulta la disponibilidad actual para unirte a nuestra comunidad.', eu: 'Begiratu egungo eskuragarritasuna gure komunitatera batzeko.' },
+
+  // Eventos / cursos (detalle)
+  'event.viewPoster': { es: 'Ver Cartel', eu: 'Ikusi Kartela' },
+  'event.dateTime': { es: 'Fecha y Hora', eu: 'Data eta Ordua' },
+  'event.important': { es: 'IMPORTANTE', eu: 'GARRANTZITSUA' },
+  'event.description': { es: 'Descripción del evento', eu: 'Ekitaldiaren deskribapena' },
+  'event.accessRestricted': { es: 'ACCESO RESTRINGIDO TEMPORALMENTE', eu: 'SARBIDEA ALDI BATEAN MURRIZTUTA' },
+  'course.important': { es: 'IMPORTANTE', eu: 'GARRANTZITSUA' },
+  'course.description': { es: 'Descripción del curso', eu: 'Ikastaroaren deskribapena' },
+
+  // Galería
+  'gallery.subtitle': { es: 'EXPOSICIONES & ARTE', eu: 'ERAKUSKETAK & ARTEA' },
+  'gallery.description': { es: 'Un espacio dedicado a la expresión visual, donde artistas locales y residentes comparten su visión.', eu: 'Adierazpen bisualari eskainitako espazioa, non bertako eta egoiliarrak diren artistek euren ikuspegia partekatzen duten.' },
   
   // Buttons
   'btn.back': { es: 'VOLVER', eu: 'BUELTATU' },

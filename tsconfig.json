@@ -22,6 +22,11 @@
     },
     "allowImportingTsExtensions": true,
     "noEmit": true,
-    "types": ["vite/client"]
+    "types": ["vite/client"],
+    "resolveJsonModule": true,
+    "forceConsistentCasingInFileNames": true,
+    "noFallthroughCasesInSwitch": true,
+    "alwaysStrict": true,
+    "useUnknownInCatchVariables": false
   }
 }

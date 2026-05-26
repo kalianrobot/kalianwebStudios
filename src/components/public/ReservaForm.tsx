@@ -3,6 +3,7 @@ import { db, auth } from '../../firebase';
 import { collection, addDoc, query, where, getDocs, doc, getDoc, DocumentData, runTransaction, increment } from 'firebase/firestore';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
+import { useLanguage } from '../../context/LanguageContext';
 
 interface ReservaFormProps {
   item: any; // Evento o Curso
@@ -11,6 +12,8 @@ interface ReservaFormProps {
 
 const ReservaForm = ({ item, alCerrar }: ReservaFormProps) => {
   const { socioData, esSocioActivo } = useAuth();
+  const { t, tField } = useLanguage();
+  const itemTitulo = tField(item, 'titulo');
   const [searchParams] = useSearchParams();
   const cuponUrl = searchParams.get('cupon') || '';
   
@@ -467,15 +470,15 @@ const ReservaForm = ({ item, alCerrar }: ReservaFormProps) => {
       {/* CABECERA CON IMAGEN */}
       <div className="relative h-56 flex-shrink-0">
         {item.imagenUrl ? (
-          <img 
-            src={item.imagenUrl} 
-            alt={item.titulo} 
-            className="w-full h-full object-cover" 
-            referrerPolicy="no-referrer" 
+          <img
+            src={item.imagenUrl}
+            alt={itemTitulo}
+            className="w-full h-full object-cover"
+            referrerPolicy="no-referrer"
           />
         ) : (
           <div className="w-full h-full bg-kalian-gold/5 flex items-center justify-center">
-            <span className="text-8xl kalian-poster-text text-kalian-gold/10 uppercase italic">{item.titulo.charAt(0)}</span>
+            <span className="text-8xl kalian-poster-text text-kalian-gold/10 uppercase italic">{itemTitulo.charAt(0)}</span>
           </div>
         )}
         <div className="absolute inset-0 bg-gradient-to-t from-kalian-dark via-kalian-dark/40 to-transparent"></div>
@@ -507,7 +510,7 @@ const ReservaForm = ({ item, alCerrar }: ReservaFormProps) => {
               </span>
             )}
           </div>
-          <h2 className="text-4xl md:text-5xl kalian-poster-text text-kalian-gold leading-none tracking-tight uppercase italic drop-shadow-2xl">{item.titulo}</h2>
+          <h2 className="text-4xl md:text-5xl kalian-poster-text text-kalian-gold leading-none tracking-tight uppercase italic drop-shadow-2xl">{itemTitulo}</h2>
         </div>
       </div>
 
@@ -515,15 +518,15 @@ const ReservaForm = ({ item, alCerrar }: ReservaFormProps) => {
       <div className="flex-1 overflow-y-auto p-8 md:p-10 space-y-10 custom-scrollbar">
         
         {/* BLOQUE IMPORTANTE (REGLAS) */}
-        {item.reglas && (
+        {tField(item, 'reglas') && (
           <div className="bg-kalian-gold/5 p-8 rounded-[2.5rem] border border-kalian-gold/20 relative overflow-hidden group">
             <div className="absolute top-0 right-0 w-24 h-24 bg-kalian-gold/5 rounded-full blur-2xl -mr-12 -mt-12"></div>
             <h3 className="text-[10px] font-black text-kalian-gold uppercase tracking-[0.5em] mb-6 flex items-center gap-3">
               <span className="w-2 h-2 bg-kalian-gold rounded-full animate-pulse"></span>
-              IMPORTANTE
+              {t('event.important')}
             </h3>
             <ul className="space-y-4">
-              {item.reglas.split('\n').filter((r: string) => r.trim()).map((regla: string, idx: number) => (
+              {tField(item, 'reglas').split('\n').filter((r: string) => r.trim()).map((regla: string, idx: number) => (
                 <li key={idx} className="text-xs text-kalian-cream/90 font-bold leading-relaxed flex gap-4">
                   <span className="text-kalian-gold flex-shrink-0 mt-1">✦</span>
                   <span>{regla}</span>
@@ -534,11 +537,11 @@ const ReservaForm = ({ item, alCerrar }: ReservaFormProps) => {
         )}
 
         {/* BLOQUE DESCRIPCIÓN */}
-        {item.descripcion && (
+        {tField(item, 'descripcion') && (
           <div className="px-4">
-            <h3 className="text-[10px] font-black text-kalian-gold/40 uppercase tracking-[0.5em] mb-4">Descripción del evento</h3>
+            <h3 className="text-[10px] font-black text-kalian-gold/40 uppercase tracking-[0.5em] mb-4">{t('event.description')}</h3>
             <p className="text-sm text-kalian-cream/70 font-medium leading-relaxed whitespace-pre-line">
-              {item.descripcion}
+              {tField(item, 'descripcion')}
             </p>
           </div>
         )}
@@ -554,7 +557,7 @@ const ReservaForm = ({ item, alCerrar }: ReservaFormProps) => {
             {mensajeBloqueo && (
               <div className="bg-red-500/10 border border-red-500/20 p-8 rounded-[2.5rem] text-center space-y-4">
                 <p className="text-red-500 font-black kalian-poster-text text-xl italic uppercase leading-none">
-                  ⚠️ ACCESO RESTRINGIDO TEMPORALMENTE
+                  ⚠️ {t('event.accessRestricted')}
                 </p>
                 <p className="text-kalian-cream/60 font-bold text-xs">
                   {mensajeBloqueo}

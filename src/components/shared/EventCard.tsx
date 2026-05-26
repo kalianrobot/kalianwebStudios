@@ -1,6 +1,7 @@
 import React from 'react';
 import { motion } from 'motion/react';
 import { DocumentData } from 'firebase/firestore';
+import { useLanguage } from '../../context/LanguageContext';
 
 interface EventCardProps {
   event: DocumentData;
@@ -11,14 +12,16 @@ interface EventCardProps {
   mensajeApertura?: string;
 }
 
-const EventCard: React.FC<EventCardProps> = ({ 
-  event, 
-  isSocio = false, 
-  onClick, 
+const EventCard: React.FC<EventCardProps> = ({
+  event,
+  isSocio = false,
+  onClick,
   onViewPoster,
   isReservaAbierta = true,
   mensajeApertura
 }) => {
+  const { t, language, tField } = useLanguage();
+  const titulo = tField(event, 'titulo');
   return (
     <motion.div 
       initial={{ opacity: 0, y: 20 }}
@@ -31,21 +34,21 @@ const EventCard: React.FC<EventCardProps> = ({
       {/* IMAGEN DEL EVENTO */}
       <div className="h-64 relative overflow-hidden bg-kalian-gold/5 border-b border-kalian-gold/10 flex-shrink-0">
         {event.imagenUrl ? (
-          <img 
-            src={event.imagenUrl} 
-            alt={event.titulo} 
+          <img
+            src={event.imagenUrl}
+            alt={titulo}
             className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-700"
             referrerPolicy="no-referrer"
           />
         ) : (
           <div className="w-full h-full flex items-center justify-center opacity-10">
-            <span className="text-8xl kalian-poster-text text-kalian-gold">{event.titulo?.charAt(0)}</span>
+            <span className="text-8xl kalian-poster-text text-kalian-gold">{titulo?.charAt(0)}</span>
           </div>
         )}
         <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-transparent to-transparent"></div>
         <div className="absolute bottom-4 left-6 right-6 flex justify-between items-end">
           {event.tiene_descuento && (
-            <span className="bg-kalian-gold text-black text-[9px] font-black uppercase px-4 py-1.5 rounded-full tracking-widest shadow-lg">Descuento Soci@s</span>
+            <span className="bg-kalian-gold text-black text-[9px] font-black uppercase px-4 py-1.5 rounded-full tracking-widest shadow-lg">{t('home.discount')}</span>
           )}
           <span className="text-kalian-gold kalian-poster-text text-4xl drop-shadow-lg ml-auto">{event.precio_estandar}€</span>
         </div>
@@ -54,7 +57,7 @@ const EventCard: React.FC<EventCardProps> = ({
       <div className="p-8 space-y-6 flex-grow flex flex-col justify-between relative z-10">
         <div className="space-y-4">
           <div className="space-y-2">
-            <h3 className="text-3xl kalian-poster-text text-kalian-cream group-hover:text-kalian-gold transition-colors leading-none uppercase italic">{event.titulo}</h3>
+            <h3 className="text-3xl kalian-poster-text text-kalian-cream group-hover:text-kalian-gold transition-colors leading-none uppercase italic">{titulo}</h3>
             <div className="w-12 h-1 bg-kalian-gold/30 group-hover:w-full transition-all duration-500"></div>
           </div>
 
@@ -72,33 +75,33 @@ const EventCard: React.FC<EventCardProps> = ({
           </div>
 
           <div className="space-y-1">
-            <p className="text-[9px] font-black text-kalian-gold/40 uppercase tracking-[0.3em]">Fecha y Hora</p>
+            <p className="text-[9px] font-black text-kalian-gold/40 uppercase tracking-[0.3em]">{t('event.dateTime')}</p>
             <p className="font-bold text-kalian-cream/80 uppercase text-sm tracking-widest">
-              {event.fecha ? new Date(event.fecha).toLocaleString('es-ES', { day: 'numeric', month: 'long', hour: '2-digit', minute: '2-digit' }) : 'Fecha pendiente'}
+              {event.fecha ? new Date(event.fecha).toLocaleString(language === 'eu' ? 'eu-ES' : 'es-ES', { day: 'numeric', month: 'long', hour: '2-digit', minute: '2-digit' }) : '—'}
             </p>
           </div>
         </div>
         
         <div className="flex flex-col gap-3 mt-4">
           {event.imagenUrl && onViewPoster && (
-            <button 
+            <button
               onClick={(e) => {
                 e.stopPropagation();
                 onViewPoster(event.imagenUrl);
               }}
               className="w-full bg-kalian-gold/10 text-kalian-gold border border-kalian-gold/20 p-4 rounded-2xl kalian-poster-text text-sm tracking-widest hover:bg-kalian-gold/20 transition-all"
             >
-              Ver Cartel
+              {t('event.viewPoster')}
             </button>
           )}
-          
+
           {isReservaAbierta ? (
             <button className="w-full bg-kalian-gold text-black p-5 rounded-2xl kalian-poster-text text-lg tracking-widest hover:bg-white transition-all shadow-xl shadow-kalian-gold/10">
-              Reservar Plaza
+              {t('home.reserve')}
             </button>
           ) : (
             <div className="w-full bg-slate-800/50 text-slate-500 p-5 rounded-2xl kalian-poster-text text-lg tracking-widest text-center border border-white/5">
-              PRÓXIMAMENTE
+              {t('home.soon')}
               {mensajeApertura && (
                 <p className="text-[10px] font-black uppercase tracking-widest mt-1">{mensajeApertura}</p>
               )}

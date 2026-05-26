@@ -3,9 +3,11 @@ import { db } from '../firebase';
 import { collection, getDocs, query, orderBy, DocumentData } from 'firebase/firestore';
 import { motion, AnimatePresence } from 'motion/react';
 import { useNavigate } from 'react-router-dom';
+import { useLanguage } from '../context/LanguageContext';
 
 const GaleriaPublica = () => {
   const navigate = useNavigate();
+  const { t, tField } = useLanguage();
   const [exposiciones, setExposiciones] = useState<DocumentData[]>([]);
   const [loading, setLoading] = useState(true);
   const [expoSeleccionada, setExpoSeleccionada] = useState<DocumentData | null>(null);
@@ -40,35 +42,34 @@ const GaleriaPublica = () => {
   return (
     <div className="min-h-screen bg-kalian-dark text-kalian-cream font-sans pb-24">
       {/* HERO */}
-      <div className="relative h-[60vh] flex flex-col items-center justify-center overflow-hidden border-b border-kalian-gold/10">
+      <div className="relative h-[32vh] min-h-[260px] flex flex-col items-center justify-center overflow-hidden border-b border-kalian-gold/10">
         <div className="absolute inset-0 bg-[url('https://picsum.photos/seed/gallery/1920/1080?blur=10')] bg-cover bg-center opacity-20"></div>
         <div className="absolute inset-0 bg-gradient-to-t from-kalian-dark via-transparent to-kalian-dark/80"></div>
-        
+
         {/* BOTÓN VOLVER A HOME */}
-        <button 
+        <button
           onClick={() => navigate(-1)}
-          className="absolute top-10 left-10 z-20 flex items-center gap-3 text-kalian-gold font-black uppercase text-[10px] tracking-[0.4em] hover:text-white transition-all group"
+          className="absolute top-6 left-6 z-20 flex items-center gap-3 text-kalian-gold font-black uppercase text-[10px] tracking-[0.4em] hover:text-white transition-all group"
         >
-          <span className="text-xl group-hover:-translate-x-2 transition-transform">←</span> VOLVER
+          <span className="text-xl group-hover:-translate-x-2 transition-transform">←</span> {t('btn.back')}
         </button>
 
-        <motion.div 
-          initial={{ y: 30, opacity: 0 }}
+        <motion.div
+          initial={{ y: 20, opacity: 0 }}
           animate={{ y: 0, opacity: 1 }}
           className="relative z-10 text-center px-6"
         >
-          <span className="text-[10px] font-black text-kalian-gold uppercase tracking-[0.8em] mb-6 block animate-pulse">EXPOSICIONES & ARTE</span>
-          <h1 className="text-7xl md:text-9xl kalian-poster-text text-kalian-gold leading-none tracking-tighter uppercase italic drop-shadow-2xl">
+          <span className="text-[10px] font-black text-kalian-gold uppercase tracking-[0.8em] mb-3 block animate-pulse">{t('gallery.subtitle')}</span>
+          <h1 className="text-5xl md:text-7xl kalian-poster-text text-kalian-gold leading-none tracking-tighter uppercase italic drop-shadow-2xl">
             KALIAN <span className="text-kalian-cream">GALLERY</span>
           </h1>
-          <p className="max-w-2xl mx-auto mt-8 text-sm md:text-base text-kalian-cream/60 font-medium leading-relaxed tracking-wide">
-            Un espacio dedicado a la expresión visual, donde artistas locales y residentes comparten su visión. 
-            Desde fotografía hasta arte digital, la galería de Kalian es un lienzo vivo en constante cambio.
+          <p className="max-w-xl mx-auto mt-4 text-sm text-kalian-cream/60 font-medium leading-snug tracking-wide">
+            {t('gallery.description')}
           </p>
         </motion.div>
       </div>
 
-      <div className="max-w-7xl mx-auto px-6 mt-24">
+      <div className="max-w-7xl mx-auto px-6 mt-12">
         {/* EXPOSICIÓN ACTUAL */}
         <section className="mb-32">
           <div className="flex items-center gap-6 mb-16">
@@ -89,15 +90,15 @@ const GaleriaPublica = () => {
             >
               <div className="relative aspect-[21/9] rounded-[3rem] overflow-hidden border border-kalian-gold/20 shadow-2xl transition-all duration-700 group-hover:border-kalian-gold/50">
                 {actual.imagenUrl ? (
-                  <img 
-                    src={actual.imagenUrl} 
-                    alt={actual.titulo} 
-                    className="w-full h-full object-cover transition-transform duration-1000 group-hover:scale-105" 
+                  <img
+                    src={actual.imagenUrl}
+                    alt={tField(actual, 'titulo')}
+                    className="w-full h-full object-cover transition-transform duration-1000 group-hover:scale-105"
                     referrerPolicy="no-referrer"
                   />
                 ) : (
                   <div className="w-full h-full bg-kalian-gold/5 flex items-center justify-center text-8xl kalian-poster-text text-kalian-gold/10 uppercase italic">
-                    {actual.titulo.charAt(0)}
+                    {tField(actual, 'titulo').charAt(0)}
                   </div>
                 )}
                 <div className="absolute inset-0 bg-gradient-to-t from-black via-black/20 to-transparent opacity-80 group-hover:opacity-90 transition-opacity"></div>
@@ -107,8 +108,8 @@ const GaleriaPublica = () => {
                     <span className="text-[10px] font-black text-kalian-gold uppercase tracking-[0.6em] block">
                       EN CURSO • {new Date(actual.fechaInicio).toLocaleDateString('es-ES', { day: 'numeric', month: 'short' })} AL {new Date(actual.fechaFin).toLocaleDateString('es-ES', { day: 'numeric', month: 'short', year: 'numeric' })}
                     </span>
-                    <h3 className="text-5xl md:text-7xl kalian-poster-text text-kalian-gold uppercase italic leading-none tracking-tighter">{actual.titulo}</h3>
-                    <p className="text-xl font-black text-kalian-cream/80 uppercase tracking-widest">Autor/a: {actual.autor}</p>
+                    <h3 className="text-5xl md:text-7xl kalian-poster-text text-kalian-gold uppercase italic leading-none tracking-tighter">{tField(actual, 'titulo')}</h3>
+                    <p className="text-xl font-black text-kalian-cream/80 uppercase tracking-widest">Autor/a: {tField(actual, 'autor')}</p>
                   </div>
                   
                   <button 
@@ -121,7 +122,7 @@ const GaleriaPublica = () => {
             </motion.div>
           ) : (
             <div className="bg-kalian-gold/5 border border-kalian-gold/10 p-20 rounded-[3rem] text-center">
-              <p className="text-kalian-gold/40 font-black uppercase tracking-[0.4em] text-xs italic">Próximamente nuevas exposiciones...</p>
+              <p className="text-kalian-gold/40 font-black uppercase tracking-[0.4em] text-xs italic">{t('home.noExpoSoon')}…</p>
             </div>
           )}
         </section>
@@ -146,15 +147,15 @@ const GaleriaPublica = () => {
                 >
                   <div className="relative aspect-[3/4] rounded-[2.5rem] overflow-hidden border border-kalian-gold/10 shadow-2xl transition-all duration-700 group-hover:border-kalian-gold/40 group-hover:-translate-y-4">
                     {expo.imagenUrl ? (
-                      <img 
-                        src={expo.imagenUrl} 
-                        alt={expo.titulo} 
-                        className="w-full h-full object-cover transition-transform duration-1000 group-hover:scale-110" 
+                      <img
+                        src={expo.imagenUrl}
+                        alt={tField(expo, 'titulo')}
+                        className="w-full h-full object-cover transition-transform duration-1000 group-hover:scale-110"
                         referrerPolicy="no-referrer"
                       />
                     ) : (
                       <div className="w-full h-full bg-kalian-gold/5 flex items-center justify-center text-8xl kalian-poster-text text-kalian-gold/10 uppercase italic">
-                        {expo.titulo.charAt(0)}
+                        {tField(expo, 'titulo').charAt(0)}
                       </div>
                     )}
                     <div className="absolute inset-0 bg-gradient-to-t from-black via-black/20 to-transparent opacity-60 group-hover:opacity-80 transition-opacity"></div>
@@ -163,8 +164,8 @@ const GaleriaPublica = () => {
                       <span className="text-[9px] font-black text-kalian-gold uppercase tracking-[0.4em] mb-3 block">
                         PRÓXIMAMENTE • {new Date(expo.fechaInicio).toLocaleDateString('es-ES', { day: 'numeric', month: 'short' })}
                       </span>
-                      <h3 className="text-3xl kalian-poster-text text-kalian-gold uppercase italic leading-none mb-2">{expo.titulo}</h3>
-                      <p className="text-[10px] font-black text-kalian-cream/60 uppercase tracking-widest mb-6">Autor/a: {expo.autor}</p>
+                      <h3 className="text-3xl kalian-poster-text text-kalian-gold uppercase italic leading-none mb-2">{tField(expo, 'titulo')}</h3>
+                      <p className="text-[10px] font-black text-kalian-cream/60 uppercase tracking-widest mb-6">Autor/a: {tField(expo, 'autor')}</p>
                       
                       <button 
                         className="w-full py-4 bg-kalian-gold/10 text-kalian-gold border border-kalian-gold/20 rounded-xl font-black uppercase text-[10px] tracking-[0.3em] hover:bg-kalian-gold hover:text-black transition-all"
@@ -195,15 +196,15 @@ const GaleriaPublica = () => {
                   className="group cursor-pointer opacity-50 hover:opacity-100 transition-all"
                 >
                   <div className="aspect-[3/4] rounded-2xl overflow-hidden border border-kalian-gold/10 mb-4 grayscale group-hover:grayscale-0 transition-all duration-500">
-                    <img src={expo.imagenUrl} alt={expo.titulo} className="w-full h-full object-cover" referrerPolicy="no-referrer" />
+                    <img src={expo.imagenUrl} alt={tField(expo, 'titulo')} className="w-full h-full object-cover" referrerPolicy="no-referrer" />
                   </div>
-                  <h4 className="text-[10px] kalian-poster-text text-kalian-gold uppercase italic truncate">{expo.titulo}</h4>
-                  <p className="text-[8px] font-black text-kalian-cream/40 uppercase tracking-widest mb-2">{expo.autor}</p>
+                  <h4 className="text-[10px] kalian-poster-text text-kalian-gold uppercase italic truncate">{tField(expo, 'titulo')}</h4>
+                  <p className="text-[8px] font-black text-kalian-cream/40 uppercase tracking-widest mb-2">{tField(expo, 'autor')}</p>
                   <p className="text-[7px] font-black text-kalian-gold/30 uppercase tracking-widest mb-3">{expo.fechaInicio} - {expo.fechaFin}</p>
-                  <button 
+                  <button
                     className="w-full py-2 bg-kalian-gold/10 text-kalian-gold border border-kalian-gold/20 rounded-lg font-black uppercase text-[7px] tracking-widest hover:bg-kalian-gold hover:text-black transition-all"
                   >
-                    Ver cartel
+                    {t('event.viewPoster')}
                   </button>
                 </div>
               ))}
@@ -241,10 +242,10 @@ const GaleriaPublica = () => {
               >✕</button>
 
               <div className="w-full md:w-1/2 h-[50vh] md:h-auto bg-kalian-gold/5">
-                <img 
-                  src={expoSeleccionada.imagenUrl} 
-                  alt={expoSeleccionada.titulo} 
-                  className="w-full h-full object-cover" 
+                <img
+                  src={expoSeleccionada.imagenUrl}
+                  alt={tField(expoSeleccionada, 'titulo')}
+                  className="w-full h-full object-cover"
                   referrerPolicy="no-referrer"
                 />
               </div>
@@ -255,10 +256,10 @@ const GaleriaPublica = () => {
                     {expoSeleccionada.es_activa ? 'Exposición Actual' : 'Archivo Galería'}
                   </span>
                   <h2 className="text-5xl md:text-6xl kalian-poster-text text-kalian-gold uppercase italic leading-none tracking-tighter mb-4">
-                    {expoSeleccionada.titulo}
+                    {tField(expoSeleccionada, 'titulo')}
                   </h2>
                   <p className="text-xl font-black text-kalian-cream uppercase tracking-widest italic">
-                    {expoSeleccionada.autor}
+                    {tField(expoSeleccionada, 'autor')}
                   </p>
                 </div>
 
@@ -267,7 +268,7 @@ const GaleriaPublica = () => {
                 <div className="space-y-6">
                   <h4 className="text-[10px] font-black text-kalian-gold/40 uppercase tracking-[0.3em]">Sobre la exposición</h4>
                   <p className="text-sm md:text-base text-kalian-cream/70 font-medium leading-relaxed whitespace-pre-line">
-                    {expoSeleccionada.descripcion}
+                    {tField(expoSeleccionada, 'descripcion')}
                   </p>
                 </div>
 

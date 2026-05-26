@@ -3,8 +3,10 @@ import { auth, db } from '../../firebase';
 import { collection, query, where, getDocs, doc, updateDoc, DocumentData, getDoc, deleteDoc, increment } from 'firebase/firestore';
 import { useNavigate } from 'react-router-dom';
 import { QRCodeSVG } from 'qrcode.react';
+import { useLanguage } from '../../context/LanguageContext';
 
 const PerfilSocio = () => {
+  const { t, tField } = useLanguage();
   const [reservasActivas, setReservasActivas] = useState<DocumentData[]>([]);
   const [historialReservas, setHistorialReservas] = useState<DocumentData[]>([]);
   const [cursosDetalle, setCursosDetalle] = useState<DocumentData[]>([]);
@@ -98,10 +100,11 @@ const PerfilSocio = () => {
             const evData = evSnap.data();
             const fechaAct = r.fechaActividad || evData.fecha || evData.fechaFin || r.fechaReserva?.split('T')[0];
             
-            return { 
-              ...r, 
+            return {
+              ...r,
               titulo: r.eventoTitulo,
-              tipo: r.esCurso ? 'CURSO' : 'EVENTO',
+              tituloEvento: tField(evData, 'titulo') || r.eventoTitulo,
+              tipo: r.esCurso ? t('profile.tipoCurso') : t('profile.tipoEvento'),
               fechaActividad: fechaAct,
               activa: new Date(fechaAct) >= new Date(),
               max_acompanantes: evData.max_acompanantes || 4
@@ -167,9 +170,9 @@ const PerfilSocio = () => {
   }, [navigate]);
 
   const getNombreCategoria = (cat: string) => {
-    if (cat === 'musica') return 'Music Is Cool';
-    if (cat === 'danza') return 'Club de Baile';
-    if (cat === 'local') return 'Kalian Hub';
+    if (cat === 'musica') return t('profile.category.musica');
+    if (cat === 'danza') return t('profile.category.danza');
+    if (cat === 'local') return t('profile.category.local');
     return cat;
   };
 
@@ -183,7 +186,7 @@ const PerfilSocio = () => {
   };
 
   const cancelarReserva = async (reserva: any) => {
-    if (!window.confirm("⚠️ ¿Seguro que quieres cancelar esta reserva? Esta acción liberará tus plazas y no se puede deshacer.")) return;
+    if (!window.confirm(t('profile.confirmCancel'))) return;
     
     try {
       const esCurso = reserva.esCurso;
@@ -205,10 +208,10 @@ const PerfilSocio = () => {
       await deleteDoc(doc(db, "reservas", reserva.id));
       
       setReservasActivas(prev => prev.filter(r => r.id !== reserva.id));
-      alert("✅ Reserva cancelada con éxito");
+      alert(t('profile.cancelSuccess'));
     } catch (err) {
       console.error(err);
-      alert("Error al cancelar");
+      alert(t('profile.cancelError'));
     }
   };
   const actualizarAcompañantes = async (reserva: any, nuevoNum: number) => {
@@ -217,20 +220,20 @@ const PerfilSocio = () => {
     const esAumento = nuevoNum > (reserva.acompañantes || 0);
     
     if (esAumento && !puedeAñadirInvitados(reserva)) {
-      alert("⚠️ Lo sentimos, no se pueden añadir más invitados a menos de 2 horas del evento. Solo se permite reducir el número o cancelar.");
+      alert(t('profile.guestsAfterEvent'));
       return;
     }
 
     const maxPermitidos = reserva.max_acompanantes || 4;
     if (nuevoNum > maxPermitidos) {
-      alert(`⚠️ El máximo de acompañantes permitido para este evento es ${maxPermitidos}.`);
+      alert(t('profile.maxGuests', { n: maxPermitidos }));
       return;
     }
 
     const yaIngresados = reserva.asistentes_ingresados || 0;
     const nuevoTotal = 1 + nuevoNum;
     if (nuevoTotal < yaIngresados) {
-      alert(`⚠️ No puedes reducir el número de asistentes por debajo de los que ya han entrado (${yaIngresados}).`);
+      alert(t('profile.cannotReduce', { n: yaIngresados }));
       return;
     }
     
@@ -241,7 +244,7 @@ const PerfilSocio = () => {
       const snapDoc = await getDoc(docRef);
       
       if (!snapDoc.exists()) {
-        alert("No se encontró la actividad.");
+        alert(t('profile.activityNotFound'));
         return;
       }
 
@@ -252,7 +255,7 @@ const PerfilSocio = () => {
       const diferencia = nuevoNum - (reserva.acompañantes || 0);
 
       if (aforoRes + diferencia > aforoMax) {
-        alert(`❌ No hay aforo suficiente. Capacidad máxima: ${aforoMax}. Espacio disponible: ${Math.max(0, aforoMax - aforoRes)}`);
+        alert(t('profile.notEnoughCapacity', { max: aforoMax, avail: Math.max(0, aforoMax - aforoRes) }));
         return;
       }
 
@@ -269,13 +272,13 @@ const PerfilSocio = () => {
       setReservasActivas(prev => prev.map(r => r.id === reserva.id ? { ...r, acompañantes: nuevoNum } : r));
     } catch (err) {
       console.error("Error al actualizar:", err);
-      alert("No se pudo actualizar el número de acompañantes.");
+      alert(t('profile.updateError'));
     }
   };
 
   if (cargando) return (
     <div className="min-h-screen bg-kalian-dark flex items-center justify-center">
-      <div className="text-kalian-gold kalian-poster-text text-4xl animate-pulse">Cargando Panel...</div>
+      <div className="text-kalian-gold kalian-poster-text text-4xl animate-pulse">{t('profile.loading')}</div>
     </div>
   );
 
@@ -283,13 +286,13 @@ const PerfilSocio = () => {
     return (
       <div className="min-h-screen bg-kalian-dark flex flex-col items-center justify-center p-6 text-center">
         <div className="w-24 h-24 bg-red-500/10 text-red-500 rounded-full flex items-center justify-center text-4xl mb-6 border border-red-500/20 shadow-2xl shadow-red-500/10">🚫</div>
-        <h2 className="text-4xl kalian-poster-text text-kalian-cream mb-4">Acceso Restringido</h2>
-        <p className="text-kalian-cream/50 font-bold max-w-md text-sm uppercase tracking-widest leading-relaxed">Lo sentimos, este panel es exclusivo para soci@s registrad@s con DNI. Si crees que esto es un error, contacta con administración.</p>
-        <button 
-          onClick={() => navigate('/')} 
+        <h2 className="text-4xl kalian-poster-text text-kalian-cream mb-4">{t('profile.restrictedAccess')}</h2>
+        <p className="text-kalian-cream/50 font-bold max-w-md text-sm uppercase tracking-widest leading-relaxed">{t('profile.restrictedAccessText')}</p>
+        <button
+          onClick={() => navigate('/')}
           className="mt-12 bg-kalian-gold text-black px-10 py-4 rounded-2xl kalian-poster-text text-xl tracking-widest hover:bg-white transition-all shadow-2xl shadow-kalian-gold/20"
         >
-          Volver al Inicio
+          {t('profile.backHome')}
         </button>
       </div>
     );
@@ -307,25 +310,24 @@ const PerfilSocio = () => {
     return 15;
   };
 
-  const meses = ["Enero", "Febrero", "Marzo", "Abril", "Mayo", "Junio", "Julio", "Agosto", "Septiembre", "Octubre", "Noviembre", "Diciembre"];
-  const mesActualStr = meses[new Date().getMonth()];
+  const mesActualStr = t(`month.${new Date().getMonth() + 1}`);
 
   return (
     <div className="min-h-screen bg-kalian-dark p-6 md:p-12 text-kalian-cream font-sans">
       <header className="max-w-6xl mx-auto mb-20 flex flex-col md:flex-row justify-between items-start md:items-end gap-8">
         <div>
-          <h1 className="text-6xl md:text-8xl kalian-poster-text text-kalian-gold tracking-[-0.05em]">MI PANEL <span className="text-kalian-cream">SOCI@S</span></h1>
+          <h1 className="text-6xl md:text-8xl kalian-poster-text text-kalian-gold tracking-[-0.05em]">{t('profile.title')} <span className="text-kalian-cream">{t('profile.titleHighlight')}</span></h1>
           {usuario && (
             <div className="mt-6 space-y-3">
-              <p className="font-black text-kalian-gold/40 uppercase tracking-[0.4em] text-[10px]">Soci@s: {usuario.nombre} • {usuario.dni}</p>
+              <p className="font-black text-kalian-gold/40 uppercase tracking-[0.4em] text-[10px]">{t('profile.memberLabel')} {usuario.nombre} • {usuario.dni}</p>
             </div>
           )}
         </div>
-        <button 
+        <button
           onClick={() => auth.signOut().then(() => navigate('/'))}
           className="text-[10px] font-black uppercase text-kalian-gold/40 hover:text-kalian-gold transition-colors tracking-[0.3em] border-b border-transparent hover:border-kalian-gold/40 pb-1"
         >
-          Cerrar Sesión
+          {t('profile.logout')}
         </button>
       </header>
 
@@ -345,7 +347,7 @@ const PerfilSocio = () => {
             <div className="mt-6 flex flex-col items-center">
               <div className="flex items-center gap-2 mb-2">
                 <div className={`w-2 h-2 rounded-full ${usuario?.estado === 'activo' ? 'bg-emerald-500 animate-pulse' : 'bg-red-500'}`}></div>
-                <p className="text-[10px] font-black uppercase tracking-[0.3em] text-black/40">CARNET DIGITAL</p>
+                <p className="text-[10px] font-black uppercase tracking-[0.3em] text-black/40">{t('profile.cardDigital')}</p>
               </div>
               <p className="font-mono text-[9px] text-black/20 font-bold uppercase tracking-widest">ID: {usuario?.uid?.substring(0, 12)}</p>
             </div>
@@ -354,9 +356,9 @@ const PerfilSocio = () => {
           <div className="relative z-10 flex-grow space-y-8 text-center lg:text-left">
             <div>
               <div className="flex flex-col lg:flex-row lg:items-center gap-4 mb-4">
-                <span className="text-kalian-gold font-black text-[10px] uppercase tracking-[0.5em]">Tarjeta de Membresía</span>
+                <span className="text-kalian-gold font-black text-[10px] uppercase tracking-[0.5em]">{t('profile.memberCard')}</span>
                 <span className={`inline-block px-4 py-1 rounded-full text-[8px] font-black uppercase tracking-widest w-fit mx-auto lg:mx-0 ${usuario?.estado === 'activo' ? 'bg-emerald-500/20 text-emerald-500 border border-emerald-500/30' : 'bg-red-500/20 text-red-500 border border-red-500/30'}`}>
-                  {usuario?.estado === 'activo' ? 'SOCI@ ACTIVO' : 'SOCI@ INACTIVO'}
+                  {usuario?.estado === 'activo' ? t('profile.activeMember') : t('profile.inactiveMember')}
                 </span>
               </div>
               <h2 className="text-5xl md:text-7xl kalian-poster-text text-kalian-cream leading-none uppercase italic">{usuario?.nombre}</h2>
@@ -364,31 +366,31 @@ const PerfilSocio = () => {
               <div className="mt-8 space-y-4">
                 <div className="flex flex-col lg:flex-row gap-4">
                   <div className="flex flex-col">
-                    <p className="text-[10px] font-black text-kalian-gold/40 uppercase tracking-[0.3em] mb-2">Membresías Activas:</p>
+                    <p className="text-[10px] font-black text-kalian-gold/40 uppercase tracking-[0.3em] mb-2">{t('profile.activeMemberships')}</p>
                     <div className="flex flex-wrap justify-center lg:justify-start gap-4">
                       {membresiasAMostrar.length > 0 ? (
                         membresiasAMostrar.map(({cat, fecha}) => (
                           <div key={cat} className="flex flex-col bg-kalian-gold/10 border border-kalian-gold/20 px-6 py-3 rounded-2xl group/item hover:bg-kalian-gold/20 transition-colors">
                             <span className="text-kalian-gold text-[10px] font-black uppercase tracking-widest">{getNombreCategoria(cat)}</span>
-                            <span className="text-kalian-cream/40 text-[8px] font-bold uppercase tracking-tighter">Válido hasta: {fecha}</span>
+                            <span className="text-kalian-cream/40 text-[8px] font-bold uppercase tracking-tighter">{t('profile.validUntil')} {fecha}</span>
                           </div>
                         ))
                       ) : (
                         <div className="bg-red-500/10 border border-red-500/20 px-6 py-3 rounded-2xl">
-                          <span className="text-red-500/60 text-[10px] font-black uppercase tracking-widest italic">Sin membresías activas</span>
+                          <span className="text-red-500/60 text-[10px] font-black uppercase tracking-widest italic">{t('profile.noMemberships')}</span>
                         </div>
                       )}
                     </div>
                   </div>
 
                   <div className="flex flex-col lg:ml-8">
-                    <p className="text-[10px] font-black text-kalian-gold/40 uppercase tracking-[0.3em] mb-2">Aportación {mesActualStr}:</p>
+                    <p className="text-[10px] font-black text-kalian-gold/40 uppercase tracking-[0.3em] mb-2">{t('profile.monthlyContribution')} {mesActualStr}:</p>
                     <div className={`flex flex-col px-6 py-3 rounded-2xl border ${pagoMensual?.pagado ? 'bg-emerald-500/10 border-emerald-500/20' : 'bg-amber-500/10 border-amber-500/20'}`}>
                       <span className={`text-[10px] font-black uppercase tracking-widest ${pagoMensual?.pagado ? 'text-emerald-500' : 'text-amber-500'}`}>
-                        {pagoMensual?.pagado ? '✅ PAGADO' : '❌ PENDIENTE'}
+                        {pagoMensual?.pagado ? t('profile.paid') : t('profile.pending')}
                       </span>
                       <span className="text-kalian-cream/40 text-[8px] font-bold uppercase tracking-tighter">
-                        {pagoMensual?.pagado ? `Monto: ${pagoMensual.monto}€/mes` : `Sugerido: ${calcularAportacionSugerida()}€/mes`}
+                        {pagoMensual?.pagado ? `${t('profile.amountLabel')} ${pagoMensual.monto}€/mes` : `${t('profile.suggestedLabel')} ${calcularAportacionSugerida()}€/mes`}
                       </span>
                     </div>
                   </div>
@@ -396,7 +398,7 @@ const PerfilSocio = () => {
               </div>
             </div>
             <p className="text-kalian-cream/40 text-sm font-bold leading-relaxed max-w-xl mx-auto lg:mx-0 uppercase tracking-widest">
-              Este carnet es personal e intransferible. Identifícate en la entrada para disfrutar de tus beneficios como soci@s de Kalian.
+              {t('profile.cardDescription')}
             </p>
           </div>
         </section>
@@ -405,7 +407,7 @@ const PerfilSocio = () => {
         {(cursosDetalle.length > 0 || localDetalle) && (
           <section className="space-y-12">
             <div className="flex items-center gap-6">
-              <h2 className="text-3xl kalian-poster-text text-kalian-gold">MIS <span className="text-kalian-cream">CURSOS Y KALIAN HUB</span></h2>
+              <h2 className="text-3xl kalian-poster-text text-kalian-gold">{t('profile.myCoursesAndHubTitle')} <span className="text-kalian-cream">{t('profile.myCoursesAndHubHighlight')}</span></h2>
               <div className="h-[1px] flex-1 bg-kalian-gold/20"></div>
             </div>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
@@ -415,14 +417,14 @@ const PerfilSocio = () => {
                     {c.categoria === 'danza' ? '💃' : '🎸'}
                   </div>
                   <div>
-                    <p className="text-[9px] font-black text-kalian-gold uppercase tracking-[0.3em] mb-2">Curso Activo</p>
-                    <h3 className="text-3xl kalian-poster-text text-kalian-cream">{c.titulo}</h3>
-                    <p className="text-xs font-bold text-kalian-cream/40 mt-2 tracking-widest uppercase">{c.horario}</p>
-                    
+                    <p className="text-[9px] font-black text-kalian-gold uppercase tracking-[0.3em] mb-2">{t('profile.activeCourse')}</p>
+                    <h3 className="text-3xl kalian-poster-text text-kalian-cream">{tField(c, 'titulo')}</h3>
+                    <p className="text-xs font-bold text-kalian-cream/40 mt-2 tracking-widest uppercase">{tField(c, 'horario')}</p>
+
                     {/* DOCUMENTOS DEL CURSO */}
                     {c.documentos && c.documentos.length > 0 && (
                       <div className="mt-6 pt-6 border-t border-kalian-gold/10 space-y-3">
-                        <p className="text-[8px] font-black text-kalian-gold/40 uppercase tracking-widest">Material del Curso</p>
+                        <p className="text-[8px] font-black text-kalian-gold/40 uppercase tracking-widest">{t('profile.courseMaterial')}</p>
                         <div className="flex flex-wrap gap-2">
                           {c.documentos.map((doc: any, idx: number) => (
                             <a 
@@ -446,9 +448,9 @@ const PerfilSocio = () => {
                 <div className="bg-black/40 border border-kalian-gold/10 rounded-3xl p-8 flex items-center gap-8 hover:border-kalian-gold/30 transition-all">
                   <div className="w-20 h-20 bg-kalian-gold/10 border border-kalian-gold/20 rounded-2xl flex items-center justify-center text-4xl">🏠</div>
                   <div>
-                    <p className="text-[9px] font-black text-kalian-gold uppercase tracking-[0.3em] mb-2">Kalian Hub</p>
+                    <p className="text-[9px] font-black text-kalian-gold uppercase tracking-[0.3em] mb-2">{t('profile.kalianHub')}</p>
                     <h3 className="text-3xl kalian-poster-text text-kalian-cream">{localDetalle.nombre}</h3>
-                    <p className="text-xs font-bold text-kalian-cream/40 mt-2 tracking-widest uppercase">Grupo: {localDetalle.nombreGrupo}</p>
+                    <p className="text-xs font-bold text-kalian-cream/40 mt-2 tracking-widest uppercase">{t('profile.group')} {localDetalle.nombreGrupo}</p>
                   </div>
                 </div>
               )}
@@ -459,13 +461,13 @@ const PerfilSocio = () => {
         {/* SECCIÓN RESERVAS EVENTOS */}
         <section className="space-y-12">
           <div className="flex items-center gap-6">
-            <h2 className="text-3xl kalian-poster-text text-kalian-gold">MIS <span className="text-kalian-cream">RESERVAS</span></h2>
+            <h2 className="text-3xl kalian-poster-text text-kalian-gold">{t('profile.myReservationsTitle')} <span className="text-kalian-cream">{t('profile.myReservationsHighlight')}</span></h2>
             <div className="h-[1px] flex-1 bg-kalian-gold/20"></div>
           </div>
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-10">
             {reservasActivas.length === 0 ? (
               <div className="col-span-full bg-black/20 p-20 rounded-[3rem] text-center border border-kalian-gold/10 border-dashed">
-                <p className="kalian-poster-text text-kalian-gold/30 text-4xl">No tienes reservas<br/>de eventos activas</p>
+                <p className="kalian-poster-text text-kalian-gold/30 text-4xl whitespace-pre-line">{t('profile.noReservations')}</p>
               </div>
             ) : reservasActivas.map(res => (
           <div key={res.id} className="bg-kalian-cream rounded-[3rem] p-10 text-black shadow-2xl flex flex-col items-center transform hover:scale-[1.02] transition-all duration-500 group relative">
@@ -475,7 +477,7 @@ const PerfilSocio = () => {
               {res.tipo} • {res.fechaActividad}
             </span>
             
-            <h3 className="text-3xl kalian-poster-text uppercase leading-none text-center mb-8 h-16 flex items-center">{res.titulo}</h3>
+            <h3 className="text-3xl kalian-poster-text uppercase leading-none text-center mb-8 h-16 flex items-center">{res.tituloEvento || res.titulo}</h3>
             
             <div className="bg-white p-8 rounded-[2.5rem] mb-8 shadow-inner border border-black/5 flex flex-col items-center group-hover:shadow-2xl transition-all">
               <QRCodeSVG 
@@ -485,15 +487,15 @@ const PerfilSocio = () => {
                 includeMargin={true}
                 className="mix-blend-multiply"
               />
-              <p className="text-center font-mono text-[11px] mt-6 text-black font-black tracking-[0.3em] uppercase">Localizador: {res.ticketID || res.id}</p>
+              <p className="text-center font-mono text-[11px] mt-6 text-black font-black tracking-[0.3em] uppercase">{t('profile.locator')} {res.ticketID || res.id}</p>
             </div>
 
             <div className="w-full bg-black/5 p-6 rounded-3xl flex justify-between items-center border border-black/5">
               <div>
-                <p className="text-[9px] font-black text-black/40 uppercase tracking-widest">Acompañantes</p>
+                <p className="text-[9px] font-black text-black/40 uppercase tracking-widest">{t('profile.companions')}</p>
                 <p className="text-3xl kalian-poster-text mt-1">{res.acompañantes}</p>
                 {res.acompañantes >= res.max_acompanantes && (
-                  <p className="text-[8px] font-bold text-kalian-gold/60 uppercase mt-1">Límite alcanzado</p>
+                  <p className="text-[8px] font-bold text-kalian-gold/60 uppercase mt-1">{t('profile.limitReached')}</p>
                 )}
               </div>
               <div className="flex gap-2">
@@ -509,15 +511,15 @@ const PerfilSocio = () => {
             
             {!puedeAñadirInvitados(res) && !res.esCurso && (
               <p className="mt-4 text-[8px] font-black text-red-500/60 uppercase tracking-widest text-center">
-                Añadir invitados deshabilitado (faltan menos de 2h)
+                {t('profile.addGuestsDisabled')}
               </p>
             )}
-            
-            <button 
+
+            <button
               onClick={() => cancelarReserva(res)}
               className="mt-6 text-[9px] font-black uppercase text-red-500/40 hover:text-red-500 transition-colors tracking-widest"
             >
-              Cancelar Reserva
+              {t('profile.cancelReservation')}
             </button>
           </div>
         ))}
@@ -528,15 +530,15 @@ const PerfilSocio = () => {
         {historialReservas.length > 0 && (
           <section className="space-y-12">
             <div className="flex items-center gap-6">
-              <h2 className="text-3xl kalian-poster-text text-kalian-gold/40">HISTORIAL <span className="text-kalian-cream/40">PASADO</span></h2>
+              <h2 className="text-3xl kalian-poster-text text-kalian-gold/40">{t('profile.historyTitle')} <span className="text-kalian-cream/40">{t('profile.historyHighlight')}</span></h2>
               <div className="h-[1px] flex-1 bg-kalian-gold/10"></div>
             </div>
             <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-4 gap-6 opacity-60 grayscale">
               {historialReservas.map(res => (
                 <div key={res.id} className="bg-black/20 border border-kalian-gold/10 rounded-3xl p-6">
                   <p className="text-[8px] font-black text-kalian-gold/40 uppercase mb-2">{res.fechaActividad}</p>
-                  <h3 className="text-xl kalian-poster-text text-kalian-cream uppercase leading-none">{res.titulo}</h3>
-                  <p className="text-[8px] font-bold text-kalian-gold/20 mt-2 uppercase">Ticket: {res.id}</p>
+                  <h3 className="text-xl kalian-poster-text text-kalian-cream uppercase leading-none">{res.tituloEvento || res.titulo}</h3>
+                  <p className="text-[8px] font-bold text-kalian-gold/20 mt-2 uppercase">{t('profile.ticket')} {res.id}</p>
                 </div>
               ))}
             </div>

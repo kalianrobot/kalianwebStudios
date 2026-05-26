@@ -72,9 +72,16 @@ const AdminSolicitudes = () => {
     setLoading(true);
     try {
       const emailClean = sol.email.trim().toLowerCase();
-      const dniUpper = (sol.dni || "").toUpperCase();
+      const dniUpper = (sol.dni || "").toUpperCase().trim();
+      // B7: validar formato DNI / NIE español (8 dígitos + letra, o letra inicial X/Y/Z + 7 dígitos + letra)
+      const dniRe = /^[0-9XYZ][0-9]{7}[A-Z]$/;
       if (!dniUpper) {
         alert("Error: La solicitud de inscripción no tiene DNI");
+        setLoading(false);
+        return;
+      }
+      if (!dniRe.test(dniUpper)) {
+        alert("Error: El formato del DNI/NIE no es válido");
         setLoading(false);
         return;
       }

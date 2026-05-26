@@ -8,10 +8,12 @@ const AdminProfesores = () => {
   const [profesores, setProfesores] = useState<DocumentData[]>([]);
   const [msg, setMsg] = useState('');
   const [loading, setLoading] = useState(false);
-  const [form, setForm] = useState({ 
-    nombre: '', 
-    email: '', 
+  const [form, setForm] = useState({
+    nombre: '',
+    email: '',
     especialidad: '',
+    nombre_eu: '',
+    especialidad_eu: '',
     activo: true
   });
   const [editando, setEditando] = useState<string | null>(null);
@@ -110,7 +112,7 @@ const AdminProfesores = () => {
       }
       
       setTimeout(() => setMsg(''), 3000);
-      setForm({ nombre: '', email: '', especialidad: '', activo: true });
+      setForm({ nombre: '', email: '', especialidad: '', nombre_eu: '', especialidad_eu: '', activo: true });
       setEditando(null);
       fetchProfesores();
     } catch (err: any) { 
@@ -157,6 +159,8 @@ const AdminProfesores = () => {
           nombre: p.nombre,
           email: emailClean,
           especialidad: p.especialidad || '',
+          nombre_eu: p.nombre_eu || '',
+          especialidad_eu: p.especialidad_eu || '',
           activo: p.activo !== false,
           uid: realUid,
           fechaAlta: p.fechaAlta || new Date().toISOString()
@@ -196,9 +200,10 @@ const AdminProfesores = () => {
           <form onSubmit={guardar} className="bg-white p-10 rounded-[3rem] shadow-2xl space-y-5 h-fit border-t-[12px] border-indigo-600">
             <h2 className="text-xl font-black uppercase italic mb-4">{editando ? 'Editar Profesor' : 'Nuevo Profesor'}</h2>
             
-            <div className="space-y-1">
+            <div className="space-y-2">
               <label className="text-[9px] font-black uppercase text-slate-600 ml-4">Nombre Completo</label>
               <input type="text" placeholder="Nombre del profesor" className="w-full p-5 bg-slate-50 rounded-2xl outline-none border border-slate-200 text-slate-900" value={form.nombre} onChange={e => setForm({...form, nombre: e.target.value})} required />
+              <input type="text" placeholder="Izena (Euskera — opcional)" className="w-full p-4 bg-slate-50/50 rounded-2xl outline-none border border-slate-100 text-slate-500 text-sm" value={form.nombre_eu} onChange={e => setForm({...form, nombre_eu: e.target.value})} />
             </div>
 
             <div className="space-y-1">
@@ -214,9 +219,10 @@ const AdminProfesores = () => {
               />
             </div>
 
-            <div className="space-y-1">
+            <div className="space-y-2">
               <label className="text-[9px] font-black uppercase text-slate-600 ml-4">Especialidad</label>
               <input type="text" placeholder="ej: Guitarra, Baile Moderno..." className="w-full p-5 bg-slate-50 rounded-2xl outline-none border border-slate-200 text-slate-900" value={form.especialidad} onChange={e => setForm({...form, especialidad: e.target.value})} />
+              <input type="text" placeholder="Espezialitatea (Euskera — opcional)" className="w-full p-4 bg-slate-50/50 rounded-2xl outline-none border border-slate-100 text-slate-500 text-sm" value={form.especialidad_eu} onChange={e => setForm({...form, especialidad_eu: e.target.value})} />
             </div>
 
             <div className="flex gap-3">
@@ -231,7 +237,7 @@ const AdminProfesores = () => {
                   type="button"
                   onClick={() => {
                     setEditando(null);
-                    setForm({ nombre: '', email: '', especialidad: '', activo: true });
+                    setForm({ nombre: '', email: '', especialidad: '', nombre_eu: '', especialidad_eu: '', activo: true });
                   }}
                   className="bg-slate-200 text-slate-600 px-8 rounded-[2rem] font-black uppercase"
                 >Cancelar</button>
@@ -268,6 +274,8 @@ const AdminProfesores = () => {
                         nombre: p.nombre,
                         email: p.email,
                         especialidad: p.especialidad || '',
+                        nombre_eu: p.nombre_eu || '',
+                        especialidad_eu: p.especialidad_eu || '',
                         activo: p.activo !== false
                       });
                     }}

@@ -2,9 +2,11 @@ import React, { useEffect, useState } from 'react';
 import { Link, useNavigate, useLocation } from 'react-router-dom';
 import { KalianLogo } from '../components/public/KalianLogo';
 import { useAuth } from '../context/AuthContext';
+import { useLanguage } from '../context/LanguageContext';
 
 const LandingPage = () => {
   const { user, role, isAdmin, isTeacher, socioData, logoutSocio } = useAuth();
+  const { t } = useLanguage();
   const navigate = useNavigate();
   const location = useLocation();
   const [inactivoMsg, setInactivoMsg] = useState<string | null>(null);
@@ -27,9 +29,9 @@ const LandingPage = () => {
   };
 
   const getRoleName = () => {
-    if (role === 'admin') return 'ADMINISTRADOR';
-    if (role === 'teacher') return 'PROFESOR';
-    return 'SOCI@S';
+    if (role === 'admin') return t('landing.roleAdmin');
+    if (role === 'teacher') return t('landing.roleTeacher');
+    return t('landing.roleMember');
   };
 
   return (
@@ -65,7 +67,7 @@ const LandingPage = () => {
                 to="/programacion" 
                 className="text-xs font-black uppercase tracking-[0.3em] text-kalian-gold hover:text-white transition-colors flex items-center justify-center gap-2"
               >
-                <span>Acceder a la web pública aquí</span>
+                <span>{t('landing.publicAccess')}</span>
                 <span className="text-lg">→</span>
               </Link>
             </div>
@@ -77,18 +79,18 @@ const LandingPage = () => {
             KALIAN <span className="text-kalian-cream opacity-90">HKG</span>
           </h1>
           <p className="text-kalian-cream/60 text-sm md:text-lg font-bold tracking-[0.6em] uppercase italic">
-            Hiri Kultur Gunea
+            {t('landing.subtitle')}
           </p>
         </div>
 
         {user ? (
           <div className="pt-12 space-y-8 animate-in fade-in zoom-in duration-700">
             <div className="space-y-2">
-              <p className="text-kalian-gold/60 text-[10px] font-black uppercase tracking-[0.4em]">Sesión iniciada como</p>
+              <p className="text-kalian-gold/60 text-[10px] font-black uppercase tracking-[0.4em]">{t('landing.sessionAs')}</p>
               <p className="text-kalian-cream text-2xl kalian-poster-text tracking-widest">
-                {isAdmin && 'ADMINISTRADOR '}
-                {isTeacher && 'PROFESOR '}
-                {socioData && 'SOCI@S'}
+                {isAdmin && `${t('landing.roleAdmin')} `}
+                {isTeacher && `${t('landing.roleTeacher')} `}
+                {socioData && t('landing.roleMember')}
               </p>
               <p className="text-kalian-gold/30 text-[9px] font-mono">{user.email}</p>
             </div>
@@ -100,7 +102,7 @@ const LandingPage = () => {
                     onClick={() => navigate('/staff')}
                     className="bg-indigo-600 text-white px-8 py-4 rounded-2xl kalian-poster-text text-lg tracking-[0.2em] hover:bg-white hover:text-indigo-600 transition-all shadow-2xl shadow-indigo-600/20"
                   >
-                    PANEL ADMIN →
+                    {t('landing.adminPanel')}
                   </button>
                 )}
                 {isTeacher && (
@@ -108,7 +110,7 @@ const LandingPage = () => {
                     onClick={() => navigate('/profesor')}
                     className="bg-emerald-600 text-white px-8 py-4 rounded-2xl kalian-poster-text text-lg tracking-[0.2em] hover:bg-white hover:text-emerald-600 transition-all shadow-2xl shadow-emerald-600/20"
                   >
-                    PANEL PROFESOR →
+                    {t('landing.teacherPanel')}
                   </button>
                 )}
                 {socioData && (
@@ -116,7 +118,7 @@ const LandingPage = () => {
                     onClick={() => navigate('/home')}
                     className="bg-kalian-gold text-black px-8 py-4 rounded-2xl kalian-poster-text text-lg tracking-[0.2em] hover:bg-white transition-all shadow-2xl shadow-kalian-gold/20"
                   >
-                    PANEL SOCI@S →
+                    {t('landing.memberPanel')}
                   </button>
                 )}
               </div>
@@ -125,7 +127,7 @@ const LandingPage = () => {
                 onClick={() => logoutSocio()}
                 className="mt-4 text-kalian-cream/40 hover:text-red-400 text-[10px] font-black uppercase tracking-[0.3em] transition-colors border-b border-transparent hover:border-red-400/40 pb-1"
               >
-                Cerrar Sesión / Cambiar Cuenta
+                {t('landing.logoutSwitch')}
               </button>
             </div>
           </div>
@@ -137,7 +139,7 @@ const LandingPage = () => {
               className="group flex flex-col items-center gap-3"
             >
               <span className="text-kalian-cream/50 group-hover:text-kalian-gold font-black uppercase tracking-[0.4em] text-[10px] transition-all duration-500">
-                Acceso Soci@s
+                {t('landing.memberAccess')}
               </span>
               <div className="w-8 group-hover:w-24 h-[2px] bg-kalian-gold transition-all duration-700 ease-in-out"></div>
             </Link>
@@ -149,7 +151,7 @@ const LandingPage = () => {
               className="group flex flex-col items-center gap-3"
             >
               <span className="text-kalian-cream/50 group-hover:text-kalian-cream font-black uppercase tracking-[0.4em] text-[10px] transition-all duration-500">
-                Profesores
+                {t('landing.teachers')}
               </span>
               <div className="w-8 group-hover:w-24 h-[2px] bg-kalian-cream/30 transition-all duration-700 ease-in-out"></div>
             </Link>
@@ -161,7 +163,7 @@ const LandingPage = () => {
               className="group flex flex-col items-center gap-3"
             >
               <span className="text-kalian-cream/50 group-hover:text-kalian-cream font-black uppercase tracking-[0.4em] text-[10px] transition-all duration-500">
-                Staff
+                {t('landing.staff')}
               </span>
               <div className="w-8 group-hover:w-24 h-[2px] bg-kalian-cream/30 transition-all duration-700 ease-in-out"></div>
             </Link>
@@ -177,7 +179,7 @@ const LandingPage = () => {
           <div className="w-12 h-[1px] bg-kalian-gold"></div>
         </div>
         <p className="text-kalian-gold/20 text-[9px] font-black uppercase tracking-[1em]">
-          ASOCIACIÓN CULTURAL
+          {t('landing.culturalAssociation')}
         </p>
       </div>
     </div>

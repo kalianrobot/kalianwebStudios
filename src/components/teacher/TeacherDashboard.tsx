@@ -3,6 +3,7 @@ import { db, storage } from '../../firebase';
 import { collection, getDocs, updateDoc, doc, query, orderBy, DocumentData, where, setDoc, getDoc, getDocsFromServer, arrayUnion, arrayRemove, increment, writeBatch, collectionGroup, deleteDoc, serverTimestamp, onSnapshot } from 'firebase/firestore';
 import { ref, uploadBytes, getDownloadURL, deleteObject } from 'firebase/storage';
 import { useAuth } from '../../context/AuthContext';
+import { useLanguage } from '../../context/LanguageContext';
 import { Link } from 'react-router-dom';
 import { registrarIngreso, MetodoPago } from '../../lib/finanzas';
 import { syncSocioStatus } from '../../lib/socioService';
@@ -30,6 +31,7 @@ const TeacherDashboard = () => {
   const [notificaciones, setNotificaciones] = useState<DocumentData[]>([]);
   const [showNotifs, setShowNotifs] = useState(false);
   const { user, socioData, logoutTeacher } = useAuth();
+  const { t } = useLanguage();
 
   const mesActual = new Date().getMonth() + 1;
   const anioActual = new Date().getFullYear();
@@ -151,7 +153,7 @@ const TeacherDashboard = () => {
         
         if (snap.exists()) {
           if (snap.data().bloqueado && socioData?.role !== 'admin') {
-            alert("⚠️ Este pago está bloqueado. Solo un administrador puede revertirlo.");
+            alert(t('teacher.paymentLocked'));
             return;
           }
 
@@ -173,7 +175,7 @@ const TeacherDashboard = () => {
 
           await batch.commit();
           await syncSocioStatus(socioId);
-          setMsg("⚠️ Pago revertido (movido a papelera)");
+          setMsg(t('teacher.paymentReversed'));
           setTimeout(() => setMsg(''), 3000);
         }
       } else if (tipo === 'inscripcion' && cursoId) {
@@ -233,7 +235,7 @@ const TeacherDashboard = () => {
 
       await registrarIngreso({
         monto: 15,
-        concepto: `Cuota Soci@ ${meses[mesActual-1]} ${anioActual}`,
+        concepto: `Cuota Soci@ ${mesesES[mesActual-1]} ${anioActual}`,
         categoria: 'Socio',
         metodo: metodoPago,
         socio_id: socioId,
@@ -245,11 +247,11 @@ const TeacherDashboard = () => {
 
       setShowConfirmModal(false);
       setConfirmingPago(null);
-      setMsg("✅ Pago registrado y bloqueado");
+      setMsg(t('teacher.paymentRegistered'));
       setTimeout(() => setMsg(''), 3000);
     } catch (err) {
       console.error(err);
-      alert("Error al procesar el pago");
+      alert(t('teacher.paymentError'));
     }
   };
 
@@ -259,7 +261,7 @@ const TeacherDashboard = () => {
     // 1. Validación de tamaño individual (20MB)
     const LIMITE_ARCHIVO = 20 * 1024 * 1024; // 20MB
     if (archivo.size > LIMITE_ARCHIVO) {
-      alert("❌ El archivo es demasiado grande. El límite es 20MB.");
+      alert(t('teacher.fileTooLarge'));
       return;
     }
 
@@ -272,7 +274,7 @@ const TeacherDashboard = () => {
       const totalActual = metaSnap.exists() ? metaSnap.data().totalBytes || 0 : 0;
 
       if (totalActual + archivo.size > LIMITE_TOTAL) {
-        alert("❌ No hay espacio suficiente en el servidor (Límite 5GB alcanzado). Contacta con el administrador.");
+        alert(t('teacher.storageFullError'));
         setSubiendo(false);
         return;
       }
@@ -303,17 +305,17 @@ const TeacherDashboard = () => {
 
       setArchivo(null);
       fetchStorageUsage();
-      alert("✅ Documento subido con éxito");
+      alert(t('teacher.docUploaded'));
     } catch (err) {
       console.error(err);
-      alert("Error al subir documento");
+      alert(t('teacher.docUploadError'));
     } finally {
       setSubiendo(false);
     }
   };
 
   const eliminarDocumento = async (cursoId: string, documento: any) => {
-    if (!window.confirm("¿Seguro que quieres eliminar este documento?")) return;
+    if (!window.confirm(t('teacher.confirmDeleteDoc'))) return;
     try {
       const storageRef = ref(storage, documento.path);
       await deleteObject(storageRef);
@@ -331,11 +333,11 @@ const TeacherDashboard = () => {
       fetchStorageUsage();
     } catch (err) {
       console.error(err);
-      alert("Error al eliminar");
+      alert(t('teacher.deleteError'));
     }
   };
 
-  const meses = ["Enero", "Febrero", "Marzo", "Abril", "Mayo", "Junio", "Julio", "Agosto", "Septiembre", "Octubre", "Noviembre", "Diciembre"];
+  const mesesES = ["Enero","Febrero","Marzo","Abril","Mayo","Junio","Julio","Agosto","Septiembre","Octubre","Noviembre","Diciembre"];
 
   const fetchSesiones = async (cursoId: string) => {
     const snap = await getDocs(query(collection(db, "cursos", cursoId, "sesiones"), orderBy("fecha", "asc")));
@@ -425,19 +427,19 @@ const TeacherDashboard = () => {
       });
 
       await batch.commit();
-      setMsg(`✅ ${sesionesAGuardar.length} sesiones añadidas`);
+      setMsg(t('teacher.sessionsAdded', { n: sesionesAGuardar.length }));
       setNuevaSesion({ fecha: '', hora_inicio: '', hora_fin: '', sala: 'SALA GRANDE', esRecurrente: false, diasSemana: [] });
       fetchSesiones(gestionandoSesiones);
       setTimeout(() => setMsg(''), 3000);
-    } catch (err) { 
+    } catch (err) {
       console.error(err);
-      alert("Error al guardar sesiones"); 
+      alert(t('teacher.saveSessionError'));
     }
   };
 
   const eliminarSesion = async (sesionId: string) => {
     if (!gestionandoSesiones) return;
-    if (window.confirm("¿Eliminar esta sesión?")) {
+    if (window.confirm(t('teacher.confirmDeleteSession'))) {
       await deleteDoc(doc(db, "cursos", gestionandoSesiones, "sesiones", sesionId));
       fetchSesiones(gestionandoSesiones);
     }
@@ -460,15 +462,15 @@ const TeacherDashboard = () => {
       <div className="max-w-6xl mx-auto">
         <header className="mb-12 flex justify-between items-end">
           <div>
-            <h1 className="text-6xl kalian-poster-text text-kalian-gold tracking-tight uppercase italic leading-none">PANEL <span className="text-kalian-cream">PROFESORES</span></h1>
+            <h1 className="text-6xl kalian-poster-text text-kalian-gold tracking-tight uppercase italic leading-none">{t('teacher.panelTitle')} <span className="text-kalian-cream">{t('teacher.panelHighlight')}</span></h1>
             {msg && <div className="bg-emerald-500 text-white p-3 rounded-xl mt-4 font-bold text-center animate-bounce text-[10px] uppercase tracking-widest">{msg}</div>}
-            <p className="text-[10px] text-kalian-gold/40 font-black uppercase tracking-[0.4em] mt-4 ml-4">Gestión de Cursos y Pagos - {meses[mesActual-1]} {anioActual}</p>
+            <p className="text-[10px] text-kalian-gold/40 font-black uppercase tracking-[0.4em] mt-4 ml-4">{t('teacher.managementSubtitle')} - {t(`month.${mesActual}`)} {anioActual}</p>
             {user && <p className="text-[8px] text-kalian-gold/20 font-mono mt-2 ml-4">ID: {user.uid}</p>}
             
             {/* Barra de Almacenamiento */}
             <div className="mt-6 ml-4 max-w-xs">
               <div className="flex justify-between items-center mb-2">
-                <span className="text-[8px] font-black uppercase text-kalian-gold/40 tracking-widest">Almacenamiento: {usageMB}MB / 5000MB</span>
+                <span className="text-[8px] font-black uppercase text-kalian-gold/40 tracking-widest">{t('teacher.storage')}: {usageMB}MB / 5000MB</span>
                 <span className="text-[8px] font-black text-kalian-gold/40">{usagePercent.toFixed(1)}%</span>
               </div>
               <div className="h-1.5 w-full bg-kalian-gold/5 rounded-full overflow-hidden border border-kalian-gold/10">
@@ -491,12 +493,12 @@ const TeacherDashboard = () => {
               {showNotifs && (
                 <div className="absolute right-0 mt-4 w-80 bg-kalian-dark border border-kalian-gold/20 rounded-2xl shadow-2xl z-[60] overflow-hidden animate-in fade-in slide-in-from-top-2 duration-300">
                   <div className="p-4 bg-black/40 border-b border-kalian-gold/10 flex justify-between items-center">
-                    <h4 className="text-[10px] font-black uppercase text-kalian-gold tracking-widest">Notificaciones</h4>
+                    <h4 className="text-[10px] font-black uppercase text-kalian-gold tracking-widest">{t('teacher.notifications')}</h4>
                     <button onClick={() => setShowNotifs(false)} className="text-kalian-gold/40 hover:text-white">×</button>
                   </div>
                   <div className="max-h-64 overflow-y-auto custom-scrollbar">
                     {notificaciones.length === 0 ? (
-                      <p className="p-8 text-center text-[10px] text-kalian-gold/20 font-black uppercase tracking-widest italic">No hay notificaciones</p>
+                      <p className="p-8 text-center text-[10px] text-kalian-gold/20 font-black uppercase tracking-widest italic">{t('teacher.noNotifications')}</p>
                     ) : (
                       notificaciones.map(n => (
                         <div key={n.id} className={`p-4 border-b border-kalian-gold/5 hover:bg-kalian-gold/5 transition-all ${!n.leida ? 'bg-kalian-gold/5' : ''}`}>
@@ -506,9 +508,9 @@ const TeacherDashboard = () => {
                           </div>
                           <p className="text-[9px] text-kalian-gold/60 leading-relaxed mb-2">{n.mensaje}</p>
                           <div className="flex justify-between items-center">
-                            <p className="text-[7px] text-kalian-gold/20 font-mono">{n.fecha?.toDate?.().toLocaleString() || 'Reciente'}</p>
+                            <p className="text-[7px] text-kalian-gold/20 font-mono">{n.fecha?.toDate?.().toLocaleString() || t('teacher.recent')}</p>
                             {!n.leida && (
-                              <button onClick={() => marcarLeida(n.id)} className="text-[8px] font-black uppercase text-kalian-gold hover:text-white transition-colors">Marcar leída</button>
+                              <button onClick={() => marcarLeida(n.id)} className="text-[8px] font-black uppercase text-kalian-gold hover:text-white transition-colors">{t('teacher.markRead')}</button>
                             )}
                           </div>
                         </div>
@@ -522,31 +524,31 @@ const TeacherDashboard = () => {
               onClick={() => setView(view === 'list' ? 'calendar' : 'list')}
               className="bg-kalian-gold text-black px-6 py-3 rounded-xl font-black text-[10px] uppercase tracking-widest hover:bg-white transition-all shadow-lg shadow-kalian-gold/20"
             >
-              {view === 'list' ? '📅 Ver Calendario' : '📋 Ver Lista'}
+              {view === 'list' ? t('teacher.viewCalendar') : t('teacher.viewList')}
             </button>
             <button 
               onClick={() => { fetchStorageUsage(); }}
               className="bg-kalian-gold/5 text-kalian-gold/40 px-4 py-3 rounded-xl font-black text-[10px] uppercase tracking-widest hover:text-kalian-gold transition-all"
             >
-              🔄 Refrescar
+              {t('teacher.refresh')}
             </button>
           </div>
         </header>
 
         {loading ? (
-          <div className="text-center py-20 text-kalian-gold/40 font-black uppercase tracking-widest animate-pulse">Cargando tus cursos...</div>
+          <div className="text-center py-20 text-kalian-gold/40 font-black uppercase tracking-widest animate-pulse">{t('teacher.loadingCourses')}</div>
         ) : view === 'calendar' ? (
           <div className="animate-in fade-in zoom-in-95 duration-500 space-y-6">
             <div className="flex justify-between items-center bg-black/40 p-6 rounded-[2rem] border border-kalian-gold/10">
               <div>
-                <h2 className="text-2xl kalian-poster-text text-kalian-gold uppercase italic leading-none">Calendario de Clases</h2>
-                <p className="text-[10px] text-kalian-gold/40 font-black uppercase tracking-widest mt-2">Haz clic en un día para añadir sesiones o arrastra para moverlas</p>
+                <h2 className="text-2xl kalian-poster-text text-kalian-gold uppercase italic leading-none">{t('teacher.classCalendar')}</h2>
+                <p className="text-[10px] text-kalian-gold/40 font-black uppercase tracking-widest mt-2">{t('teacher.calendarHint')}</p>
               </div>
               <button 
                 onClick={() => setView('list')}
                 className="bg-kalian-gold/10 text-kalian-gold px-6 py-3 rounded-xl text-[10px] font-black uppercase tracking-widest hover:bg-kalian-gold/20 transition-all border border-kalian-gold/20"
               >
-                Volver a Lista
+                {t('teacher.backToList')}
               </button>
             </div>
             <KalianCalendar teacherMode={true} />
@@ -555,7 +557,7 @@ const TeacherDashboard = () => {
           <div className="grid lg:grid-cols-3 gap-8">
             {/* LISTA DE CURSOS */}
             <div className="lg:col-span-1 space-y-4">
-              <h2 className="text-xl kalian-poster-text text-kalian-gold/40 uppercase tracking-widest mb-6 ml-4 italic">Mis Cursos</h2>
+              <h2 className="text-xl kalian-poster-text text-kalian-gold/40 uppercase tracking-widest mb-6 ml-4 italic">{t('teacher.myCourses')}</h2>
               {cursos.map(c => (
                 <div 
                   key={c.id} 
@@ -568,14 +570,14 @@ const TeacherDashboard = () => {
                   </p>
                   <div className="mt-4 flex flex-wrap gap-2 justify-between items-center">
                     <span className={`text-[10px] font-black uppercase tracking-widest ${c.aforo_disponible !== false ? 'text-emerald-500' : 'text-red-500'}`}>
-                      {c.aforo_disponible !== false ? 'Plazas Libres' : 'Sin Plazas'}
+                      {c.aforo_disponible !== false ? t('teacher.seatsAvail') : t('teacher.noSeats')}
                     </span>
                     <div className="flex gap-2">
-                      <button 
+                      <button
                         onClick={(e) => { e.stopPropagation(); toggleAforo(c.id, c.aforo_disponible !== false); }}
                         className="bg-kalian-gold/10 text-kalian-gold px-3 py-2 rounded-xl text-[8px] font-black uppercase tracking-widest hover:bg-kalian-gold/20 transition-all"
                       >
-                        {c.aforo_disponible !== false ? 'Cerrar' : 'Abrir'}
+                        {c.aforo_disponible !== false ? t('teacher.closeCapacity') : t('teacher.openCapacity')}
                       </button>
                       <button 
                         onClick={(e) => { 
@@ -592,7 +594,7 @@ const TeacherDashboard = () => {
               ))}
               {cursos.length === 0 && (
                 <div className="bg-black/20 p-10 rounded-[2.5rem] text-center border border-dashed border-kalian-gold/10">
-                  <p className="text-kalian-gold/20 font-black uppercase tracking-widest italic text-xs">No tienes cursos asignados</p>
+                  <p className="text-kalian-gold/20 font-black uppercase tracking-widest italic text-xs">{t('teacher.noCourses')}</p>
                 </div>
               )}
             </div>
@@ -604,31 +606,31 @@ const TeacherDashboard = () => {
                   <div className="flex justify-between items-start mb-10">
                     <div>
                       <h2 className="text-4xl kalian-poster-text text-kalian-gold uppercase italic leading-none">{cursoSeleccionado.titulo}</h2>
-                      <p className="text-[10px] text-kalian-gold/40 font-black uppercase tracking-[0.4em] mt-3 ml-4">Control de Asistencia y Pagos</p>
+                      <p className="text-[10px] text-kalian-gold/40 font-black uppercase tracking-[0.4em] mt-3 ml-4">{t('teacher.attendanceControl')}</p>
                     </div>
                     <div className="flex flex-col items-end gap-2">
                       <div className="flex items-center gap-3 bg-black/20 px-4 py-2 rounded-xl border border-kalian-gold/10">
-                        <p className="text-[8px] font-black text-kalian-gold/40 uppercase tracking-widest">Método Cobro:</p>
-                        <select 
+                        <p className="text-[8px] font-black text-kalian-gold/40 uppercase tracking-widest">{t('teacher.paymentMethod')}</p>
+                        <select
                           value={metodoPago}
                           onChange={(e) => setMetodoPago(e.target.value as MetodoPago)}
                           className="bg-transparent text-[10px] text-kalian-gold font-bold outline-none cursor-pointer"
                         >
-                          <option value="Efectivo">Efectivo</option>
-                          <option value="Tarjeta">Tarjeta</option>
-                          <option value="Transferencia">Transferencia</option>
+                          <option value="Efectivo">{t('teacher.cash')}</option>
+                          <option value="Tarjeta">{t('teacher.card')}</option>
+                          <option value="Transferencia">{t('teacher.transfer')}</option>
                         </select>
                       </div>
                       <div className="text-right">
                         <p className="text-3xl kalian-poster-text text-kalian-cream leading-none">{cursoSeleccionado.alumnos?.length || 0}</p>
-                        <p className="text-[8px] font-black text-kalian-gold/20 uppercase tracking-widest">Alumnos</p>
+                        <p className="text-[8px] font-black text-kalian-gold/20 uppercase tracking-widest">{t('teacher.students')}</p>
                       </div>
                     </div>
                   </div>
 
                   {/* GESTIÓN DE DOCUMENTOS */}
                   <div className="mb-12 bg-kalian-gold/5 p-8 rounded-[2rem] border border-kalian-gold/10">
-                    <h3 className="text-sm font-black uppercase tracking-widest text-kalian-gold mb-6 italic">Documentos del Curso</h3>
+                    <h3 className="text-sm font-black uppercase tracking-widest text-kalian-gold mb-6 italic">{t('teacher.courseDocs')}</h3>
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
                       {cursoSeleccionado.documentos?.map((doc: any, idx: number) => (
                         <div key={idx} className="flex justify-between items-center bg-black/40 p-4 rounded-xl border border-kalian-gold/10 group">
@@ -646,7 +648,7 @@ const TeacherDashboard = () => {
                         </div>
                       ))}
                       {(!cursoSeleccionado.documentos || cursoSeleccionado.documentos.length === 0) && (
-                        <p className="col-span-full text-[10px] text-kalian-gold/20 font-black uppercase tracking-widest text-center py-4 italic">No hay documentos subidos</p>
+                        <p className="col-span-full text-[10px] text-kalian-gold/20 font-black uppercase tracking-widest text-center py-4 italic">{t('teacher.noDocs')}</p>
                       )}
                     </div>
                     
@@ -661,16 +663,16 @@ const TeacherDashboard = () => {
                         disabled={!archivo || subiendo}
                         className="bg-kalian-gold text-black px-6 py-3 rounded-xl font-black text-[10px] uppercase tracking-widest hover:bg-white transition-all disabled:opacity-30"
                       >
-                        {subiendo ? 'Subiendo...' : 'Subir Documento'}
+                        {subiendo ? t('teacher.uploading') : t('teacher.uploadDoc')}
                       </button>
                     </div>
                   </div>
 
                     <div className="space-y-3">
                       <div className="grid grid-cols-12 gap-4 px-6 py-3 text-[9px] font-black text-kalian-gold/80 uppercase tracking-widest border-b border-kalian-gold/10">
-                        <div className="col-span-6">Alumno</div>
-                        <div className="col-span-3 text-center">Aportación Kalian {meses[mesActual-1]}</div>
-                        <div className="col-span-3 text-center">Inscripción Curso</div>
+                        <div className="col-span-6">{t('teacher.student')}</div>
+                        <div className="col-span-3 text-center">{t('teacher.monthlyKalian')} {t(`month.${mesActual}`)}</div>
+                        <div className="col-span-3 text-center">{t('teacher.courseEnrollment')}</div>
                       </div>
 
                       {alumnosDetalles.map((alumno: any, idx: number) => {
@@ -685,7 +687,7 @@ const TeacherDashboard = () => {
                               <p className="font-black text-kalian-cream uppercase italic group-hover:text-kalian-gold transition-colors">{alumno.nombre}</p>
                               <p className="text-[8px] text-kalian-gold/60 font-bold tracking-widest mt-1">{alumno.dni}</p>
                               {cubiertoPorLocal && (
-                                <p className="text-[7px] font-black text-emerald-500 uppercase tracking-widest mt-1">Cuota cubierta por Local</p>
+                                <p className="text-[7px] font-black text-emerald-500 uppercase tracking-widest mt-1">{t('teacher.coveredByLocal')}</p>
                               )}
                             </div>
                             <div className="col-span-3 flex flex-col items-center gap-1">
@@ -697,7 +699,7 @@ const TeacherDashboard = () => {
                                 {pagoM.pagado ? '✓' : ''}
                               </button>
                               {bloqueado && pagoM.pagado && (
-                                <span className="text-[7px] font-black text-emerald-500/60 uppercase tracking-tighter">Saldado</span>
+                                <span className="text-[7px] font-black text-emerald-500/60 uppercase tracking-tighter">{t('teacher.settled')}</span>
                               )}
                             </div>
                             <div className="col-span-3 flex justify-center">
@@ -714,7 +716,7 @@ const TeacherDashboard = () => {
 
                       {alumnosDetalles.length === 0 && (
                         <div className="py-20 text-center">
-                          <p className="text-kalian-gold/20 font-black uppercase tracking-widest italic text-xs">No hay alumnos inscritos en este curso</p>
+                          <p className="text-kalian-gold/20 font-black uppercase tracking-widest italic text-xs">{t('teacher.noStudents')}</p>
                         </div>
                       )}
                     </div>
@@ -722,9 +724,9 @@ const TeacherDashboard = () => {
               ) : (
                 <div className="h-full flex flex-col items-center justify-center bg-black/20 rounded-[3rem] border border-dashed border-kalian-gold/10 p-20 text-center">
                   <div className="text-6xl mb-8 opacity-20">📋</div>
-                  <h3 className="text-2xl kalian-poster-text text-kalian-gold/40 uppercase italic mb-4">Selecciona un curso</h3>
+                  <h3 className="text-2xl kalian-poster-text text-kalian-gold/40 uppercase italic mb-4">{t('teacher.selectCourse')}</h3>
                   <p className="text-[10px] text-kalian-gold/20 font-black uppercase tracking-widest max-w-xs">
-                    Elige un curso de la lista de la izquierda para gestionar los alumnos y sus pagos mensuales.
+                    {t('teacher.selectCourseHint')}
                   </p>
                 </div>
               )}
@@ -740,12 +742,12 @@ const TeacherDashboard = () => {
                 💰
               </div>
               <div className="space-y-4">
-                <h3 className="text-2xl kalian-poster-text text-kalian-gold uppercase italic">Confirmar Aportación</h3>
+                <h3 className="text-2xl kalian-poster-text text-kalian-gold uppercase italic">{t('teacher.confirmContrib')}</h3>
                 <p className="text-sm text-kalian-cream/70 leading-relaxed">
-                  El alumno <span className="text-kalian-gold font-black">{confirmingPago.nombre}</span> ha realizado la aportación a Kalian.
+                  {t('teacher.contribConfirmMsg', { nombre: confirmingPago.nombre })}
                 </p>
                 <p className="text-[10px] font-black text-kalian-gold/40 uppercase tracking-widest">
-                  ¿Quieres bloquear este campo para el mes en curso y evitar errores accidentales?
+                  {t('teacher.lockConfirmMsg')}
                 </p>
               </div>
               <div className="flex flex-col gap-3">
@@ -753,13 +755,13 @@ const TeacherDashboard = () => {
                   onClick={ejecutarPagoConfirmado}
                   className="w-full bg-kalian-gold text-black py-5 rounded-2xl kalian-poster-text text-lg tracking-widest hover:bg-white transition-all shadow-xl shadow-kalian-gold/20"
                 >
-                  SÍ, BLOQUÉALO
+                  {t('teacher.confirmLock')}
                 </button>
                 <button 
                   onClick={() => { setShowConfirmModal(false); setConfirmingPago(null); }}
                   className="w-full py-5 text-kalian-gold/40 font-black uppercase text-[10px] tracking-widest hover:text-white transition-colors"
                 >
-                  CANCELAR
+                  {t('teacher.cancel')}
                 </button>
               </div>
             </div>
@@ -772,7 +774,7 @@ const TeacherDashboard = () => {
             <div className="bg-kalian-dark w-full max-w-2xl rounded-[3rem] shadow-2xl overflow-hidden flex flex-col max-h-[90vh] border border-kalian-gold/20">
               <div className="p-8 bg-black/40 text-white flex justify-between items-center border-b border-kalian-gold/10">
                 <div>
-                  <h3 className="text-2xl kalian-poster-text text-kalian-gold uppercase italic">Gestionar Sesiones</h3>
+                  <h3 className="text-2xl kalian-poster-text text-kalian-gold uppercase italic">{t('teacher.manageSessions')}</h3>
                   <p className="text-[10px] font-black text-kalian-gold/40 uppercase tracking-widest mt-1">
                     {cursos.find(c => c.id === gestionandoSesiones)?.titulo}
                   </p>
@@ -783,10 +785,10 @@ const TeacherDashboard = () => {
               <div className="p-8 overflow-y-auto space-y-8 custom-scrollbar">
                 {/* Formulario Nueva Sesión */}
                 <form onSubmit={guardarSesion} className="bg-kalian-gold/5 p-8 rounded-[2rem] border border-kalian-gold/10 space-y-6">
-                  <h4 className="text-[10px] font-black uppercase text-kalian-gold/60 tracking-[0.3em] italic">Añadir Nueva Sesión</h4>
+                  <h4 className="text-[10px] font-black uppercase text-kalian-gold/60 tracking-[0.3em] italic">{t('teacher.addNewSession')}</h4>
                   <div className="grid grid-cols-2 gap-6">
                     <div className="space-y-2">
-                      <label className="text-[8px] font-black uppercase text-kalian-gold/40 ml-2 tracking-widest">Fecha</label>
+                      <label className="text-[8px] font-black uppercase text-kalian-gold/40 ml-2 tracking-widest">{t('teacher.dateLabel')}</label>
                       <input 
                         type="date" 
                         className="w-full p-4 bg-black/40 rounded-xl text-xs border border-kalian-gold/20 text-kalian-cream outline-none focus:border-kalian-gold/50 transition-all"
@@ -796,7 +798,7 @@ const TeacherDashboard = () => {
                       />
                     </div>
                     <div className="space-y-2">
-                      <label className="text-[8px] font-black uppercase text-kalian-gold/40 ml-2 tracking-widest">Sala</label>
+                      <label className="text-[8px] font-black uppercase text-kalian-gold/40 ml-2 tracking-widest">{t('teacher.roomLabel')}</label>
                       <select 
                         className="w-full p-4 bg-black/40 rounded-xl text-xs border border-kalian-gold/20 text-kalian-cream outline-none focus:border-kalian-gold/50 transition-all uppercase font-black"
                         value={nuevaSesion.sala}
@@ -810,7 +812,7 @@ const TeacherDashboard = () => {
                   </div>
                   <div className="grid grid-cols-2 gap-6">
                     <div className="space-y-2">
-                      <label className="text-[8px] font-black uppercase text-kalian-gold/40 ml-2 tracking-widest">Hora Inicio</label>
+                      <label className="text-[8px] font-black uppercase text-kalian-gold/40 ml-2 tracking-widest">{t('teacher.startTime')}</label>
                       <input 
                         type="time" 
                         className="w-full p-4 bg-black/40 rounded-xl text-xs border border-kalian-gold/20 text-kalian-cream outline-none focus:border-kalian-gold/50 transition-all"
@@ -820,7 +822,7 @@ const TeacherDashboard = () => {
                       />
                     </div>
                     <div className="space-y-2">
-                      <label className="text-[8px] font-black uppercase text-kalian-gold/40 ml-2 tracking-widest">Hora Fin</label>
+                      <label className="text-[8px] font-black uppercase text-kalian-gold/40 ml-2 tracking-widest">{t('teacher.endTime')}</label>
                       <input 
                         type="time" 
                         className="w-full p-4 bg-black/40 rounded-xl text-xs border border-kalian-gold/20 text-kalian-cream outline-none focus:border-kalian-gold/50 transition-all"
@@ -840,13 +842,13 @@ const TeacherDashboard = () => {
                       onChange={e => setNuevaSesion({...nuevaSesion, esRecurrente: e.target.checked})}
                     />
                     <label htmlFor="recurrente-teacher" className="text-[10px] font-black uppercase text-kalian-gold/60 cursor-pointer tracking-widest">
-                      ¿Es una clase recurrente?
+                      {t('teacher.isRecurrent')}
                     </label>
                   </div>
 
                   {nuevaSesion.esRecurrente && (
                     <div className="space-y-4 bg-kalian-gold/5 p-6 rounded-[2rem] border border-kalian-gold/10 animate-in fade-in zoom-in-95 duration-300">
-                      <p className="text-[9px] font-black text-kalian-gold/60 uppercase tracking-[0.2em] mb-4">Selecciona los días de repetición:</p>
+                      <p className="text-[9px] font-black text-kalian-gold/60 uppercase tracking-[0.2em] mb-4">{t('teacher.selectDays')}</p>
                       <div className="flex flex-wrap gap-2">
                         {[
                           { id: 1, label: 'L' },
@@ -881,34 +883,34 @@ const TeacherDashboard = () => {
                         ))}
                       </div>
                       <p className="text-[8px] font-black text-kalian-gold/40 uppercase tracking-[0.2em] leading-relaxed mt-4">
-                        🔄 Repetir semanalmente hasta el <span className="text-kalian-cream">{cursos.find(c => c.id === gestionandoSesiones)?.fechaFin}</span>
+                        {t('teacher.repeatUntil', { date: cursos.find(c => c.id === gestionandoSesiones)?.fechaFin || '' })}
                       </p>
                     </div>
                   )}
 
                   {conflictos.length > 0 && (
                     <div className="bg-red-500/10 p-5 rounded-2xl border border-red-500/20 animate-in shake-1 duration-500">
-                      <p className="text-[9px] font-black text-red-500 uppercase mb-3 tracking-widest">⚠️ Conflictos detectados en:</p>
+                      <p className="text-[9px] font-black text-red-500 uppercase mb-3 tracking-widest">{t('teacher.conflictsDetected')}</p>
                       <div className="flex flex-wrap gap-2">
                         {conflictos.map(f => (
                           <span key={f} className="bg-red-500/20 text-red-200 px-3 py-1.5 rounded-lg text-[8px] font-mono border border-red-500/30">{f}</span>
                         ))}
                       </div>
-                      <p className="text-[8px] text-red-500/60 mt-3 italic">No se puede crear la serie si hay choques de horario o sala.</p>
+                      <p className="text-[8px] text-red-500/60 mt-3 italic">{t('teacher.conflictsHint')}</p>
                     </div>
                   )}
 
                   <button className="w-full bg-kalian-gold text-black p-5 rounded-2xl font-black uppercase text-[10px] tracking-[0.3em] shadow-2xl shadow-kalian-gold/20 hover:bg-white transition-all active:scale-95">
-                    {nuevaSesion.esRecurrente ? 'Generar Serie de Clases' : 'Añadir Sesión al Calendario'}
+                    {nuevaSesion.esRecurrente ? t('teacher.generateSeries') : t('teacher.addSession')}
                   </button>
                 </form>
 
                 {/* Listado de Sesiones */}
                 <div className="space-y-4">
-                  <h4 className="text-[10px] font-black uppercase text-kalian-gold/40 tracking-[0.3em] ml-4 italic">Sesiones Programadas</h4>
+                  <h4 className="text-[10px] font-black uppercase text-kalian-gold/40 tracking-[0.3em] ml-4 italic">{t('teacher.scheduledSessions')}</h4>
                   {sesiones.length === 0 ? (
                     <div className="bg-black/20 p-12 rounded-[2rem] text-center border border-dashed border-kalian-gold/10">
-                      <p className="text-kalian-gold/20 font-black uppercase tracking-widest italic text-xs">No hay sesiones programadas aún</p>
+                      <p className="text-kalian-gold/20 font-black uppercase tracking-widest italic text-xs">{t('teacher.noSessions')}</p>
                     </div>
                   ) : (
                     <div className="grid gap-3">
@@ -916,7 +918,7 @@ const TeacherDashboard = () => {
                         <div key={s.id} className="flex items-center justify-between bg-black/40 p-5 rounded-2xl border border-kalian-gold/10 group hover:border-kalian-gold/30 transition-all">
                           <div className="flex items-center gap-5">
                             <div className="bg-kalian-gold/10 text-kalian-gold p-4 rounded-xl font-black text-center min-w-[70px] border border-kalian-gold/10">
-                              <p className="text-[8px] uppercase tracking-widest mb-1 opacity-40">Día</p>
+                              <p className="text-[8px] uppercase tracking-widest mb-1 opacity-40">{t('teacher.day')}</p>
                               <p className="text-lg leading-none">{s.fecha.split('-')[2]}</p>
                             </div>
                             <div>

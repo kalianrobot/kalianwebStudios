@@ -17,13 +17,13 @@ ENTRADA HASTA LAS 00:00. RESERVAS DISPONIBLES HASTA COMPLETAR AFORO.`;
 
   const [eventos, setEventos] = useState<DocumentData[]>([]);
   const [loading, setLoading] = useState(true);
-  const [form, setForm] = useState({ 
-    titulo: '', 
-    fecha: '', 
+  const [form, setForm] = useState({
+    titulo: '',
+    fecha: '',
     fecha_fin: '',
     sala: 'SALA GRANDE',
-    precio_estandar: '', 
-    categoria: 'musica', 
+    precio_estandar: '',
+    categoria: 'musica',
     aforo_maximo: '50',
     aforo_reservado: 0,
     aforo_actual: 0,
@@ -38,6 +38,9 @@ ENTRADA HASTA LAS 00:00. RESERVAS DISPONIBLES HASTA COMPLETAR AFORO.`;
     imagenUrl: '',
     reglas: defaultReglas,
     descripcion: '',
+    titulo_eu: '',
+    descripcion_eu: '',
+    reglas_eu: '',
     es_publico: true
   });
   const [archivo, setArchivo] = useState<File | null>(null);
@@ -100,6 +103,9 @@ ENTRADA HASTA LAS 00:00. RESERVAS DISPONIBLES HASTA COMPLETAR AFORO.`;
           imagenUrl: ev.imagenUrl || '',
           reglas: ev.reglas || defaultReglas,
           descripcion: ev.descripcion || '',
+          titulo_eu: ev.titulo_eu || '',
+          descripcion_eu: ev.descripcion_eu || '',
+          reglas_eu: ev.reglas_eu || '',
           max_acompanantes: ev.max_acompanantes?.toString() || '4',
           es_publico: ev.es_publico !== false
         });
@@ -216,19 +222,19 @@ ENTRADA HASTA LAS 00:00. RESERVAS DISPONIBLES HASTA COMPLETAR AFORO.`;
         setMsg("✅ Evento publicado con éxito");
       }
 
-      setForm({ 
-        titulo: '', 
-        fecha: '', 
+      setForm({
+        titulo: '',
+        fecha: '',
         fecha_fin: '',
         sala: 'SALA GRANDE',
-        precio_estandar: '', 
-        categoria: 'musica', 
-        aforo_maximo: '50', 
+        precio_estandar: '',
+        categoria: 'musica',
+        aforo_maximo: '50',
         aforo_reservado: 0,
         aforo_actual: 0,
         max_acompanantes: '4',
-        tiene_descuento: false, 
-        precio_descuento: '', 
+        tiene_descuento: false,
+        precio_descuento: '',
         cupon: '',
         precioCupon: '',
         fechaCupon: '',
@@ -237,6 +243,9 @@ ENTRADA HASTA LAS 00:00. RESERVAS DISPONIBLES HASTA COMPLETAR AFORO.`;
         imagenUrl: '',
         reglas: defaultReglas,
         descripcion: '',
+        titulo_eu: '',
+        descripcion_eu: '',
+        reglas_eu: '',
         es_publico: true
       });
       setArchivo(null);
@@ -277,6 +286,7 @@ ENTRADA HASTA LAS 00:00. RESERVAS DISPONIBLES HASTA COMPLETAR AFORO.`;
             <div className="space-y-2">
               <label className="text-[9px] font-black uppercase text-kalian-gold/40 ml-4 tracking-widest">Título del Evento</label>
               <input type="text" placeholder="EJ: CONCIERTO DE JAZZ" className="w-full p-5 bg-kalian-gold/5 rounded-2xl outline-none border border-kalian-gold/10 focus:border-kalian-gold transition-all text-kalian-gold font-black uppercase text-xl" value={form.titulo} onChange={e => setForm({...form, titulo: e.target.value})} required />
+              <input type="text" placeholder="Izenburua (Euskera — opcional)" className="w-full p-3 bg-kalian-gold/5 rounded-2xl outline-none border border-kalian-gold/5 focus:border-kalian-gold/40 transition-all text-kalian-gold/60 font-bold uppercase text-base" value={form.titulo_eu} onChange={e => setForm({...form, titulo_eu: e.target.value})} />
             </div>
           </div>
 
@@ -430,23 +440,35 @@ ENTRADA HASTA LAS 00:00. RESERVAS DISPONIBLES HASTA COMPLETAR AFORO.`;
           <div className="space-y-4">
             <div className="space-y-2">
               <label className="text-[9px] font-black uppercase text-kalian-gold/80 ml-4 tracking-widest">IMPORTANTE (Reglas)</label>
-              <textarea 
-                placeholder="Normas del evento..." 
-                className="w-full p-5 bg-kalian-gold/5 rounded-2xl outline-none border border-kalian-gold/10 focus:border-kalian-gold transition-all text-kalian-cream font-bold min-h-[150px]" 
-                value={form.reglas} 
-                onChange={e => setForm({...form, reglas: e.target.value})} 
-                required 
+              <textarea
+                placeholder="Normas del evento..."
+                className="w-full p-5 bg-kalian-gold/5 rounded-2xl outline-none border border-kalian-gold/10 focus:border-kalian-gold transition-all text-kalian-cream font-bold min-h-[150px]"
+                value={form.reglas}
+                onChange={e => setForm({...form, reglas: e.target.value})}
+                required
+              />
+              <textarea
+                placeholder="Arauak (Euskera — opcional)"
+                className="w-full p-4 bg-kalian-gold/5 rounded-2xl outline-none border border-kalian-gold/5 focus:border-kalian-gold/40 transition-all text-kalian-cream/60 font-bold min-h-[100px] text-sm"
+                value={form.reglas_eu}
+                onChange={e => setForm({...form, reglas_eu: e.target.value})}
               />
             </div>
 
             <div className="space-y-2">
               <label className="text-[9px] font-black uppercase text-kalian-gold/80 ml-4 tracking-widest">Descripción del evento</label>
-              <textarea 
-                placeholder="Información libre sobre el evento..." 
-                className="w-full p-5 bg-kalian-gold/5 rounded-2xl outline-none border border-kalian-gold/10 focus:border-kalian-gold transition-all text-kalian-cream font-bold min-h-[150px]" 
-                value={form.descripcion} 
-                onChange={e => setForm({...form, descripcion: e.target.value})} 
-                required 
+              <textarea
+                placeholder="Información libre sobre el evento..."
+                className="w-full p-5 bg-kalian-gold/5 rounded-2xl outline-none border border-kalian-gold/10 focus:border-kalian-gold transition-all text-kalian-cream font-bold min-h-[150px]"
+                value={form.descripcion}
+                onChange={e => setForm({...form, descripcion: e.target.value})}
+                required
+              />
+              <textarea
+                placeholder="Deskribapena (Euskera — opcional)"
+                className="w-full p-4 bg-kalian-gold/5 rounded-2xl outline-none border border-kalian-gold/5 focus:border-kalian-gold/40 transition-all text-kalian-cream/60 font-bold min-h-[100px] text-sm"
+                value={form.descripcion_eu}
+                onChange={e => setForm({...form, descripcion_eu: e.target.value})}
               />
             </div>
           </div>
@@ -567,6 +589,9 @@ ENTRADA HASTA LAS 00:00. RESERVAS DISPONIBLES HASTA COMPLETAR AFORO.`;
                             imagenUrl: ev.imagenUrl || '',
                             reglas: ev.reglas || defaultReglas,
                             descripcion: ev.descripcion || '',
+                            titulo_eu: ev.titulo_eu || '',
+                            descripcion_eu: ev.descripcion_eu || '',
+                            reglas_eu: ev.reglas_eu || '',
                             max_acompanantes: ev.max_acompanantes?.toString() || '4',
                             es_publico: ev.es_publico !== false
                           });
@@ -605,6 +630,9 @@ ENTRADA HASTA LAS 00:00. RESERVAS DISPONIBLES HASTA COMPLETAR AFORO.`;
                             imagenUrl: ev.imagenUrl || '',
                             reglas: ev.reglas || defaultReglas,
                             descripcion: ev.descripcion || '',
+                            titulo_eu: ev.titulo_eu ? `${ev.titulo_eu} (KOPIA)` : '',
+                            descripcion_eu: ev.descripcion_eu || '',
+                            reglas_eu: ev.reglas_eu || '',
                             max_acompanantes: ev.max_acompanantes?.toString() || '4',
                             es_publico: ev.es_publico !== false
                           });
@@ -686,6 +714,9 @@ ENTRADA HASTA LAS 00:00. RESERVAS DISPONIBLES HASTA COMPLETAR AFORO.`;
                             imagenUrl: ev.imagenUrl || '',
                             reglas: ev.reglas || defaultReglas,
                             descripcion: ev.descripcion || '',
+                            titulo_eu: ev.titulo_eu || '',
+                            descripcion_eu: ev.descripcion_eu || '',
+                            reglas_eu: ev.reglas_eu || '',
                             max_acompanantes: ev.max_acompanantes?.toString() || '4',
                             es_publico: ev.es_publico !== false
                           });

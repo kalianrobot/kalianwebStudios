@@ -32,40 +32,53 @@ service firebase.storage {
       );
     }
 
+    function isImage() {
+      return request.resource.contentType.matches('image/.*');
+    }
+
+    function isDocOrImage() {
+      return request.resource.contentType.matches('image/.*')
+          || request.resource.contentType.matches('application/pdf')
+          || request.resource.contentType.matches('application/vnd.openxmlformats-officedocument.*')
+          || request.resource.contentType.matches('application/msword')
+          || request.resource.contentType.matches('text/plain');
+    }
+
     // CURSOS: documentos de clase
     match /cursos/{cursoId}/{fileName} {
       allow read: if isAuthenticated() && (isSocio() || isTeacherOf(cursoId) || isAdmin());
       allow write: if isAuthenticated() &&
                    (isTeacherOf(cursoId) || isAdmin()) &&
-                   request.resource.size < 20 * 1024 * 1024;
+                   request.resource.size < 20 * 1024 * 1024 &&
+                   isDocOrImage();
       allow delete: if isAuthenticated() && (isTeacherOf(cursoId) || isAdmin());
     }
 
     // ACADEMIAS: imágenes de portada de academias
     match /academias/{fileName} {
       allow read: if true;
-      allow write: if isAdmin() && request.resource.size < 5 * 1024 * 1024;
+      allow write: if isAdmin() && request.resource.size < 5 * 1024 * 1024 && isImage();
       allow delete: if isAdmin();
     }
 
     // CONFIG: logo, hero, galería, hub — solo admin
     match /config/{fileName} {
       allow read: if true;
-      allow write: if isAdmin() && request.resource.size < 5 * 1024 * 1024;
+      allow write: if isAdmin() && request.resource.size < 5 * 1024 * 1024 && isImage();
       allow delete: if isAdmin();
     }
 
     // EVENTOS: carteles de eventos
     match /eventos/{fileName} {
       allow read: if true;
-      allow write: if isAdmin() && request.resource.size < 10 * 1024 * 1024;
+      allow write: if isAdmin() && request.resource.size < 10 * 1024 * 1024 && isImage();
       allow delete: if isAdmin();
     }
 
     // EXPOSICIONES: imágenes de galería
     match /exposiciones/{fileName} {
       allow read: if true;
-      allow write: if isAdmin() && request.resource.size < 10 * 1024 * 1024;
+      allow write: if isAdmin() && request.resource.size < 10 * 1024 * 1024 && isImage();
       allow delete: if isAdmin();
     }
   }

@@ -20,7 +20,8 @@ const EventCard: React.FC<EventCardProps> = ({
   isReservaAbierta = true,
   mensajeApertura
 }) => {
-  const { t, language } = useLanguage();
+  const { t, language, tField } = useLanguage();
+  const titulo = tField(event, 'titulo');
   return (
     <motion.div 
       initial={{ opacity: 0, y: 20 }}
@@ -33,15 +34,15 @@ const EventCard: React.FC<EventCardProps> = ({
       {/* IMAGEN DEL EVENTO */}
       <div className="h-64 relative overflow-hidden bg-kalian-gold/5 border-b border-kalian-gold/10 flex-shrink-0">
         {event.imagenUrl ? (
-          <img 
-            src={event.imagenUrl} 
-            alt={event.titulo} 
+          <img
+            src={event.imagenUrl}
+            alt={titulo}
             className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-700"
             referrerPolicy="no-referrer"
           />
         ) : (
           <div className="w-full h-full flex items-center justify-center opacity-10">
-            <span className="text-8xl kalian-poster-text text-kalian-gold">{event.titulo?.charAt(0)}</span>
+            <span className="text-8xl kalian-poster-text text-kalian-gold">{titulo?.charAt(0)}</span>
           </div>
         )}
         <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-transparent to-transparent"></div>
@@ -56,7 +57,7 @@ const EventCard: React.FC<EventCardProps> = ({
       <div className="p-8 space-y-6 flex-grow flex flex-col justify-between relative z-10">
         <div className="space-y-4">
           <div className="space-y-2">
-            <h3 className="text-3xl kalian-poster-text text-kalian-cream group-hover:text-kalian-gold transition-colors leading-none uppercase italic">{event.titulo}</h3>
+            <h3 className="text-3xl kalian-poster-text text-kalian-cream group-hover:text-kalian-gold transition-colors leading-none uppercase italic">{titulo}</h3>
             <div className="w-12 h-1 bg-kalian-gold/30 group-hover:w-full transition-all duration-500"></div>
           </div>
 

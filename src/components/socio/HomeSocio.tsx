@@ -13,7 +13,7 @@ import SectionTitle from '../shared/SectionTitle';
 
 export const HomeSocio = () => {
   const { user } = useAuth();
-  const { t } = useLanguage();
+  const { t, tField } = useLanguage();
   const navigate = useNavigate();
   const [eventos, setEventos] = useState<DocumentData[]>([]);
   const [cursos, setCursos] = useState<DocumentData[]>([]);
@@ -431,8 +431,8 @@ export const HomeSocio = () => {
                               {c.emoji || (academias.find(a => a.id === c.categoria || a.nombre === c.categoria)?.nombre?.toLowerCase().includes('danza') ? '💃' : '🎸')}
                             </div>
                             <div>
-                              <h3 className="text-4xl kalian-poster-text text-kalian-cream group-hover:text-kalian-gold transition-colors leading-tight uppercase italic">{c.titulo}</h3>
-                              <p className="text-[10px] font-black text-kalian-gold/40 uppercase tracking-[0.4em] mt-4">Categoría: {c.categoria} • {c.subcategoria}</p>
+                              <h3 className="text-4xl kalian-poster-text text-kalian-cream group-hover:text-kalian-gold transition-colors leading-tight uppercase italic">{tField(c, 'titulo')}</h3>
+                              <p className="text-[10px] font-black text-kalian-gold/40 uppercase tracking-[0.4em] mt-4">{t('home.category')} {c.categoria} • {tField(c, 'subcategoria')}</p>
                             </div>
                           </div>
 
@@ -484,7 +484,7 @@ export const HomeSocio = () => {
                   <div className="absolute inset-0">
                     <img 
                       src={expoActual.imagenUrl} 
-                      alt={expoActual.titulo} 
+                      alt={tField(expoActual, 'titulo')}
                       className="w-full h-full object-cover opacity-40 group-hover:opacity-60 transition-all duration-700 group-hover:scale-105" 
                       referrerPolicy="no-referrer"
                     />
@@ -492,8 +492,8 @@ export const HomeSocio = () => {
                   </div>
                   <div className="relative z-10 p-12 h-full flex flex-col justify-end space-y-4">
                     <span className="text-[10px] font-black text-kalian-gold uppercase tracking-[0.6em] animate-pulse">EXPOSICIÓN ACTUAL</span>
-                    <h3 className="text-5xl md:text-7xl kalian-poster-text text-kalian-gold uppercase italic leading-none tracking-tighter">{expoActual.titulo}</h3>
-                    <p className="text-xl font-black text-kalian-cream/80 uppercase tracking-widest italic">Autor/a: {expoActual.autor}</p>
+                    <h3 className="text-5xl md:text-7xl kalian-poster-text text-kalian-gold uppercase italic leading-none tracking-tighter">{tField(expoActual, 'titulo')}</h3>
+                    <p className="text-xl font-black text-kalian-cream/80 uppercase tracking-widest italic">Autor/a: {tField(expoActual, 'autor')}</p>
                     <div className="pt-6">
                       <span className="inline-block bg-kalian-gold text-black px-8 py-3 rounded-xl kalian-poster-text text-sm tracking-widest hover:bg-white transition-all">
                         VER EXPOSICIÓN →
@@ -526,14 +526,14 @@ export const HomeSocio = () => {
                       className="bg-kalian-gold/5 border border-kalian-gold/10 rounded-3xl p-6 flex items-center gap-6 group cursor-pointer"
                     >
                       <div className="w-16 h-20 flex-shrink-0 rounded-xl overflow-hidden border border-kalian-gold/20">
-                        <img src={expo.imagenUrl} alt={expo.titulo} className="w-full h-full object-cover" referrerPolicy="no-referrer" />
+                        <img src={expo.imagenUrl} alt={tField(expo, 'titulo')} className="w-full h-full object-cover" referrerPolicy="no-referrer" />
                       </div>
                       <div className="flex-1 min-w-0">
                         <p className="text-[8px] font-black text-kalian-gold/60 uppercase tracking-widest mb-1">
                           {new Date(expo.fechaInicio).toLocaleDateString('es-ES', { day: 'numeric', month: 'short' })}
                         </p>
-                        <h5 className="text-lg kalian-poster-text text-kalian-cream uppercase italic truncate">{expo.titulo}</h5>
-                        <p className="text-[9px] font-black text-kalian-cream/40 uppercase tracking-widest truncate">{expo.autor}</p>
+                        <h5 className="text-lg kalian-poster-text text-kalian-cream uppercase italic truncate">{tField(expo, 'titulo')}</h5>
+                        <p className="text-[9px] font-black text-kalian-cream/40 uppercase tracking-widest truncate">{tField(expo, 'autor')}</p>
                       </div>
                     </motion.div>
                   ))
@@ -638,10 +638,10 @@ export const HomeSocio = () => {
               
               <div className="space-y-10">
                 <div className="space-y-4">
-                  <span className="text-[12px] font-black uppercase text-kalian-gold/80 tracking-[0.6em]">{cursoDetalle.categoria} • {cursoDetalle.subcategoria}</span>
-                  <h2 className="text-6xl kalian-poster-text text-kalian-gold leading-none uppercase italic">{cursoDetalle.titulo}</h2>
+                  <span className="text-[12px] font-black uppercase text-kalian-gold/80 tracking-[0.6em]">{cursoDetalle.categoria} • {tField(cursoDetalle, 'subcategoria')}</span>
+                  <h2 className="text-6xl kalian-poster-text text-kalian-gold leading-none uppercase italic">{tField(cursoDetalle, 'titulo')}</h2>
                   <div className="flex flex-wrap items-center gap-6 pt-2">
-                    <p className="text-sm font-black text-kalian-cream/60 uppercase tracking-widest bg-white/5 px-4 py-2 rounded-full border border-white/10">{cursoDetalle.horario}</p>
+                    <p className="text-sm font-black text-kalian-cream/60 uppercase tracking-widest bg-white/5 px-4 py-2 rounded-full border border-white/10">{tField(cursoDetalle, 'horario')}</p>
                     <p className="text-sm font-black text-kalian-cream/60 uppercase tracking-widest bg-white/5 px-4 py-2 rounded-full border border-white/10">{cursoDetalle.profesorNombre || 'Pendiente de asignar'}</p>
                   </div>
                 </div>
@@ -653,16 +653,16 @@ export const HomeSocio = () => {
                       <span className="text-xl">★</span> {t('course.important')}
                     </p>
                     <p className="text-sm text-kalian-cream/90 italic leading-relaxed">
-                      {cursoDetalle.ventajas || `Este curso incluye el alta como soci@ de la asociación KALIAN y acceso a descuentos en actividades de la misma categoría.`}
+                      {tField(cursoDetalle, 'ventajas') || t('home.courseIncludes')}
                     </p>
                   </div>
 
                   {/* DESCRIPCIÓN DEL CURSO */}
-                  {cursoDetalle.descripcion && (
+                  {tField(cursoDetalle, 'descripcion') && (
                     <div className="space-y-4">
                       <p className="text-[12px] font-black text-kalian-gold/60 uppercase tracking-[0.4em]">Descripción del curso</p>
                       <p className="text-base text-kalian-cream/80 leading-relaxed font-medium">
-                        {cursoDetalle.descripcion}
+                        {tField(cursoDetalle, 'descripcion')}
                       </p>
                     </div>
                   )}
@@ -805,7 +805,7 @@ export const HomeSocio = () => {
               <div className="absolute top-0 left-0 w-full h-1 bg-kalian-gold"></div>
               <button onClick={() => setSolicitudCurso(null)} className="absolute top-8 right-8 text-kalian-gold/90 font-black text-2xl hover:text-kalian-gold transition-colors">✕</button>
               
-              <h2 className="text-4xl kalian-poster-text text-kalian-gold leading-none mb-2 tracking-tight uppercase italic">{solicitudCurso.curso.titulo}</h2>
+              <h2 className="text-4xl kalian-poster-text text-kalian-gold leading-none mb-2 tracking-tight uppercase italic">{tField(solicitudCurso.curso, 'titulo')}</h2>
               <div className="flex justify-between items-center mb-10">
                 <p className="text-[10px] font-black text-kalian-gold/90 uppercase tracking-[0.3em]">
                   {solicitudCurso.tipo === 'consulta' ? 'Solicitud de Información' : 'Formulario de Inscripción'}

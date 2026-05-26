@@ -1,11 +1,13 @@
 import React, { useState } from 'react';
 import { db } from '../../firebase';
 import { collection, addDoc, serverTimestamp } from 'firebase/firestore';
+import { useLanguage } from '../../context/LanguageContext';
 
 const isDev = import.meta.env.DEV;
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 const NewsletterForm = () => {
+  const { t } = useLanguage();
   const [form, setForm] = useState({ nombre: '', email: '', interes: 'musica' });
   const [aceptado, setAceptado] = useState(false);
   const [cargando, setCargando] = useState(false);
@@ -19,11 +21,11 @@ const NewsletterForm = () => {
     const nombre = form.nombre.trim();
     const email = form.email.trim().toLowerCase();
     if (nombre.length === 0 || nombre.length > 100) {
-      setError('Nombre no válido.');
+      setError(t('newsletter.invalidName'));
       return;
     }
     if (!EMAIL_RE.test(email) || email.length > 100) {
-      setError('Email no válido.');
+      setError(t('newsletter.invalidEmail'));
       return;
     }
 
@@ -90,7 +92,7 @@ const NewsletterForm = () => {
       setForm({ nombre: '', email: '', interes: 'musica' });
     } catch (err: any) {
       if (isDev) console.error("Error en suscripción:", err);
-      setError("Hubo un problema al procesar tu suscripción. Inténtalo de nuevo.");
+      setError(t('newsletter.submitError'));
     } finally {
       setCargando(false);
     }
@@ -100,13 +102,13 @@ const NewsletterForm = () => {
     return (
       <div className="bg-emerald-500/10 border border-emerald-500/20 p-8 rounded-[2.5rem] text-center animate-in fade-in zoom-in duration-500">
         <div className="text-4xl mb-4">🎉</div>
-        <h3 className="text-2xl font-black uppercase italic text-emerald-500 mb-2">¡Genial!</h3>
-        <p className="text-slate-400 font-bold">Revisa tu email para confirmar la suscripción y empezar a recibir noticias de Kalian.</p>
-        <button 
+        <h3 className="text-2xl font-black uppercase italic text-emerald-500 mb-2">{t('newsletter.successTitle')}</h3>
+        <p className="text-slate-400 font-bold">{t('newsletter.successMessage')}</p>
+        <button
           onClick={() => setExito(false)}
           className="mt-6 text-[10px] font-black uppercase text-slate-500 hover:text-white transition-colors tracking-widest"
         >
-          Volver
+          {t('newsletter.back')}
         </button>
       </div>
     );
@@ -115,16 +117,16 @@ const NewsletterForm = () => {
   return (
     <div className="bg-slate-900 border border-white/10 p-8 md:p-12 rounded-[3rem] shadow-2xl max-w-xl mx-auto">
       <div className="mb-8">
-        <h2 className="text-3xl font-black uppercase italic leading-none text-white">Únete a la<br/><span className="text-indigo-500">Newsletter</span></h2>
-        <p className="text-slate-400 font-bold mt-2 text-sm uppercase tracking-tighter">Recibe noticias, eventos y descuentos exclusivos.</p>
+        <h2 className="text-3xl font-black uppercase italic leading-none text-white">{t('newsletter.title')}<br/><span className="text-indigo-500">{t('newsletter.titleHighlight')}</span></h2>
+        <p className="text-slate-400 font-bold mt-2 text-sm uppercase tracking-tighter">{t('newsletter.subtitle')}</p>
       </div>
 
       <form onSubmit={handleSubmit} className="space-y-5">
         <div className="space-y-1">
-          <label className="text-[10px] font-black uppercase text-slate-200 ml-4 tracking-widest">Nombre Completo</label>
-          <input 
-            type="text" 
-            placeholder="Tu nombre..."
+          <label className="text-[10px] font-black uppercase text-slate-200 ml-4 tracking-widest">{t('newsletter.fullName')}</label>
+          <input
+            type="text"
+            placeholder={t('newsletter.namePlaceholder')}
             className="w-full p-5 bg-white/10 border border-white/20 rounded-2xl outline-none focus:ring-2 ring-indigo-500 text-white font-bold transition-all placeholder:text-white/40"
             value={form.nombre}
             onChange={e => setForm({...form, nombre: e.target.value})}
@@ -133,9 +135,9 @@ const NewsletterForm = () => {
         </div>
 
         <div className="space-y-1">
-          <label className="text-[10px] font-black uppercase text-slate-200 ml-4 tracking-widest">Email</label>
-          <input 
-            type="email" 
+          <label className="text-[10px] font-black uppercase text-slate-200 ml-4 tracking-widest">{t('newsletter.email')}</label>
+          <input
+            type="email"
             placeholder="tu@email.com"
             className="w-full p-5 bg-white/10 border border-white/20 rounded-2xl outline-none focus:ring-2 ring-indigo-500 text-white font-bold transition-all placeholder:text-white/40"
             value={form.email}
@@ -145,14 +147,14 @@ const NewsletterForm = () => {
         </div>
 
         <div className="space-y-1">
-          <label className="text-[10px] font-black uppercase text-slate-200 ml-4 tracking-widest">Me interesa...</label>
-          <select 
+          <label className="text-[10px] font-black uppercase text-slate-200 ml-4 tracking-widest">{t('newsletter.interest')}</label>
+          <select
             className="w-full p-5 bg-white/10 border border-white/20 rounded-2xl outline-none focus:ring-2 ring-indigo-500 text-white font-black uppercase tracking-widest transition-all appearance-none"
             value={form.interes}
             onChange={e => setForm({...form, interes: e.target.value})}
           >
-            <option value="musica" className="bg-slate-900 text-white">🎸 Música y Conciertos</option>
-            <option value="danza" className="bg-slate-900 text-white">💃 Danza y Clases</option>
+            <option value="musica" className="bg-slate-900 text-white">{t('newsletter.musicCategory')}</option>
+            <option value="danza" className="bg-slate-900 text-white">{t('newsletter.danceCategory')}</option>
           </select>
         </div>
 
@@ -172,7 +174,7 @@ const NewsletterForm = () => {
               </div>
             </div>
             <span className="text-[11px] text-slate-400 font-bold leading-tight select-none">
-              Acepto recibir comunicaciones comerciales y noticias sobre cursos y eventos de Centro Cultural Kalian. He leído y acepto la <span className="text-indigo-400 underline">Política de Privacidad</span>.
+              {t('newsletter.acceptTerms')} <span className="text-indigo-400 underline">{t('newsletter.privacyPolicy')}</span>.
             </span>
           </label>
         </div>
@@ -187,13 +189,13 @@ const NewsletterForm = () => {
             : 'bg-slate-800 text-slate-600 cursor-not-allowed'
           }`}
         >
-          {cargando ? 'Procesando...' : 'Suscribirme Ahora'}
+          {cargando ? t('newsletter.processing') : t('newsletter.subscribe')}
         </button>
 
         <div className="text-center space-y-1 pt-4 border-t border-white/5">
-          <p className="text-[8px] text-slate-500 font-black uppercase tracking-widest">Información Básica de Protección de Datos</p>
+          <p className="text-[8px] text-slate-500 font-black uppercase tracking-widest">{t('newsletter.dataProtectionTitle')}</p>
           <p className="text-[8px] text-slate-600 font-bold leading-relaxed">
-            Responsable: Kalian. Finalidad: Envío de noticias. Destinatario: Brevo. Derechos: Acceso y supresión.
+            {t('newsletter.dataProtectionText')}
           </p>
         </div>
       </form>

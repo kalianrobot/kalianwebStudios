@@ -67,7 +67,12 @@ service cloud.firestore {
 
     // --- CURSOS ---
     function isValidCurso(data) {
-      return data.titulo is string && data.titulo.size() <= 200;
+      return data.titulo is string && data.titulo.size() <= 200
+          && (!data.keys().hasAny(['titulo_eu'])       || (data.titulo_eu is string       && data.titulo_eu.size() <= 200))
+          && (!data.keys().hasAny(['descripcion_eu'])  || (data.descripcion_eu is string  && data.descripcion_eu.size() <= 2000))
+          && (!data.keys().hasAny(['horario_eu'])      || (data.horario_eu is string      && data.horario_eu.size() <= 500))
+          && (!data.keys().hasAny(['ventajas_eu'])     || (data.ventajas_eu is string     && data.ventajas_eu.size() <= 1000))
+          && (!data.keys().hasAny(['subcategoria_eu']) || (data.subcategoria_eu is string && data.subcategoria_eu.size() <= 100));
     }
     match /cursos/{id} {
       allow read: if true;
@@ -92,7 +97,10 @@ service cloud.firestore {
       return data.titulo is string && data.titulo.size() <= 200
           && (!data.keys().hasAny(['aforo_maximo']) || data.aforo_maximo is number)
           && (!data.keys().hasAny(['aforo_max']) || data.aforo_max is number)
-          && (!data.keys().hasAny(['aforo_reservado']) || data.aforo_reservado is number);
+          && (!data.keys().hasAny(['aforo_reservado']) || data.aforo_reservado is number)
+          && (!data.keys().hasAny(['titulo_eu'])      || (data.titulo_eu is string      && data.titulo_eu.size() <= 200))
+          && (!data.keys().hasAny(['descripcion_eu']) || (data.descripcion_eu is string && data.descripcion_eu.size() <= 2000))
+          && (!data.keys().hasAny(['reglas_eu'])      || (data.reglas_eu is string      && data.reglas_eu.size() <= 2000));
     }
     // C4: una actualización pública sólo puede aumentar 'aforo_reservado' en pasos acotados
     // y nunca por encima del aforo máximo. Bloquea reset a 0 / valores arbitrarios.
@@ -151,9 +159,26 @@ service cloud.firestore {
     }
 
     // --- OTROS PÚBLICOS ---
+    function isValidProfesor(data) {
+      return (!data.keys().hasAny(['nombre_eu'])       || (data.nombre_eu is string       && data.nombre_eu.size() <= 200))
+          && (!data.keys().hasAny(['especialidad_eu']) || (data.especialidad_eu is string && data.especialidad_eu.size() <= 200));
+    }
+    function isValidExposicion(data) {
+      return (!data.keys().hasAny(['titulo_eu'])      || (data.titulo_eu is string      && data.titulo_eu.size() <= 200))
+          && (!data.keys().hasAny(['autor_eu'])       || (data.autor_eu is string       && data.autor_eu.size() <= 200))
+          && (!data.keys().hasAny(['descripcion_eu']) || (data.descripcion_eu is string && data.descripcion_eu.size() <= 2000));
+    }
     match /academias/{id}    { allow read: if true; allow write: if isAdmin(); }
-    match /profesores/{id}   { allow read: if true; allow write: if isAdmin(); }
-    match /exposiciones/{id} { allow read: if true; allow write: if isAdmin(); }
+    match /profesores/{id} {
+      allow read: if true;
+      allow create, update: if isAdmin() && isValidProfesor(incoming());
+      allow delete: if isAdmin();
+    }
+    match /exposiciones/{id} {
+      allow read: if true;
+      allow create, update: if isAdmin() && isValidExposicion(incoming());
+      allow delete: if isAdmin();
+    }
     match /locales/{id}      { allow read: if true; allow write: if isAdmin(); }
 
     // --- SOLICITUDES CURSOS ---

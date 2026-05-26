@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { useNavigate, Link } from 'react-router-dom';
+import { useLanguage } from '../context/LanguageContext';
 
 const TeacherLogin = () => {
   const [email, setEmail] = useState('');
@@ -10,6 +11,7 @@ const TeacherLogin = () => {
   const [info, setInfo] = useState('');
   const { loginTeacher, resetPassword } = useAuth();
   const navigate = useNavigate();
+  const { t } = useLanguage();
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -20,7 +22,7 @@ const TeacherLogin = () => {
       await loginTeacher(email, pass);
       navigate('/profesor');
     } catch (err: any) {
-      setError(err.message || 'Error al iniciar sesión');
+      setError(err.message || t('auth.loginError'));
     } finally {
       setLoading(false);
     }
@@ -28,7 +30,7 @@ const TeacherLogin = () => {
 
   const handleReset = async () => {
     if (!email) {
-      setError("Introduce tu email para enviarte el enlace.");
+      setError(t('auth.provideEmailForReset'));
       return;
     }
     setLoading(true);
@@ -36,9 +38,9 @@ const TeacherLogin = () => {
     setInfo('');
     try {
       await resetPassword(email);
-      setInfo("✅ Email enviado. Revisa tu bandeja de entrada.");
+      setInfo(t('auth.resetEmailSent'));
     } catch (err: any) {
-      setError(err.message || 'Error al enviar email');
+      setError(err.message || t('auth.sendEmailError'));
     } finally {
       setLoading(false);
     }
@@ -47,15 +49,15 @@ const TeacherLogin = () => {
   return (
     <div className="min-h-screen bg-kalian-dark flex items-center justify-center p-6 font-sans">
       <div className="max-w-md w-full bg-black/40 p-12 rounded-[3rem] border border-kalian-gold/20 shadow-2xl">
-        <h1 className="text-5xl kalian-poster-text text-kalian-gold text-center mb-8 uppercase italic leading-none">ACCESO <span className="text-kalian-cream">PROFESORES</span></h1>
-        
+        <h1 className="text-5xl kalian-poster-text text-kalian-gold text-center mb-8 uppercase italic leading-none">{t('auth.teacherAccessTitle').split(' ')[0]} <span className="text-kalian-cream">{t('auth.teacherAccessTitle').split(' ').slice(1).join(' ')}</span></h1>
+
         <div className="mb-8 text-center">
-          <Link to="/" className="text-kalian-gold/70 font-black text-[10px] uppercase tracking-[0.3em] hover:text-kalian-gold transition-colors">← Volver al Inicio</Link>
+          <Link to="/" className="text-kalian-gold/70 font-black text-[10px] uppercase tracking-[0.3em] hover:text-kalian-gold transition-colors">{t('auth.backToHome')}</Link>
         </div>
 
         <form onSubmit={handleLogin} className="space-y-6">
           <div className="space-y-2">
-            <label className="text-[10px] font-black uppercase text-kalian-gold/70 ml-4 tracking-widest">Email de Profesor</label>
+            <label className="text-[10px] font-black uppercase text-kalian-gold/70 ml-4 tracking-widest">{t('auth.teacherEmail')}</label>
             <input 
               type="email" 
               placeholder="profesor@kalian.es" 
@@ -67,7 +69,7 @@ const TeacherLogin = () => {
           </div>
 
           <div className="space-y-2">
-            <label className="text-[10px] font-black uppercase text-kalian-gold/70 ml-4 tracking-widest">Contraseña</label>
+            <label className="text-[10px] font-black uppercase text-kalian-gold/70 ml-4 tracking-widest">{t('auth.password')}</label>
             <input 
               type="password" 
               placeholder="••••••••" 
@@ -85,7 +87,7 @@ const TeacherLogin = () => {
             disabled={loading}
             className="w-full bg-kalian-gold text-black p-6 rounded-2xl kalian-poster-text text-xl tracking-widest hover:bg-white transition-all shadow-2xl shadow-kalian-gold/20 active:scale-95 uppercase disabled:opacity-50"
           >
-            {loading ? 'CARGANDO...' : 'Entrar al Panel'}
+            {loading ? t('auth.loading') : t('auth.enterPanel')}
           </button>
         </form>
 
@@ -95,7 +97,7 @@ const TeacherLogin = () => {
             disabled={loading}
             className="text-kalian-gold/70 font-black text-[9px] uppercase tracking-[0.3em] hover:text-kalian-gold transition-colors border-b border-transparent hover:border-kalian-gold/40 pb-1"
           >
-            ¿Has olvidado tu contraseña?
+            {t('auth.forgotPassword')}
           </button>
         </div>
       </div>

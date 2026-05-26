@@ -31,6 +31,11 @@ const AdminCursos = () => {
     profesorNombre: '',
     descripcion: '',
     ventajas: '',
+    titulo_eu: '',
+    descripcion_eu: '',
+    horario_eu: '',
+    subcategoria_eu: '',
+    ventajas_eu: '',
     // Nuevos campos
     diasSemana: [1],
     horaInicio: '18:00',
@@ -46,6 +51,12 @@ const AdminCursos = () => {
     const aca = academias.find(a => a.id === cat || a.nombre === cat);
     const catName = aca ? aca.nombre.toUpperCase() : 'KALIAN CLUB';
     return `Este curso incluye el alta como soci@ de ${catName} y acceso a descuentos en actividades de la misma categoría.`;
+  };
+
+  const getVentajasTextEU = (cat: string) => {
+    const aca = academias.find(a => a.id === cat || a.nombre === cat);
+    const catName = aca ? (aca.nombre_eu || aca.nombre).toUpperCase() : 'KALIAN CLUB';
+    return `Ikastaro honek ${catName}-eko bazkide alta eta kategoria bereko jardueretan deskontuak barne hartzen ditu.`;
   };
   const [editando, setEditando] = useState<string | null>(null);
   const [cursoSeleccionado, setCursoSeleccionado] = useState<string | null>(null);
@@ -474,6 +485,11 @@ const AdminCursos = () => {
           profesorNombre: c.profesorNombre || c.profesor || '',
           descripcion: c.descripcion || '',
           ventajas: c.ventajas || '',
+          titulo_eu: c.titulo_eu || '',
+          descripcion_eu: c.descripcion_eu || '',
+          horario_eu: c.horario_eu || '',
+          subcategoria_eu: c.subcategoria_eu || '',
+          ventajas_eu: c.ventajas_eu || '',
           diasSemana: c.diasSemana || [1],
           horaInicio: c.horaInicio || '18:00',
           horaFin: c.horaFin || '19:30',
@@ -697,12 +713,13 @@ const AdminCursos = () => {
       
       const generatedId = getIdealId(form);
 
-      const cursoData = { 
-        ...form, 
+      const cursoData = {
+        ...form,
         categoria: academia ? academia.nombre : form.categoria, // Normalización al nombre oficial
         profesorNombre: prof ? prof.nombre : '',
         modalidades: form.modalidades.map(m => ({ ...m, precio: Number(m.precio) })),
         ventajas: getVentajasText(form.categoria),
+        ventajas_eu: getVentajasTextEU(form.categoria),
         aforo_actual: editando ? (cursos.find(c => c.id === editando)?.aforo_actual || 0) : 0,
         alumnos: editando ? (cursos.find(c => c.id === editando)?.alumnos || []) : [],
         deletedAt: null,
@@ -797,6 +814,11 @@ const AdminCursos = () => {
         profesorNombre: '',
         descripcion: '',
         ventajas: '',
+        titulo_eu: '',
+        descripcion_eu: '',
+        horario_eu: '',
+        subcategoria_eu: '',
+        ventajas_eu: '',
         diasSemana: [1],
         horaInicio: '18:00',
         horaFin: '19:30',
@@ -984,9 +1006,10 @@ const AdminCursos = () => {
                   title="Pega cualquier emoji (Win + . o Ctrl + Cmd + Espacio)"
                 />
               </div>
-              <div className="space-y-1">
+              <div className="space-y-2">
                 <label className="text-[9px] font-black uppercase text-slate-400 ml-4">Nombre del Curso</label>
                 <input type="text" placeholder="Nombre del Curso" className="w-full p-5 bg-slate-50 rounded-2xl outline-none focus:ring-2 ring-indigo-500 border border-slate-200 text-slate-900" value={form.titulo} onChange={e => setForm({...form, titulo: e.target.value})} required />
+                <input type="text" placeholder="Izenburua (Euskera — opcional)" className="w-full p-4 bg-slate-50/50 rounded-2xl outline-none focus:ring-2 ring-indigo-200 border border-slate-100 text-slate-500 text-sm" value={form.titulo_eu} onChange={e => setForm({...form, titulo_eu: e.target.value})} />
               </div>
             </div>
 
@@ -1077,6 +1100,11 @@ const AdminCursos = () => {
                   </div>
                 )}
               </div>
+            </div>
+
+            <div className="space-y-1">
+              <label className="text-[9px] font-black uppercase text-slate-400 ml-4">Subcategoría (Euskera — opcional)</label>
+              <input type="text" placeholder="Azpikategoria (Euskera)" className="w-full p-4 bg-slate-50/50 rounded-2xl outline-none focus:ring-2 ring-indigo-200 border border-slate-100 text-slate-500 text-sm uppercase" value={form.subcategoria_eu} onChange={e => setForm({...form, subcategoria_eu: e.target.value})} />
             </div>
 
             <div className="space-y-1">
@@ -1207,9 +1235,10 @@ const AdminCursos = () => {
               )}
             </div>
 
-            <div className="space-y-1">
+            <div className="space-y-2">
               <label className="text-[9px] font-black uppercase text-slate-600 ml-4">Horario (Texto para Web)</label>
               <input type="text" placeholder="ej: Lunes y Martes 14:00-15:00" className="w-full p-5 bg-slate-50 rounded-2xl outline-none border border-slate-200 text-slate-900" value={form.horario} onChange={e => setForm({...form, horario: e.target.value})} required />
+              <input type="text" placeholder="Ordutegia (Euskera — opcional)" className="w-full p-4 bg-slate-50/50 rounded-2xl outline-none border border-slate-100 text-slate-500 text-sm" value={form.horario_eu} onChange={e => setForm({...form, horario_eu: e.target.value})} />
             </div>
 
             <div className="space-y-4">
@@ -1314,9 +1343,10 @@ const AdminCursos = () => {
               </div>
             </div>
 
-            <div className="space-y-1">
+            <div className="space-y-2">
               <label className="text-[9px] font-black uppercase text-slate-600 ml-4">Descripción del Curso</label>
               <textarea placeholder="Información descriptiva del curso..." className="w-full p-5 bg-slate-50 rounded-2xl outline-none border border-slate-200 text-slate-900 min-h-[100px]" value={form.descripcion} onChange={e => setForm({...form, descripcion: e.target.value})} />
+              <textarea placeholder="Deskribapena (Euskera — opcional)" className="w-full p-4 bg-slate-50/50 rounded-2xl outline-none border border-slate-100 text-slate-500 min-h-[80px] text-sm" value={form.descripcion_eu} onChange={e => setForm({...form, descripcion_eu: e.target.value})} />
             </div>
 
             <div className="flex gap-3">
@@ -1331,19 +1361,25 @@ const AdminCursos = () => {
                   type="button"
                   onClick={() => {
                     setEditando(null);
-                    setForm({ 
-                      titulo: '', 
-                      categoria: academias.length > 0 ? academias[0].id : '', 
+                    setForm({
+                      titulo: '',
+                      categoria: academias.length > 0 ? academias[0].id : '',
                       subcategoria: '',
+                      emoji: '🎸',
                       modalidades: [{ tipo: 'presencial', frecuencia: 'semanal', precio: '' }],
-                      fechaInicio: '2025-09-01', 
-                      fechaFin: '2026-06-30', 
-                      aforo_disponible: true, 
+                      fechaInicio: '2025-09-01',
+                      fechaFin: '2026-06-30',
+                      aforo_disponible: true,
                       horario: '',
                       profesorId: '',
                       profesorNombre: '',
                       descripcion: '',
                       ventajas: '',
+                      titulo_eu: '',
+                      descripcion_eu: '',
+                      horario_eu: '',
+                      subcategoria_eu: '',
+                      ventajas_eu: '',
                       diasSemana: [1],
                       horaInicio: '18:00',
                       horaFin: '19:30',
@@ -1458,6 +1494,7 @@ const AdminCursos = () => {
                                 titulo: c.titulo,
                                 categoria: c.categoria,
                                 subcategoria: c.subcategoria || '',
+                                emoji: c.emoji || '🎸',
                                 modalidades: c.modalidades || [{ tipo: 'presencial', frecuencia: 'semanal', precio: '' }],
                                 fechaInicio: c.fechaInicio,
                                 fechaFin: c.fechaFin,
@@ -1467,6 +1504,11 @@ const AdminCursos = () => {
                                 profesorNombre: c.profesorNombre || c.profesor || '',
                                 descripcion: c.descripcion || '',
                                 ventajas: c.ventajas || '',
+                                titulo_eu: c.titulo_eu || '',
+                                descripcion_eu: c.descripcion_eu || '',
+                                horario_eu: c.horario_eu || '',
+                                subcategoria_eu: c.subcategoria_eu || '',
+                                ventajas_eu: c.ventajas_eu || '',
                                 diasSemana: c.diasSemana || [1],
                                 horaInicio: c.horaInicio || '18:00',
                                 horaFin: c.horaFin || '19:30',

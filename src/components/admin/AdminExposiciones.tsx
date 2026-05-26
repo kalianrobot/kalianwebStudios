@@ -8,10 +8,13 @@ import { useAuth } from '../../context/AuthContext';
 const AdminExposiciones = () => {
   const { user } = useAuth();
   const [exposiciones, setExposiciones] = useState<DocumentData[]>([]);
-  const [form, setForm] = useState({ 
-    titulo: '', 
-    autor: '', 
+  const [form, setForm] = useState({
+    titulo: '',
+    autor: '',
     descripcion: '',
+    titulo_eu: '',
+    autor_eu: '',
+    descripcion_eu: '',
     imagenUrl: '',
     fechaInicio: new Date().toISOString().split('T')[0],
     fechaFin: '',
@@ -66,7 +69,7 @@ const AdminExposiciones = () => {
         setMsg("✅ Exposición creada");
       }
 
-      setForm({ titulo: '', autor: '', descripcion: '', imagenUrl: '', fechaInicio: new Date().toISOString().split('T')[0], fechaFin: '', es_activa: true });
+      setForm({ titulo: '', autor: '', descripcion: '', titulo_eu: '', autor_eu: '', descripcion_eu: '', imagenUrl: '', fechaInicio: new Date().toISOString().split('T')[0], fechaFin: '', es_activa: true });
       setArchivo(null);
       setEditando(null);
       setTimeout(() => setMsg(''), 3000);
@@ -88,6 +91,9 @@ const AdminExposiciones = () => {
       titulo: expo.titulo || '',
       autor: expo.autor || '',
       descripcion: expo.descripcion || '',
+      titulo_eu: expo.titulo_eu || '',
+      autor_eu: expo.autor_eu || '',
+      descripcion_eu: expo.descripcion_eu || '',
       imagenUrl: expo.imagenUrl || '',
       fechaInicio: expo.fechaInicio || '',
       fechaFin: expo.fechaFin || '',
@@ -113,28 +119,43 @@ const AdminExposiciones = () => {
             <form onSubmit={guardar} className="space-y-6">
               <div className="space-y-2">
                 <p className="text-[9px] font-black text-kalian-gold/40 uppercase tracking-[0.3em] ml-4">Título de la Exposición</p>
-                <input 
-                  type="text" placeholder="Título" 
+                <input
+                  type="text" placeholder="Título"
                   className="w-full p-4 bg-kalian-gold/5 rounded-xl border border-kalian-gold/10 outline-none focus:border-kalian-gold text-kalian-cream"
-                  value={form.titulo} onChange={e => setForm({...form, titulo: e.target.value})} required 
+                  value={form.titulo} onChange={e => setForm({...form, titulo: e.target.value})} required
+                />
+                <input
+                  type="text" placeholder="Izenburua (Euskera — opcional)"
+                  className="w-full p-3 bg-kalian-gold/5 rounded-xl border border-kalian-gold/5 outline-none focus:border-kalian-gold/40 text-kalian-gold/60 text-sm"
+                  value={form.titulo_eu} onChange={e => setForm({...form, titulo_eu: e.target.value})}
                 />
               </div>
 
               <div className="space-y-2">
                 <p className="text-[9px] font-black text-kalian-gold/40 uppercase tracking-[0.3em] ml-4">Nombre del Autor</p>
-                <input 
-                  type="text" placeholder="Autor" 
+                <input
+                  type="text" placeholder="Autor"
                   className="w-full p-4 bg-kalian-gold/5 rounded-xl border border-kalian-gold/10 outline-none focus:border-kalian-gold text-kalian-cream"
-                  value={form.autor} onChange={e => setForm({...form, autor: e.target.value})} required 
+                  value={form.autor} onChange={e => setForm({...form, autor: e.target.value})} required
+                />
+                <input
+                  type="text" placeholder="Egilea (Euskera — opcional)"
+                  className="w-full p-3 bg-kalian-gold/5 rounded-xl border border-kalian-gold/5 outline-none focus:border-kalian-gold/40 text-kalian-gold/60 text-sm"
+                  value={form.autor_eu} onChange={e => setForm({...form, autor_eu: e.target.value})}
                 />
               </div>
 
               <div className="space-y-2">
                 <p className="text-[9px] font-black text-kalian-gold/40 uppercase tracking-[0.3em] ml-4">Descripción / Obra</p>
-                <textarea 
-                  placeholder="Descripción detallada..." 
+                <textarea
+                  placeholder="Descripción detallada..."
                   className="w-full p-4 bg-kalian-gold/5 rounded-xl border border-kalian-gold/10 outline-none focus:border-kalian-gold text-kalian-cream h-32"
-                  value={form.descripcion} onChange={e => setForm({...form, descripcion: e.target.value})} required 
+                  value={form.descripcion} onChange={e => setForm({...form, descripcion: e.target.value})} required
+                />
+                <textarea
+                  placeholder="Deskribapena (Euskera — opcional)"
+                  className="w-full p-3 bg-kalian-gold/5 rounded-xl border border-kalian-gold/5 outline-none focus:border-kalian-gold/40 text-kalian-gold/60 h-24 text-sm"
+                  value={form.descripcion_eu} onChange={e => setForm({...form, descripcion_eu: e.target.value})}
                 />
               </div>
 
@@ -186,7 +207,7 @@ const AdminExposiciones = () => {
               </button>
               {editando && (
                 <button 
-                  type="button" onClick={() => { setEditando(null); setForm({ titulo: '', autor: '', descripcion: '', imagenUrl: '', fechaInicio: new Date().toISOString().split('T')[0], fechaFin: '', es_activa: true }); }}
+                  type="button" onClick={() => { setEditando(null); setForm({ titulo: '', autor: '', descripcion: '', titulo_eu: '', autor_eu: '', descripcion_eu: '', imagenUrl: '', fechaInicio: new Date().toISOString().split('T')[0], fechaFin: '', es_activa: true }); }}
                   className="w-full bg-transparent text-kalian-gold/40 p-4 rounded-2xl text-[10px] font-black uppercase tracking-widest hover:text-kalian-gold transition-all"
                 >
                   Cancelar Edición

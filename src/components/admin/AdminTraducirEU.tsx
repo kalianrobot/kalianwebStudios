@@ -1,7 +1,6 @@
 import React, { useState } from 'react';
 import { db } from '../../firebase';
 import { collection, getDocs, updateDoc, doc } from 'firebase/firestore';
-import { getFunctions, httpsCallable } from 'firebase/functions';
 import { Link } from 'react-router-dom';
 
 interface TraduccionJob {
@@ -17,16 +16,16 @@ interface Resultado {
   msg: string;
 }
 
-const DELAY_MS = 400;
-
-const traducirTextoFn = httpsCallable<{ texto: string }, { traduccion: string }>(
-  getFunctions(), 'traducirTextoEU'
-);
+const DELAY_MS = 600;
 
 async function traducirTexto(texto: string): Promise<string> {
   if (!texto.trim()) return '';
-  const result = await traducirTextoFn({ texto });
-  return result.data.traduccion || texto;
+  const url = `https://api.mymemory.translated.net/get?q=${encodeURIComponent(texto)}&langpair=es|eu`;
+  const res = await fetch(url);
+  if (!res.ok) throw new Error(`HTTP ${res.status}`);
+  const data = await res.json();
+  if (data.responseStatus !== 200) throw new Error(data.responseDetails || 'Error MyMemory');
+  return data.responseData.translatedText || texto;
 }
 
 const sleep = (ms: number) => new Promise(r => setTimeout(r, ms));

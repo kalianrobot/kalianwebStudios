@@ -63,7 +63,7 @@ const EventCard: React.FC<EventCardProps> = ({
 
           <div className="flex flex-wrap gap-3">
             <div className="space-y-1">
-              <p className="text-[9px] font-black text-kalian-gold/40 uppercase tracking-[0.3em]">Sala</p>
+              <p className="text-[9px] font-black text-kalian-gold/40 uppercase tracking-[0.3em]">{t('event.room')}</p>
               <div className="flex items-center gap-2">
                 <div 
                   className="w-2.5 h-2.5 rounded-full" 

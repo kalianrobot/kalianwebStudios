@@ -12,7 +12,7 @@ interface ReservaFormProps {
 
 const ReservaForm = ({ item, alCerrar }: ReservaFormProps) => {
   const { socioData, esSocioActivo } = useAuth();
-  const { t, tField } = useLanguage();
+  const { t, tField, language } = useLanguage();
   const itemTitulo = tField(item, 'titulo');
   const [searchParams] = useSearchParams();
   const cuponUrl = searchParams.get('cupon') || '';
@@ -133,12 +133,13 @@ const ReservaForm = ({ item, alCerrar }: ReservaFormProps) => {
         if (puedeCupon || puedeSocio || puedeGral) {
           setMensajeBloqueo('');
         } else {
+          const locale = language === 'eu' ? 'eu-ES' : 'es-ES';
           if (usaCuponApertura && fechaCupon && ahora < fechaCupon) {
-            setMensajeBloqueo(`Las reservas con cupón abren el ${fechaCupon.toLocaleString('es-ES')}`);
+            setMensajeBloqueo(t('reserva.cuponOpens', { date: fechaCupon.toLocaleString(locale) }));
           } else if (esSocio && fechaSocio && ahora < fechaSocio) {
-            setMensajeBloqueo(`Las reservas para soci@s abren el ${fechaSocio.toLocaleString('es-ES')}`);
+            setMensajeBloqueo(t('reserva.memberOpens', { date: fechaSocio.toLocaleString(locale) }));
           } else if (fechaGral && ahora < fechaGral) {
-            setMensajeBloqueo(`Las reservas para invitados abren el ${fechaGral.toLocaleString('es-ES')}`);
+            setMensajeBloqueo(t('reserva.generalOpens', { date: fechaGral.toLocaleString(locale) }));
           } else {
             setMensajeBloqueo('');
           }
@@ -171,7 +172,7 @@ const ReservaForm = ({ item, alCerrar }: ReservaFormProps) => {
     // BDD3: Cursos -> DNI, Nombre y Email obligatorios.
     if (esCurso) {
       if (!form.dni || !form.nombre || !form.email) {
-        setMensaje("⚠️ Para inscribirte en un curso, el DNI, Nombre y Email son obligatorios.");
+        setMensaje(t('reserva.missingFields'));
         return;
       }
     }
@@ -196,15 +197,16 @@ const ReservaForm = ({ item, alCerrar }: ReservaFormProps) => {
         const puedeGral = !fechaGral || ahora >= fechaGral;
 
         if (!puedeCupon && !puedeSocio && !puedeGral) {
+          const locale = language === 'eu' ? 'eu-ES' : 'es-ES';
           if (usaCuponApertura && fechaCupon) {
-            setMensaje(`⚠️ Las reservas con cupón abren el ${fechaCupon.toLocaleString('es-ES')}`);
+            setMensaje(`⚠️ ${t('reserva.cuponOpens', { date: fechaCupon.toLocaleString(locale) })}`);
           } else if (esSocio && fechaSocio) {
-            setMensaje(`⚠️ Las reservas para soci@s abren el ${fechaSocio.toLocaleString('es-ES')}`);
+            setMensaje(`⚠️ ${t('reserva.memberOpens', { date: fechaSocio.toLocaleString(locale) })}`);
           } else if (fechaGral) {
             if (item.cupon) {
-                setMensaje(`⚠️ Las reservas para invitados abren el ${fechaGral.toLocaleString('es-ES')}. Si tienes un cupón de acceso anticipado, introdúcelo abajo.`);
+              setMensaje(`⚠️ ${t('reserva.generalOpensCoupon', { date: fechaGral.toLocaleString(locale) })}`);
             } else {
-                setMensaje(`⚠️ Las reservas para invitados abren el ${fechaGral.toLocaleString('es-ES')}`);
+              setMensaje(`⚠️ ${t('reserva.generalOpens', { date: fechaGral.toLocaleString(locale) })}`);
             }
           }
           setCargando(false);
@@ -215,7 +217,7 @@ const ReservaForm = ({ item, alCerrar }: ReservaFormProps) => {
       // 1.0 VALIDACIÓN DE ACOMPAÑANTES (Arquitecto)
       const maxPermitidos = Number(item.max_acompanantes || 4);
       if (Number(form.acompañantes) > maxPermitidos) {
-        setMensaje(`⚠️ El máximo de acompañantes para este evento es ${maxPermitidos}.`);
+        setMensaje(t('reserva.aforo.tooMany', { n: maxPermitidos }));
         setCargando(false);
         return;
       }
@@ -233,7 +235,7 @@ const ReservaForm = ({ item, alCerrar }: ReservaFormProps) => {
         }
         
         if (!snapDuplicado.empty) {
-          setMensaje("⚠️ Ya tienes una reserva previa para este evento.");
+          setMensaje(t('reserva.alreadyBooked'));
           setCargando(false);
           return;
         }
@@ -244,14 +246,14 @@ const ReservaForm = ({ item, alCerrar }: ReservaFormProps) => {
         const nuevosSolicitados = 1 + Number(form.acompañantes);
 
         if (!esCurso && (aRes + nuevosSolicitados > aMax)) {
-          setMensaje(`❌ Lo sentimos, no hay aforo suficiente. Quedan ${Math.max(0, aMax - aRes)} plazas.`);
+          setMensaje(t('reserva.aforo.notEnough', { n: Math.max(0, aMax - aRes) }));
           setCargando(false);
           return;
         }
 
         const aforoDisponibleManual = item.aforo_disponible !== false;
         if (!aforoDisponibleManual) {
-          setMensaje("❌ Lo sentimos, este curso no tiene plazas disponibles actualmente.");
+          setMensaje(t('reserva.aforo.courseNoCapacity'));
           setCargando(false);
           return;
         }
@@ -340,7 +342,7 @@ const ReservaForm = ({ item, alCerrar }: ReservaFormProps) => {
       }
 
       if (esCurso) {
-        setMensaje("✅ Solicitud enviada. Debes pasarte por el local para ultimar los detalles y finalizar tu alta al curso (que será tu alta de socio).");
+        setMensaje(t('reserva.courseSuccess'));
         setTimeout(alCerrar, 6000);
       } else {
         setResultado({ ticketID: tID, qrUrl: qrUrl, nombre: form.nombre });
@@ -352,9 +354,9 @@ const ReservaForm = ({ item, alCerrar }: ReservaFormProps) => {
       console.error(err);
       if (err.message?.includes("AFORO_FULL")) {
         const plazas = err.message.split("|")[1] || "0";
-        setMensaje(`❌ Lo sentimos, el aforo se ha completado mientras realizabas la reserva. Plazas libres: ${plazas}`);
+        setMensaje(t('reserva.aforo.raceCondition', { n: plazas }));
       } else {
-        setMensaje("❌ Error al procesar la reserva: " + err.message);
+        setMensaje(t('reserva.error', { msg: err.message }));
       }
     }
     setCargando(false);
@@ -414,8 +416,8 @@ const ReservaForm = ({ item, alCerrar }: ReservaFormProps) => {
     return (
       <div className="bg-white rounded-[3rem] shadow-2xl max-w-lg w-full text-center p-10 space-y-6 animate-in zoom-in duration-300 overflow-y-auto max-h-[90vh] relative">
         <div className="absolute top-0 left-0 w-full h-2 bg-emerald-500 rounded-t-[3rem]"></div>
-        <h2 className="text-4xl kalian-poster-text italic uppercase text-emerald-600 tracking-tight">¡Reserva Lista!</h2>
-        <p className="text-slate-500 font-black uppercase text-[10px] tracking-[0.4em]">Presenta este código en la entrada</p>
+        <h2 className="text-4xl kalian-poster-text italic uppercase text-emerald-600 tracking-tight">{t('reserva.bookingReady')}</h2>
+        <p className="text-slate-500 font-black uppercase text-[10px] tracking-[0.4em]">{t('reserva.showAtEntrance')}</p>
         
         <div className="bg-slate-50 p-10 rounded-[3rem] border-2 border-emerald-100 inline-block shadow-inner">
           <img src={resultado.qrUrl} alt="QR Ticket" className="w-56 h-56 mx-auto" />
@@ -423,44 +425,44 @@ const ReservaForm = ({ item, alCerrar }: ReservaFormProps) => {
         </div>
 
         <div className="flex flex-col gap-4 max-w-sm mx-auto">
-          <button 
+          <button
             onClick={descargarTicket}
             className="w-full bg-indigo-600 text-white p-5 rounded-2xl font-black uppercase text-xs tracking-widest hover:bg-indigo-500 transition-all flex items-center justify-center gap-3 shadow-xl shadow-indigo-600/20"
           >
-            📥 Descargar Ticket
+            {t('reserva.download')}
           </button>
 
           {!emailEnviado ? (
             <div className="bg-slate-50 p-6 rounded-[2rem] space-y-4 border border-slate-100">
-              <p className="text-[10px] font-black uppercase text-slate-400 tracking-widest">¿Quieres recibirlo por email?</p>
+              <p className="text-[10px] font-black uppercase text-slate-400 tracking-widest">{t('reserva.emailPrompt')}</p>
               <div className="flex gap-2">
-                <input 
-                  type="email" 
-                  placeholder="tu@email.com" 
+                <input
+                  type="email"
+                  placeholder="tu@email.com"
                   className="flex-1 p-4 bg-white rounded-xl text-xs outline-none border border-slate-200 focus:border-indigo-500 transition-colors"
                   value={emailEnvio}
                   onChange={e => setEmailEnvio(e.target.value)}
                 />
-                <button 
+                <button
                   onClick={enviarEmailManual}
                   disabled={cargando || !emailEnvio}
                   className="bg-slate-900 text-white px-6 rounded-xl font-black text-[10px] uppercase disabled:opacity-50 hover:bg-black transition-colors"
                 >
-                  Enviar
+                  {t('reserva.send')}
                 </button>
               </div>
             </div>
           ) : (
             <div className="bg-emerald-50 p-6 rounded-[2rem] text-emerald-600 font-black text-xs uppercase tracking-widest border border-emerald-100">
-              ✅ Email enviado con éxito
+              {t('reserva.emailSent')}
             </div>
           )}
         </div>
 
-        <button 
+        <button
           onClick={alCerrar}
           className="w-full bg-slate-100 text-slate-500 p-6 rounded-2xl font-black uppercase tracking-[0.3em] text-[10px] hover:bg-slate-200 transition-all"
-        >Cerrar Ventana</button>
+        >{t('reserva.close')}</button>
       </div>
     );
   }
@@ -492,7 +494,7 @@ const ReservaForm = ({ item, alCerrar }: ReservaFormProps) => {
         <div className="absolute bottom-6 left-8 right-8 z-10">
           <div className="flex flex-wrap items-center gap-3 mb-2">
             <span className="text-[10px] font-black text-kalian-gold uppercase tracking-[0.3em] bg-kalian-gold/10 px-3 py-1 rounded-full border border-kalian-gold/20 backdrop-blur-sm">
-              {esCurso ? '📚 CURSO' : '🎟️ EVENTO'}
+              {esCurso ? t('reserva.course') : t('reserva.event')}
             </span>
             <span 
               className="text-[10px] font-black text-white uppercase tracking-[0.3em] px-3 py-1 rounded-full border border-white/20 backdrop-blur-sm flex items-center gap-2"
@@ -564,10 +566,10 @@ const ReservaForm = ({ item, alCerrar }: ReservaFormProps) => {
                 </p>
                 {!socioData && item.cupon && (
                   <div className="pt-4 space-y-2">
-                    <p className="text-[10px] font-black text-emerald-400/60 uppercase tracking-widest">¿Tienes un cupón de acceso anticipado?</p>
-                    <input 
-                      type="text" 
-                      placeholder="INTRODUCIR CUPÓN" 
+                    <p className="text-[10px] font-black text-emerald-400/60 uppercase tracking-widest">{t('reserva.earlyAccessCoupon')}</p>
+                    <input
+                      type="text"
+                      placeholder={t('reserva.enterCoupon')} 
                       className="w-full p-4 bg-emerald-500/5 rounded-xl border border-emerald-500/10 text-center font-black uppercase text-emerald-500 outline-none focus:border-emerald-500 transition-all"
                       value={claveInput}
                       onChange={e => setClaveInput(e.target.value.toUpperCase())}
@@ -582,10 +584,10 @@ const ReservaForm = ({ item, alCerrar }: ReservaFormProps) => {
                 <div className="grid grid-cols-1 gap-6">
                 <div className="space-y-2">
                   <label className="text-[9px] font-black text-kalian-gold/90 uppercase tracking-[0.3em] ml-4">
-                    {esCurso ? 'DNI (OBLIGATORIO)' : 'TU IDENTIFICACIÓN (DNI SI ERES SOCI@S)'}
+                    {esCurso ? t('reserva.dniRequired') : t('reserva.dniIfMember')}
                   </label>
-                  <input 
-                    type="text" placeholder={esCurso ? "DNI OBLIGATORIO" : "DNI PARA DESCUENTO"} 
+                  <input
+                    type="text" placeholder={esCurso ? t('reserva.dniRequired') : t('reserva.dniForDiscount')} 
                     className="w-full p-5 bg-kalian-gold/10 rounded-2xl font-black uppercase outline-none border border-kalian-gold/20 focus:border-kalian-gold transition-all text-xl text-kalian-gold placeholder:text-kalian-gold/40" 
                     value={form.dni} 
                     onChange={e => setForm({...form, dni: e.target.value.toUpperCase()})} 
@@ -595,9 +597,9 @@ const ReservaForm = ({ item, alCerrar }: ReservaFormProps) => {
                 </div>
 
                 <div className="space-y-2">
-                  <label className="text-[9px] font-black text-kalian-gold/90 uppercase tracking-[0.3em] ml-4">NOMBRE COMPLETO</label>
-                  <input 
-                    type="text" placeholder="NOMBRE Y APELLIDOS" 
+                  <label className="text-[9px] font-black text-kalian-gold/90 uppercase tracking-[0.3em] ml-4">{t('reserva.fullName')}</label>
+                  <input
+                    type="text" placeholder={t('reserva.fullNamePlaceholder')} 
                     className="w-full p-5 bg-kalian-gold/10 rounded-2xl font-bold outline-none border border-kalian-gold/20 focus:border-kalian-gold transition-all text-kalian-cream placeholder:text-kalian-cream/40" 
                     value={form.nombre} 
                     onChange={e => setForm({...form, nombre: e.target.value})} 
@@ -608,7 +610,7 @@ const ReservaForm = ({ item, alCerrar }: ReservaFormProps) => {
 
                 <div className="space-y-2">
                   <label className="text-[9px] font-black text-kalian-gold/90 uppercase tracking-[0.3em] ml-4">
-                    EMAIL {esCurso ? '(OBLIGATORIO)' : '(OPCIONAL PARA RECIBIR EL QR)'}
+                    {esCurso ? t('reserva.emailRequired') : t('reserva.emailOptional')}
                   </label>
                   <input 
                     type="email" placeholder="tu@email.com" 
@@ -622,10 +624,10 @@ const ReservaForm = ({ item, alCerrar }: ReservaFormProps) => {
 
                 {!esCurso && (
                   <div className="space-y-2">
-                    <label className="text-[9px] font-black text-kalian-gold/90 uppercase tracking-[0.3em] ml-4">CLAVE DE DESCUENTO</label>
+                    <label className="text-[9px] font-black text-kalian-gold/90 uppercase tracking-[0.3em] ml-4">{t('reserva.discountCode')}</label>
                     <div className="relative">
-                      <input 
-                        type="text" placeholder="¿TIENES UN CUPÓN?" 
+                      <input
+                        type="text" placeholder={t('reserva.hasCoupon')} 
                         className={`w-full p-5 bg-kalian-gold/10 rounded-2xl font-black uppercase outline-none border transition-all text-xl placeholder:text-kalian-gold/40 ${claveValida ? 'border-emerald-500 text-emerald-500' : 'border-kalian-gold/20 focus:border-kalian-gold text-kalian-gold'}`} 
                         value={claveInput} 
                         onChange={e => setClaveInput(e.target.value.toUpperCase())} 
@@ -638,8 +640,8 @@ const ReservaForm = ({ item, alCerrar }: ReservaFormProps) => {
                 {!esCurso && (
                   <div className="flex justify-between items-center bg-kalian-gold/5 p-6 rounded-3xl border border-kalian-gold/10">
                     <div>
-                      <span className="text-[9px] font-black uppercase text-kalian-gold/80 block mb-1 tracking-widest">Acompañantes</span>
-                      <span className="text-[10px] text-kalian-gold/60 font-bold italic uppercase">Máximo {item.max_acompanantes || 4} personas</span>
+                      <span className="text-[9px] font-black uppercase text-kalian-gold/80 block mb-1 tracking-widest">{t('reserva.companions')}</span>
+                      <span className="text-[10px] text-kalian-gold/60 font-bold italic uppercase">{t('reserva.maxPersons', { n: item.max_acompanantes || 4 })}</span>
                     </div>
                     <div className="flex items-center gap-4">
                       <button 
@@ -661,30 +663,30 @@ const ReservaForm = ({ item, alCerrar }: ReservaFormProps) => {
               {/* DESGLOSE DE PRECIO */}
               <div className="bg-black/40 p-8 rounded-[2.5rem] border border-kalian-gold/10 space-y-4 shadow-inner">
                 <div className="flex justify-between items-center text-[10px] font-black uppercase text-kalian-gold/90 tracking-[0.2em]">
-                  <span>{esCurso ? 'Aportación Mensual' : 'Aportación Base'}</span>
+                  <span>{esCurso ? t('reserva.monthlyContrib') : t('reserva.baseContrib')}</span>
                   <span>{precioBase}€{esCurso ? '/mes' : ''}</span>
                 </div>
                 {precioCalculado.esSocio && (
                 <div className="flex justify-between items-center text-[10px] font-black uppercase text-kalian-gold/90 tracking-[0.2em]">
-                  <span>Descuento Soci@s</span>
+                  <span>{t('reserva.memberDiscount')}</span>
                   <span>{item.precio_descuento}€{esCurso ? '/mes' : ''}</span>
                 </div>
                 )}
                 {precioCalculado.esClave && (
                 <div className="flex justify-between items-center text-[10px] font-black uppercase text-emerald-400 tracking-[0.2em]">
-                  <span>Descuento Cupón</span>
+                  <span>{t('reserva.couponDiscount')}</span>
                   <span>{item.precioCupon}€{esCurso ? '/mes' : ''}</span>
                 </div>
                 )}
                 <div className="flex justify-between items-center pt-4 border-t border-kalian-gold/10">
-                  <span className="text-sm font-black uppercase text-kalian-cream tracking-[0.3em]">Total</span>
+                  <span className="text-sm font-black uppercase text-kalian-cream tracking-[0.3em]">{t('reserva.total')}</span>
                   <span className="text-5xl kalian-poster-text text-kalian-gold italic drop-shadow-lg">{precioCalculado.total}€{esCurso ? '/mes' : ''}</span>
                 </div>
                 <p className="text-[9px] text-kalian-gold/30 font-black uppercase text-center pt-2 tracking-widest leading-relaxed">
-                  {precioCalculado.esSocio ? `✓ DESCUENTO APLICADO (SOCI@S ${getNombreCategoria(categoriaActividad).toUpperCase()})` : 
-                   precioCalculado.esClave ? '✓ DESCUENTO APLICADO POR CUPÓN' :
-                   categoriaActividad !== 'ninguno' ? `DESCUENTO DISPONIBLE PARA SOCI@S ${getNombreCategoria(categoriaActividad).toUpperCase()}` :
-                   'SIN DESCUENTO PARA SOCI@S'}
+                  {precioCalculado.esSocio ? t('reserva.memberDiscountApplied', { cat: getNombreCategoria(categoriaActividad).toUpperCase() }) :
+                   precioCalculado.esClave ? t('reserva.couponDiscountApplied') :
+                   categoriaActividad !== 'ninguno' ? t('reserva.memberDiscountAvail', { cat: getNombreCategoria(categoriaActividad).toUpperCase() }) :
+                   t('reserva.noDiscount')}
                 </p>
               </div>
 
@@ -692,7 +694,7 @@ const ReservaForm = ({ item, alCerrar }: ReservaFormProps) => {
                 disabled={cargando}
                 className="w-full bg-kalian-gold text-black p-6 rounded-2xl kalian-poster-text text-2xl tracking-widest hover:bg-white transition-all flex items-center justify-center gap-4 active:scale-95 shadow-2xl shadow-kalian-gold/20 disabled:opacity-50"
               >
-                {cargando ? 'PROCESANDO...' : (esCurso ? 'CONSULTAR INSCRIPCIÓN' : 'CONFIRMAR RESERVA')}
+                {cargando ? t('reserva.processing') : (esCurso ? t('reserva.checkEnrollment') : t('reserva.confirmBooking'))}
               </button>
               
               </form>
@@ -700,7 +702,7 @@ const ReservaForm = ({ item, alCerrar }: ReservaFormProps) => {
             
             {!esCurso && !mensajeBloqueo && (
               <p className="text-center text-[9px] text-kalian-gold/20 font-black uppercase tracking-[0.4em]">
-                El pago se realizará en efectivo en el centro
+                {t('reserva.cashPayment')}
               </p>
             )}
           </div>

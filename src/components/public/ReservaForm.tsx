@@ -623,15 +623,15 @@ const ReservaForm = ({ item, alCerrar }: ReservaFormProps) => {
                   />
                 </div>
 
-                {!esCurso && (
+                {!esCurso && item.cupon && (
                   <div className="space-y-2">
                     <label className="text-[9px] font-black text-kalian-gold/90 uppercase tracking-[0.3em] ml-4">{t('reserva.discountCode')}</label>
                     <div className="relative">
                       <input
-                        type="text" placeholder={t('reserva.hasCoupon')} 
-                        className={`w-full p-5 bg-kalian-gold/10 rounded-2xl font-black uppercase outline-none border transition-all text-xl placeholder:text-kalian-gold/40 ${claveValida ? 'border-emerald-500 text-emerald-500' : 'border-kalian-gold/20 focus:border-kalian-gold text-kalian-gold'}`} 
-                        value={claveInput} 
-                        onChange={e => setClaveInput(e.target.value.toUpperCase())} 
+                        type="text" placeholder={t('reserva.hasCoupon')}
+                        className={`w-full p-5 bg-kalian-gold/10 rounded-2xl font-black uppercase outline-none border transition-all text-xl placeholder:text-kalian-gold/40 ${claveValida ? 'border-emerald-500 text-emerald-500' : 'border-kalian-gold/20 focus:border-kalian-gold text-kalian-gold'}`}
+                        value={claveInput}
+                        onChange={e => setClaveInput(e.target.value.toUpperCase())}
                       />
                       {claveValida && <span className="absolute right-5 top-1/2 -translate-y-1/2 text-emerald-500 text-xl">✓</span>}
                     </div>

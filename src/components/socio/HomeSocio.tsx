@@ -237,7 +237,8 @@ export const HomeSocio = () => {
         <section className="space-y-12">
           <SectionTitle title={t('home.upcomingEvents')} subtitle={t('home.eventsLabel')} color={config?.titleColor} />
 
-          {/* ACCESO POR CUPÓN GLOBAL */}
+          {/* ACCESO POR CUPÓN GLOBAL — solo si hay algún evento con cupón activo */}
+          {eventos.some(ev => ev.cupon) && (
           <motion.div
             initial={{ opacity: 0, y: 20 }}
             whileInView={{ opacity: 1, y: 0 }}
@@ -270,6 +271,7 @@ export const HomeSocio = () => {
               <p className="text-red-500 text-[10px] font-black uppercase tracking-widest animate-pulse">{errorCupon}</p>
             )}
           </motion.div>
+          )}
 
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
             {eventos.map(ev => (

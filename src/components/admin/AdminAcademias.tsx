@@ -52,6 +52,7 @@ const AdminAcademias = () => {
 
   const [form, setForm] = useState<any>({
     nombre: '',
+    nombre_eu: '',
     orden: 0,
     activo: true,
     imageUrl: '',
@@ -136,7 +137,7 @@ const AdminAcademias = () => {
         setMsg("✅ Academia creada con éxito");
       }
 
-      setForm({ nombre: '', orden: 0, activo: true, imageUrl: '', storagePath: '', subcategorias: [] });
+      setForm({ nombre: '', nombre_eu: '', orden: 0, activo: true, imageUrl: '', storagePath: '', subcategorias: [] });
       setArchivo(null);
       setEditando(null);
       fetchAcademias();
@@ -197,6 +198,7 @@ const AdminAcademias = () => {
               <div className="space-y-2">
                 <label className="text-[9px] font-black uppercase text-kalian-gold/90 ml-4 tracking-widest">Nombre</label>
                 <input type="text" placeholder="EJ: MUSIC IS COOL" className="w-full p-4 bg-kalian-gold/10 rounded-xl outline-none border border-kalian-gold/20 focus:border-kalian-gold transition-all text-kalian-cream font-bold placeholder:text-kalian-cream/50" value={form.nombre} onChange={e => setForm({...form, nombre: e.target.value})} required />
+                <input type="text" placeholder="Izena (Euskera — opcional)" className="w-full p-3 bg-kalian-gold/5 rounded-xl outline-none border border-kalian-gold/5 focus:border-kalian-gold/40 transition-all text-kalian-gold/60 font-bold text-sm placeholder:text-kalian-cream/30" value={form.nombre_eu} onChange={e => setForm({...form, nombre_eu: e.target.value})} />
               </div>
 
               <div className="grid grid-cols-2 gap-4">
@@ -297,7 +299,7 @@ const AdminAcademias = () => {
                     type="button"
                     onClick={() => {
                       setEditando(null);
-                      setForm({ nombre: '', orden: 0, activo: true, imageUrl: '', storagePath: '', subcategorias: [] });
+                      setForm({ nombre: '', nombre_eu: '', orden: 0, activo: true, imageUrl: '', storagePath: '', subcategorias: [] });
                       setArchivo(null);
                     }}
                     className="bg-white/10 text-white px-4 rounded-xl font-black uppercase text-[10px]"
@@ -344,6 +346,7 @@ const AdminAcademias = () => {
                           setEditando(aca.id);
                           setForm({
                             nombre: aca.nombre,
+                            nombre_eu: aca.nombre_eu || '',
                             orden: aca.orden,
                             activo: aca.activo,
                             imageUrl: aca.imageUrl,

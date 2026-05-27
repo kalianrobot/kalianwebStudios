@@ -16,16 +16,17 @@ interface Resultado {
   msg: string;
 }
 
-const DELAY_MS = 600;
+const DELAY_MS = 300;
 
 async function traducirTexto(texto: string): Promise<string> {
   if (!texto.trim()) return '';
-  const url = `https://api.mymemory.translated.net/get?q=${encodeURIComponent(texto)}&langpair=es|eu`;
+  const url = `https://translate.googleapis.com/translate_a/single?client=gtx&sl=es&tl=eu&dt=t&q=${encodeURIComponent(texto)}`;
   const res = await fetch(url);
   if (!res.ok) throw new Error(`HTTP ${res.status}`);
   const data = await res.json();
-  if (data.responseStatus !== 200) throw new Error(data.responseDetails || 'Error MyMemory');
-  return data.responseData.translatedText || texto;
+  // Formato: [[[translated, original, ...], ...], ...]
+  const traduccion = data?.[0]?.map((seg: any) => seg?.[0] ?? '').join('');
+  return traduccion || texto;
 }
 
 const sleep = (ms: number) => new Promise(r => setTimeout(r, ms));

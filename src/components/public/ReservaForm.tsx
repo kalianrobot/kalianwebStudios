@@ -494,9 +494,6 @@ const ReservaForm = ({ item, alCerrar }: ReservaFormProps) => {
         
         <div className="absolute bottom-6 left-8 right-8 z-10">
           <div className="flex flex-wrap items-center gap-3 mb-2">
-            <span className="text-[10px] font-black text-kalian-gold uppercase tracking-[0.3em] bg-kalian-gold/10 px-3 py-1 rounded-full border border-kalian-gold/20 backdrop-blur-sm">
-              {esCurso ? t('reserva.course') : t('reserva.event')}
-            </span>
             {!!socioData && (
               <span
                 className="text-[10px] font-black text-white uppercase tracking-[0.3em] px-3 py-1 rounded-full border border-white/20 backdrop-blur-sm flex items-center gap-2"

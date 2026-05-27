@@ -117,6 +117,7 @@ const eu: Record<string, string> = {
   'reserva.generalOpensCoupon': 'Gonbidatuentzako erreserbak honetan irekitzen dira: {date}. Aurrerapen-kupoia baduzu, sartu behean.',
   'reserva.earlyAccessCoupon': 'Aurrerapen-sarrerako kupoia al duzu?',
   'reserva.enterCoupon': 'KUPOIA SARTU',
+  'reserva.discountTag': '{cat} Deskontua',
 
   // EventCard
   'event.room': 'Gela',

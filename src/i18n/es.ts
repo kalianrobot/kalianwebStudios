@@ -117,6 +117,7 @@ const es: Record<string, string> = {
   'reserva.generalOpensCoupon': 'Las reservas para invitados abren el {date}. Si tienes un cupón de acceso anticipado, introdúcelo abajo.',
   'reserva.earlyAccessCoupon': '¿Tienes un cupón de acceso anticipado?',
   'reserva.enterCoupon': 'INTRODUCIR CUPÓN',
+  'reserva.discountTag': 'Dto. {cat}',
 
   // EventCard
   'event.room': 'Sala',

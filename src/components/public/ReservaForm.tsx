@@ -508,7 +508,7 @@ const ReservaForm = ({ item, alCerrar }: ReservaFormProps) => {
             </span>
             {item.tiene_descuento && (
               <span className="text-[10px] font-black text-emerald-400 uppercase tracking-[0.3em] bg-emerald-400/10 px-3 py-1 rounded-full border border-emerald-400/20 backdrop-blur-sm">
-                Dto. {getNombreCategoria(categoriaActividad)}
+                {t('reserva.discountTag', { cat: getNombreCategoria(categoriaActividad) })}
               </span>
             )}
           </div>

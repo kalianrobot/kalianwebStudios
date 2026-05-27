@@ -496,11 +496,11 @@ const ReservaForm = ({ item, alCerrar }: ReservaFormProps) => {
             <span className="text-[10px] font-black text-kalian-gold uppercase tracking-[0.3em] bg-kalian-gold/10 px-3 py-1 rounded-full border border-kalian-gold/20 backdrop-blur-sm">
               {esCurso ? t('reserva.course') : t('reserva.event')}
             </span>
-            <span 
+            <span
               className="text-[10px] font-black text-white uppercase tracking-[0.3em] px-3 py-1 rounded-full border border-white/20 backdrop-blur-sm flex items-center gap-2"
               style={{ backgroundColor: (item.sala || 'SALA GRANDE') === 'Estudio' ? '#f59e0b44' : ((item.sala || 'SALA GRANDE') === 'Local Pequeño' ? '#10b98144' : '#3b82f644') }}
             >
-              <div 
+              <div
                 className="w-2 h-2 rounded-full"
                 style={{ backgroundColor: (item.sala || 'SALA GRANDE') === 'Estudio' ? '#f59e0b' : ((item.sala || 'SALA GRANDE') === 'Local Pequeño' ? '#10b981' : '#3b82f6') }}
               ></div>
@@ -564,12 +564,12 @@ const ReservaForm = ({ item, alCerrar }: ReservaFormProps) => {
                 <p className="text-kalian-cream/60 font-bold text-xs">
                   {mensajeBloqueo}
                 </p>
-                {!socioData && item.cupon && (
+                {item.cupon && (
                   <div className="pt-4 space-y-2">
                     <p className="text-[10px] font-black text-emerald-400/60 uppercase tracking-widest">{t('reserva.earlyAccessCoupon')}</p>
                     <input
                       type="text"
-                      placeholder={t('reserva.enterCoupon')} 
+                      placeholder={t('reserva.enterCoupon')}
                       className="w-full p-4 bg-emerald-500/5 rounded-xl border border-emerald-500/10 text-center font-black uppercase text-emerald-500 outline-none focus:border-emerald-500 transition-all"
                       value={claveInput}
                       onChange={e => setClaveInput(e.target.value.toUpperCase())}

@@ -6,29 +6,31 @@ service firebase.storage {
       return request.auth != null;
     }
 
+    function isMasterAdmin() {
+      return isAuthenticated() && request.auth.token.email == "kalianrobot@gmail.com";
+    }
+
     function isAdmin() {
-      return isAuthenticated() && (
-        request.auth.token.email == "kalianrobot@gmail.com" ||
-        (
-          exists(/databases/(default)/documents/users/$(request.auth.uid)) &&
-          firestore.get(/databases/(default)/documents/users/$(request.auth.uid)).data.role == 'admin'
-        )
+      return isMasterAdmin() || (
+        isAuthenticated() &&
+        firestore.exists(/databases/(default)/documents/users/$(request.auth.uid)) &&
+        firestore.get(/databases/(default)/documents/users/$(request.auth.uid)).data.role == 'admin'
       );
     }
 
     function isTeacherOf(cursoId) {
       return isAuthenticated() &&
-        exists(/databases/(default)/documents/cursos/$(cursoId)) &&
+        firestore.exists(/databases/(default)/documents/cursos/$(cursoId)) &&
         firestore.get(/databases/(default)/documents/cursos/$(cursoId)).data.profesorId == request.auth.uid;
     }
 
-    function isSocio() {
+    // Checks users/{uid}.role — socios collection uses DNI as doc ID, not UID
+    function isMember() {
       return isAuthenticated() && (
-        (
-          exists(/databases/(default)/documents/users/$(request.auth.uid)) &&
-          firestore.get(/databases/(default)/documents/users/$(request.auth.uid)).data.role == 'socio'
-        ) ||
-        exists(/databases/(default)/documents/socios/$(request.auth.uid))
+        isMasterAdmin() ||
+        (firestore.exists(/databases/(default)/documents/users/$(request.auth.uid)) &&
+         firestore.get(/databases/(default)/documents/users/$(request.auth.uid)).data.role in
+           ['socio', 'teacher', 'teacher_admin', 'portero', 'admin'])
       );
     }
 
@@ -44,42 +46,56 @@ service firebase.storage {
           || request.resource.contentType.matches('text/plain');
     }
 
-    // CURSOS: documentos de clase
+    // Site config images (logo, hero, gallery, hub)
+    match /config/{fileName} {
+      allow read: if true;
+      allow write: if isAdmin() && isImage() && request.resource.size < 10 * 1024 * 1024;
+      allow delete: if isAdmin();
+    }
+
+    // Event posters — shown publicly on landing page and socio portal
+    match /eventos/{fileName} {
+      allow read: if true;
+      allow write: if isAdmin() && isImage() && request.resource.size < 10 * 1024 * 1024;
+      allow delete: if isAdmin();
+    }
+
+    // Academia images
+    match /academias/{fileName} {
+      allow read: if true;
+      allow write: if isAdmin() && isImage() && request.resource.size < 5 * 1024 * 1024;
+      allow delete: if isAdmin();
+    }
+
+    // Professor profile images
+    match /profesores/{fileName} {
+      allow read: if true;
+      allow write: if isAdmin() && isImage() && request.resource.size < 5 * 1024 * 1024;
+      allow delete: if isAdmin();
+    }
+
+    // Exhibition images
+    match /exposiciones/{fileName} {
+      allow read: if true;
+      allow write: if isAdmin() && isImage() && request.resource.size < 10 * 1024 * 1024;
+      allow delete: if isAdmin();
+    }
+
+    // Local/space images
+    match /locales/{fileName} {
+      allow read: if true;
+      allow write: if isAdmin() && isImage() && request.resource.size < 5 * 1024 * 1024;
+      allow delete: if isAdmin();
+    }
+
+    // Course materials: any file type allowed (PDFs, videos, etc.)
     match /cursos/{cursoId}/{fileName} {
-      allow read: if isAuthenticated() && (isSocio() || isTeacherOf(cursoId) || isAdmin());
+      allow read: if isAuthenticated() && (isMember() || isTeacherOf(cursoId) || isAdmin());
       allow write: if isAuthenticated() &&
                    (isTeacherOf(cursoId) || isAdmin()) &&
                    request.resource.size < 20 * 1024 * 1024 &&
                    isDocOrImage();
       allow delete: if isAuthenticated() && (isTeacherOf(cursoId) || isAdmin());
-    }
-
-    // ACADEMIAS: imágenes de portada de academias
-    match /academias/{fileName} {
-      allow read: if true;
-      allow write: if isAdmin() && request.resource.size < 5 * 1024 * 1024 && isImage();
-      allow delete: if isAdmin();
-    }
-
-    // CONFIG: logo, hero, galería, hub — solo admin
-    match /config/{fileName} {
-      allow read: if true;
-      allow write: if isAdmin() && request.resource.size < 5 * 1024 * 1024 && isImage();
-      allow delete: if isAdmin();
-    }
-
-    // EVENTOS: carteles de eventos
-    match /eventos/{fileName} {
-      allow read: if true;
-      allow write: if isAdmin() && request.resource.size < 10 * 1024 * 1024 && isImage();
-      allow delete: if isAdmin();
-    }
-
-    // EXPOSICIONES: imágenes de galería
-    match /exposiciones/{fileName} {
-      allow read: if true;
-      allow write: if isAdmin() && request.resource.size < 10 * 1024 * 1024 && isImage();
-      allow delete: if isAdmin();
     }
   }
 }

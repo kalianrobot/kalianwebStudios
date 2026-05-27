@@ -70,7 +70,7 @@ const KalianCalendar: React.FC<KalianCalendarProps> = ({ teacherMode = false }) 
 
     let unsubEventos = () => {};
     let unsubCursos = () => {};
-    let unsubSesiones = () => {};
+    const unsubSesiones = () => {};
     let unsubProf = () => {};
     let unsubFallback = () => {};
     let unsubMulti = () => {};
@@ -81,7 +81,6 @@ const KalianCalendar: React.FC<KalianCalendarProps> = ({ teacherMode = false }) 
       // Listener para Eventos
       unsubEventos = onSnapshot(query(collection(db, "eventos"), orderBy("fecha", "asc")), (snap) => {
         const data = snap.docs.map(d => ({ id: d.id, ...d.data(), refPath: d.ref.path }));
-        console.log("Calendar: Eventos actualizados:", data.length);
         setRawEventos(data);
         setLoading(false);
       }, (err) => {
@@ -93,7 +92,6 @@ const KalianCalendar: React.FC<KalianCalendarProps> = ({ teacherMode = false }) 
       const setupRealTimeSesiones = async (cursosIdList: string[]) => {
         if (unsubMulti) unsubMulti(); // Limpiar previo si existe
         
-        console.log("📡 Configurando Real-Time para sesiones de", cursosIdList.length, "cursos");
         const listeners: any[] = [];
         const sesionesMap: Record<string, any[]> = {};
 
@@ -117,7 +115,6 @@ const KalianCalendar: React.FC<KalianCalendarProps> = ({ teacherMode = false }) 
       // Listener para Cursos (Y sus sesiones subordinadas)
       unsubCursos = onSnapshot(collection(db, "cursos"), (snap) => {
         const cursosData = snap.docs.map(d => ({ id: d.id, ...d.data() }));
-        console.log("💎 Calendar: Cursos recibidos:", cursosData.length);
         setCursos(cursosData);
         
         // Iniciamos carga de sesiones para estos cursos
@@ -169,7 +166,6 @@ const KalianCalendar: React.FC<KalianCalendarProps> = ({ teacherMode = false }) 
     });
 
     const allEvents: any[] = [];
-    console.log(`📊 Calendar Processing: Cursos=${cursos.length}, Sesiones=${rawSesiones.length}, Eventos=${rawEventos.length}`);
 
     // Procesar Eventos
     rawEventos.forEach(ev => {
@@ -331,7 +327,6 @@ const KalianCalendar: React.FC<KalianCalendarProps> = ({ teacherMode = false }) 
     const { event } = info;
     const { type, path, sala, profesorId, esRecurrente, courseId } = event.extendedProps;
 
-    console.log("Event change detected:", { id: event.id, start: event.start, end: event.end });
 
     // 1. Permisos
     const isEditable = userRole === 'admin' || (userRole === 'profesor' && profesorId === userUID);
@@ -360,7 +355,6 @@ const KalianCalendar: React.FC<KalianCalendarProps> = ({ teacherMode = false }) 
     }
 
     // 3. Preparar Modal de Confirmación
-    console.log("Opening confirmation modal for:", { newDate, newStart, newEnd });
     setPendingChange({
       info,
       newDate,
@@ -485,7 +479,6 @@ const KalianCalendar: React.FC<KalianCalendarProps> = ({ teacherMode = false }) 
             <div className="flex gap-2 ml-auto">
               <button 
                 onClick={() => {
-                  console.log("DEBUG CALENDAR MANUAL REFRESH");
                   window.location.reload();
                 }}
                 className="bg-kalian-gold/10 hover:bg-kalian-gold hover:text-black px-2 py-1 rounded transition-all text-[8px]"

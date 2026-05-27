@@ -139,7 +139,7 @@ const AdminCursos = () => {
       today.setHours(0, 0, 0, 0);
 
       form.diasSemana.forEach(targetDay => {
-        let current = new Date(form.fechaInicio);
+        const current = new Date(form.fechaInicio);
         const targetDayJs = targetDay === 7 ? 0 : targetDay;
 
         while (current.getDay() !== targetDayJs) {
@@ -257,7 +257,7 @@ const AdminCursos = () => {
       const fechasAComprobar: string[] = [];
 
       if (nuevaSesion.esRecurrente) {
-        let current = new Date(nuevaSesion.fecha);
+        const current = new Date(nuevaSesion.fecha);
         const end = new Date(curso.fechaFin);
         
         while (current <= end) {
@@ -473,7 +473,7 @@ const AdminCursos = () => {
         setEditando(c.id);
         setForm({
           titulo: c.titulo || '',
-          categoria: c.categoria || (academias.length > 0 ? academias[0].id : ''),
+          categoria: c.categoria || (academias.length > 0 ? academias[0].nombre : ''),
           subcategoria: c.subcategoria || '',
           emoji: c.emoji || '🎸',
           modalidades: c.modalidades || [{ tipo: 'presencial', frecuencia: 'semanal', precio: '' }],
@@ -769,7 +769,7 @@ const AdminCursos = () => {
         const end = new Date(form.fechaFin);
         
         form.diasSemana.forEach(targetDay => {
-          let current = new Date(form.fechaInicio);
+          const current = new Date(form.fechaInicio);
           const targetDayJs = targetDay === 7 ? 0 : targetDay;
 
           while (current.getDay() !== targetDayJs) {
@@ -802,7 +802,7 @@ const AdminCursos = () => {
       setTimeout(() => setMsg(''), 3000);
       setForm({
         titulo: '',
-        categoria: academias.length > 0 ? academias[0].id : '',
+        categoria: academias.length > 0 ? academias[0].nombre : '',
         subcategoria: '',
         emoji: '🎸',
         modalidades: [{ tipo: 'presencial', frecuencia: 'semanal', precio: '' }],
@@ -1363,7 +1363,7 @@ const AdminCursos = () => {
                     setEditando(null);
                     setForm({
                       titulo: '',
-                      categoria: academias.length > 0 ? academias[0].id : '',
+                      categoria: academias.length > 0 ? academias[0].nombre : '',
                       subcategoria: '',
                       emoji: '🎸',
                       modalidades: [{ tipo: 'presencial', frecuencia: 'semanal', precio: '' }],

@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { db } from '../firebase';
-import { collection, getDocs, query, orderBy, DocumentData, addDoc, where, doc, getDoc, onSnapshot } from 'firebase/firestore';
+import { collection, getDocs, query, orderBy, DocumentData, addDoc, doc, getDoc, onSnapshot, where } from 'firebase/firestore';
 import { Link, useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'motion/react';
 import { useAuth } from '../context/AuthContext';
@@ -242,7 +242,7 @@ const ProgramacionPublica = () => {
           <SectionTitle title={t('home.upcomingEvents')} subtitle={t('home.eventsLabel')} color={config?.titleColor} />
 
           {/* ACCESO POR CUPÓN GLOBAL */}
-          <motion.div 
+          <motion.div
             initial={{ opacity: 0, y: 20 }}
             whileInView={{ opacity: 1, y: 0 }}
             viewport={{ once: true }}
@@ -274,7 +274,7 @@ const ProgramacionPublica = () => {
               <p className="text-red-500 text-[10px] font-black uppercase tracking-widest animate-pulse">{errorCupon}</p>
             )}
           </motion.div>
-          
+
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
             {eventos.map(ev => (
               <EventCard 
@@ -562,20 +562,22 @@ const ProgramacionPublica = () => {
         <section className="space-y-12">
           <SectionTitle title={t('home.kalian')} subtitle={t('home.hubHeader')} color={config?.titleColor} />
           
-          <motion.div 
+          <motion.div
             whileHover={{ scale: 1.02, y: -5 }}
-            className="bg-black/40 border border-kalian-gold/10 rounded-[3rem] p-12 flex flex-col md:flex-row items-center justify-between gap-10 shadow-2xl hover:border-kalian-gold/30 transition-all relative overflow-hidden group"
+            className="border border-kalian-gold/10 rounded-[3rem] p-12 flex flex-col md:flex-row items-center justify-between gap-10 shadow-2xl hover:border-kalian-gold/30 transition-all relative overflow-hidden group"
           >
-            <div className="absolute inset-0 bg-kalian-gold/5 opacity-0 group-hover:opacity-100 transition-opacity duration-700"></div>
-            
-            <div className="flex flex-col md:flex-row items-center gap-10 relative z-10">
-              <div className="w-32 h-32 flex-shrink-0 rounded-2xl overflow-hidden border border-kalian-gold/20 shadow-2xl">
-                {config?.hubImageUrl ? (
-                  <img src={config.hubImageUrl} alt="Hub" className="w-full h-full object-cover" />
-                ) : (
-                  <div className="w-full h-full bg-kalian-gold/10 flex items-center justify-center text-5xl">🏢</div>
-                )}
+            {/* Background image or fallback */}
+            {config?.hubImageUrl ? (
+              <div className="absolute inset-0 z-0">
+                <img src={config.hubImageUrl} alt="" className="w-full h-full object-cover" />
+                <div className="absolute inset-0 bg-black/65"></div>
               </div>
+            ) : (
+              <div className="absolute inset-0 bg-black/40 z-0"></div>
+            )}
+            <div className="absolute inset-0 bg-kalian-gold/5 opacity-0 group-hover:opacity-100 transition-opacity duration-700 z-[1]"></div>
+
+            <div className="flex flex-col md:flex-row items-center gap-10 relative z-10">
               <div className="space-y-4 text-center md:text-left">
                 <h3 className="text-3xl kalian-poster-text text-kalian-cream uppercase italic">{t('hub.spaceQuery')}</h3>
                 <p className="text-kalian-cream/60 text-sm max-w-md leading-relaxed">

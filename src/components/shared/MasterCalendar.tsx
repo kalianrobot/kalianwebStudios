@@ -142,7 +142,7 @@ const MasterCalendar = ({ teacherMode = false }: MasterCalendarProps) => {
         const end = new Date(curso.fechaFin);
         
         nuevaSesion.diasSemana.forEach(targetDay => {
-          let current = new Date(showAddModal.date);
+          const current = new Date(showAddModal.date);
           const targetDayJs = targetDay === 7 ? 0 : targetDay;
 
           while (current.getDay() !== targetDayJs) {

@@ -37,6 +37,12 @@ service cloud.firestore {
       );
     }
 
+    function isTeacherOfCourse(cursoId) {
+      return isSignedIn() &&
+             exists(/databases/$(database)/documents/cursos/$(cursoId)) &&
+             get(/databases/$(database)/documents/cursos/$(cursoId)).data.profesorId == request.auth.uid;
+    }
+
     // --- GLOBAL SAFETY NET (solo master admin) ---
     match /{document=**} {
       allow read, write: if isMasterAdmin();
@@ -46,12 +52,14 @@ service cloud.firestore {
     // C1: el campo 'role' sólo puede ser modificado por un admin. El usuario puede crear y
     // mantener su propio perfil pero nunca tocar 'role'.
     match /users/{userId} {
-      allow read: if isSignedIn() && (request.auth.uid == userId || isAdmin());
+      // Users can read their own profile but cannot self-assign roles
+      allow read: if (isSignedIn() && request.auth.uid == userId) || isAdmin();
       allow create: if isSignedIn() && request.auth.uid == userId
-                    && (!incoming().keys().hasAny(['role']) || incoming().role == 'invitado');
-      allow update: if isSignedIn() && request.auth.uid == userId
-                    && !incoming().diff(existing()).affectedKeys().hasAny(['role']);
-      allow write: if isAdmin();
+                    && !incoming().keys().hasAny(['role']);
+      allow update: if (isSignedIn() && request.auth.uid == userId
+                        && !incoming().diff(existing()).affectedKeys().hasAny(['role']))
+                    || isAdmin();
+      allow delete: if isAdmin();
     }
 
     // --- CONFIG público (lectura abierta, escritura admin) ---
@@ -85,11 +93,11 @@ service cloud.firestore {
     // --- SESIONES ---
     match /cursos/{cursoId}/sesiones/{sId} {
       allow read, list: if true;
-      allow write: if isAdmin();
+      allow write: if isAdmin() || isTeacherOfCourse(cursoId);
     }
     match /{path=**}/sesiones/{sId} {
       allow read, list: if true;
-      allow write: if isAdmin();
+      allow write: if isAdmin() || isTeacher();
     }
 
     // --- EVENTOS ---
@@ -113,7 +121,8 @@ service cloud.firestore {
     }
     match /eventos/{id} {
       allow read: if true;
-      allow create, delete: if isAdmin();
+      allow create: if isAdmin() && isValidEvento(incoming());
+      allow delete: if isAdmin();
       allow update: if (isAdmin() && isValidEvento(incoming()))
                     || isSafeAforoUpdate();
     }
@@ -138,8 +147,12 @@ service cloud.firestore {
                   || isPortero()
                   || (isSignedIn() && resource.data.uidTitular == request.auth.uid)
                   || (isSignedIn() && resource.data.get('emailTitular', '').lower() == request.auth.token.get('email', '').lower());
-      allow update: if isAdmin() || isPortero();
-      allow delete: if isAdmin();
+      allow update: if isAdmin() || isPortero()
+                    || (isSignedIn()
+                        && resource.data.uidTitular == request.auth.uid
+                        && incoming().diff(existing()).affectedKeys().hasOnly(['acompañantes']));
+      allow delete: if isAdmin()
+                    || (isSignedIn() && resource.data.uidTitular == request.auth.uid);
     }
 
     // --- SOCIOS ---
@@ -152,8 +165,12 @@ service cloud.firestore {
           && data.email is string && data.email.size() <= 100;
     }
     match /socios/{id} {
-      allow read: if (isSignedIn() && resource.data.uid == request.auth.uid)
-                  || isAdmin() || isPortero();
+      // Allow querying by uid OR email (PerfilSocio uses both as fallback)
+      allow read: if isSignedIn() && (
+        resource.data.uid == request.auth.uid ||
+        resource.data.email == request.auth.token.email ||
+        isAdmin() || isPortero()
+      );
       allow create: if isAdmin() || (isSignedIn() && isValidSocioCreate(incoming()));
       allow update, delete: if isAdmin();
     }
@@ -214,7 +231,7 @@ service cloud.firestore {
 
     // --- FINANZAS / CAJA ---
     match /finanzas/{id}              { allow read, write: if isAdmin(); }
-    match /pagos_mensuales/{id}       { allow read, write: if isAdmin(); }
+    match /pagos_mensuales/{id}       { allow read: if isAdmin() || isSignedIn(); allow write: if isAdmin(); }
     match /pagos_inscripciones/{id}   { allow read, write: if isAdmin(); }
     match /caja_eventos/{id}          { allow read, write: if isAdmin() || isPortero(); }
     match /asistencia_eventos/{id}    { allow read, create: if isAdmin() || isPortero(); }
@@ -224,7 +241,12 @@ service cloud.firestore {
     match /notificaciones/{id} {
       allow read: if isSignedIn() && (resource.data.userId == request.auth.uid || isAdmin());
       allow create: if isSignedIn() && incoming().userId == request.auth.uid;
-      allow update, delete: if isSignedIn() && existing().userId == request.auth.uid;
+      allow update, delete: if isSignedIn() && (existing().userId == request.auth.uid || isAdmin());
+    }
+
+    // --- ASISTENCIA EVENTOS ---
+    match /asistencia_eventos/{id} {
+      allow read, write: if isAdmin() || isTeacher();
     }
   }
 }

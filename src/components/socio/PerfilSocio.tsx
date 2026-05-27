@@ -47,13 +47,17 @@ const PerfilSocio = () => {
         if (sData) {
           setUsuario(sData);
           
-          // Cargar pago mensual
-          const mesActual = new Date().getMonth() + 1;
-          const anioActual = new Date().getFullYear();
-          const pagoId = `${anioActual}_${mesActual}_${sData.dni}`;
-          const pagoSnap = await getDoc(doc(db, "pagos_mensuales", pagoId));
-          if (pagoSnap.exists()) {
-            setPagoMensual(pagoSnap.data());
+          // Cargar pago mensual (opcional — no aborta el perfil si falla)
+          try {
+            const mesActual = new Date().getMonth() + 1;
+            const anioActual = new Date().getFullYear();
+            const pagoId = `${anioActual}_${mesActual}_${sData.dni}`;
+            const pagoSnap = await getDoc(doc(db, "pagos_mensuales", pagoId));
+            if (pagoSnap.exists()) {
+              setPagoMensual(pagoSnap.data());
+            }
+          } catch (e) {
+            console.warn("No se pudo cargar el pago mensual:", e);
           }
 
           let cursosRes: any[] = [];
@@ -79,7 +83,7 @@ const PerfilSocio = () => {
           const snapResUid = await getDocs(qResUid);
           const hoy = new Date().toISOString().split('T')[0];
 
-          let todasLasReservas: any[] = snapResUid.docs.map(d => ({ id: d.id, ...d.data() }));
+          const todasLasReservas: any[] = snapResUid.docs.map(d => ({ id: d.id, ...d.data() }));
 
           // Fallback por DNI
           if (sData.dni) {

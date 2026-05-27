@@ -72,7 +72,6 @@ const AdminAcademias = () => {
       let huboMigracion = false;
       for (const aca of list) {
         if (aca.lema && (!aca.subcategorias || aca.subcategorias.length === 0)) {
-          console.log(`Migrando lema de ${aca.nombre}...`);
           const nuevasSub = aca.lema.split('•').map((s: string) => s.trim()).filter((s: string) => s !== '');
           await updateDoc(doc(db, "academias", aca.id), {
             subcategorias: nuevasSub,

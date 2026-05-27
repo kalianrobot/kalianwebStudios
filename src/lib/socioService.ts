@@ -19,6 +19,9 @@ export const syncSocioStatus = async (socioId: string) => {
     const mesActual = new Date().getMonth() + 1;
     const anioActual = new Date().getFullYear();
     const mesAnioKey = `${anioActual}_${mesActual}`;
+    const mesAnterior = mesActual === 1 ? 12 : mesActual - 1;
+    const anioMesAnterior = mesActual === 1 ? anioActual - 1 : anioActual;
+    const mesAnioKeyAnterior = `${anioMesAnterior}_${mesAnterior}`;
 
     // 1. Comprobar cursos activos
     let hasActiveCourse = false;
@@ -39,7 +42,8 @@ export const syncSocioStatus = async (socioId: string) => {
     if (socio.localId) {
       const localSnap = await getDoc(doc(db, "locales", socio.localId));
       if (localSnap.exists()) {
-        hasActiveLocal = localSnap.data().ultimoPagoMesAnio === mesAnioKey;
+        const ultimoPago = localSnap.data().ultimoPagoMesAnio;
+        hasActiveLocal = ultimoPago === mesAnioKey || ultimoPago === mesAnioKeyAnterior;
       }
     }
 
@@ -50,13 +54,11 @@ export const syncSocioStatus = async (socioId: string) => {
         estado: 'inactivo',
         membresias: {} // Limpiamos categorías para que no salgan en el carnet
       });
-      console.log(`Socio ${socioId} marcado como INACTIVO`);
       return 'inactivo';
     } else if (shouldBeActive && socio.estado !== 'activo') {
       await updateDoc(socioRef, {
         estado: 'activo'
       });
-      console.log(`Socio ${socioId} marcado como ACTIVO`);
       return 'activo';
     }
     

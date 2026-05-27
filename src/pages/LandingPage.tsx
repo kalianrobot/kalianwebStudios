@@ -1,8 +1,12 @@
 import React, { useEffect, useState } from 'react';
 import { Link, useNavigate, useLocation } from 'react-router-dom';
+import { db } from '../firebase';
+import { doc, getDoc } from 'firebase/firestore';
 import { KalianLogo } from '../components/public/KalianLogo';
 import { useAuth } from '../context/AuthContext';
 import { useLanguage } from '../context/LanguageContext';
+
+const FALLBACK_HERO = "https://images.unsplash.com/photo-1555041469-a586c61ea9bc?auto=format&fit=crop&q=80&w=1920";
 
 const LandingPage = () => {
   const { user, role, isAdmin, isTeacher, socioData, logoutSocio } = useAuth();
@@ -10,6 +14,15 @@ const LandingPage = () => {
   const navigate = useNavigate();
   const location = useLocation();
   const [inactivoMsg, setInactivoMsg] = useState<string | null>(null);
+  const [heroUrl, setHeroUrl] = useState<string>(FALLBACK_HERO);
+
+  useEffect(() => {
+    getDoc(doc(db, "config", "main")).then(snap => {
+      if (snap.exists() && snap.data().heroImageUrl) {
+        setHeroUrl(snap.data().heroImageUrl);
+      }
+    }).catch(() => {});
+  }, []);
 
   useEffect(() => {
     if (location.state?.msg) {
@@ -36,11 +49,11 @@ const LandingPage = () => {
 
   return (
     <div className="relative min-h-screen w-full flex flex-col items-center justify-center overflow-hidden bg-kalian-dark">
-      {/* Background Image (Sofa) */}
+      {/* Background Hero Image */}
       <div className="absolute inset-0 z-0">
-        <img 
-          src="https://images.unsplash.com/photo-1555041469-a586c61ea9bc?auto=format&fit=crop&q=80&w=1920" 
-          alt="Kalian Sofa" 
+        <img
+          src={heroUrl}
+          alt="Hero"
           className="w-full h-full object-cover brightness-[0.25] grayscale-[0.5]"
           referrerPolicy="no-referrer"
         />

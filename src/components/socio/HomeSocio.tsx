@@ -5,6 +5,7 @@ import { Link, useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'motion/react';
 import { useAuth } from '../../context/AuthContext';
 import { useLanguage } from '../../context/LanguageContext';
+import { formatDate } from '../../i18n/dateFormat';
 import ReservaForm from '../public/ReservaForm';
 import LegalModal from '../public/LegalModal';
 import KalianHeader from '../shared/KalianHeader';
@@ -13,7 +14,7 @@ import SectionTitle from '../shared/SectionTitle';
 
 export const HomeSocio = () => {
   const { user } = useAuth();
-  const { t, tField } = useLanguage();
+  const { t, tField, language } = useLanguage();
   const navigate = useNavigate();
   const [eventos, setEventos] = useState<DocumentData[]>([]);
   const [cursos, setCursos] = useState<DocumentData[]>([]);
@@ -529,7 +530,7 @@ export const HomeSocio = () => {
                       </div>
                       <div className="flex-1 min-w-0">
                         <p className="text-[8px] font-black text-kalian-gold/60 uppercase tracking-widest mb-1">
-                          {new Date(expo.fechaInicio).toLocaleDateString('es-ES', { day: 'numeric', month: 'short' })}
+                          {formatDate(expo.fechaInicio, language, { day: 'numeric', month: 'short' })}
                         </p>
                         <h5 className="text-lg kalian-poster-text text-kalian-cream uppercase italic truncate">{tField(expo, 'titulo')}</h5>
                         <p className="text-[9px] font-black text-kalian-cream/40 uppercase tracking-widest truncate">{tField(expo, 'autor')}</p>

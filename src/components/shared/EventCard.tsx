@@ -2,6 +2,7 @@ import React from 'react';
 import { motion } from 'motion/react';
 import { DocumentData } from 'firebase/firestore';
 import { useLanguage } from '../../context/LanguageContext';
+import { formatDate } from '../../i18n/dateFormat';
 
 interface EventCardProps {
   event: DocumentData;
@@ -77,7 +78,7 @@ const EventCard: React.FC<EventCardProps> = ({
           <div className="space-y-1">
             <p className="text-[9px] font-black text-kalian-gold/40 uppercase tracking-[0.3em]">{t('event.dateTime')}</p>
             <p className="font-bold text-kalian-cream/80 uppercase text-sm tracking-widest">
-              {event.fecha ? new Date(event.fecha).toLocaleString(language === 'eu' ? 'eu-ES' : 'es-ES', { day: 'numeric', month: 'long', hour: '2-digit', minute: '2-digit' }) : '—'}
+              {formatDate(event.fecha, language, { day: 'numeric', month: 'long', hour: '2-digit', minute: '2-digit' })}
             </p>
           </div>
         </div>

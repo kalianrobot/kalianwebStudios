@@ -5,6 +5,7 @@ import { Link, useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'motion/react';
 import { useAuth } from '../context/AuthContext';
 import { useLanguage } from '../context/LanguageContext';
+import { formatDate } from '../i18n/dateFormat';
 import ReservaForm from '../components/public/ReservaForm';
 import NewsletterForm from '../components/public/NewsletterForm';
 import LegalModal from '../components/public/LegalModal';
@@ -219,13 +220,12 @@ const ProgramacionPublica = () => {
     const hoy = new Date();
     const aperturaSocios = ev.apertura_socios ? new Date(ev.apertura_socios) : null;
     const aperturaGral = ev.apertura_general ? new Date(ev.apertura_general) : null;
-    const locale = language === 'eu' ? 'eu-ES' : 'es-ES';
 
     if (aperturaSocios && hoy < aperturaSocios) {
-      return `${t('home.openMembers')}: ${aperturaSocios.toLocaleDateString(locale)}`;
+      return `${t('home.openMembers')}: ${formatDate(aperturaSocios, language, { day: 'numeric', month: 'long', year: 'numeric' })}`;
     }
     if (aperturaGral && hoy < aperturaGral) {
-      return `${t('home.openGeneral')}: ${aperturaGral.toLocaleDateString(locale)}`;
+      return `${t('home.openGeneral')}: ${formatDate(aperturaGral, language, { day: 'numeric', month: 'long', year: 'numeric' })}`;
     }
     return t('home.openIn7Days');
   };
@@ -534,7 +534,7 @@ const ProgramacionPublica = () => {
                       </div>
                       <div className="flex-1 min-w-0">
                         <p className="text-[8px] font-black text-kalian-gold/60 uppercase tracking-widest mb-1">
-                          {new Date(expo.fechaInicio).toLocaleDateString(language === 'eu' ? 'eu-ES' : 'es-ES', { day: 'numeric', month: 'short' })}
+                          {formatDate(expo.fechaInicio, language, { day: 'numeric', month: 'short' })}
                         </p>
                         <h5 className="text-lg kalian-poster-text text-kalian-cream uppercase italic truncate">{tField(expo, 'titulo')}</h5>
                         <p className="text-[9px] font-black text-kalian-cream/40 uppercase tracking-widest truncate">{tField(expo, 'autor')}</p>

@@ -4,6 +4,7 @@ import { collection, getDocs, query, orderBy, DocumentData } from 'firebase/fire
 import { motion, AnimatePresence } from 'motion/react';
 import { useNavigate } from 'react-router-dom';
 import { useLanguage } from '../context/LanguageContext';
+import { formatDate } from '../i18n/dateFormat';
 
 const GaleriaPublica = () => {
   const navigate = useNavigate();
@@ -106,7 +107,7 @@ const GaleriaPublica = () => {
                 <div className="absolute bottom-12 left-12 right-12 flex flex-col md:flex-row justify-between items-end gap-8">
                   <div className="space-y-4">
                     <span className="text-[10px] font-black text-kalian-gold uppercase tracking-[0.6em] block">
-                      {t('gallery.ongoing')} • {new Date(actual.fechaInicio).toLocaleDateString(language === 'eu' ? 'eu-ES' : 'es-ES', { day: 'numeric', month: 'short' })} AL {new Date(actual.fechaFin).toLocaleDateString(language === 'eu' ? 'eu-ES' : 'es-ES', { day: 'numeric', month: 'short', year: 'numeric' })}
+                      {t('gallery.ongoing')} • {formatDate(actual.fechaInicio, language, { day: 'numeric', month: 'short' })} AL {formatDate(actual.fechaFin, language, { day: 'numeric', month: 'short', year: 'numeric' })}
                     </span>
                     <h3 className="text-5xl md:text-7xl kalian-poster-text text-kalian-gold uppercase italic leading-none tracking-tighter">{tField(actual, 'titulo')}</h3>
                     <p className="text-xl font-black text-kalian-cream/80 uppercase tracking-widest">{t('gallery.author')} {tField(actual, 'autor')}</p>
@@ -162,7 +163,7 @@ const GaleriaPublica = () => {
                     
                     <div className="absolute bottom-10 left-10 right-10">
                       <span className="text-[9px] font-black text-kalian-gold uppercase tracking-[0.4em] mb-3 block">
-                        {t('gallery.comingSoon')} • {new Date(expo.fechaInicio).toLocaleDateString(language === 'eu' ? 'eu-ES' : 'es-ES', { day: 'numeric', month: 'short' })}
+                        {t('gallery.comingSoon')} • {formatDate(expo.fechaInicio, language, { day: 'numeric', month: 'short' })}
                       </span>
                       <h3 className="text-3xl kalian-poster-text text-kalian-gold uppercase italic leading-none mb-2">{tField(expo, 'titulo')}</h3>
                       <p className="text-[10px] font-black text-kalian-cream/60 uppercase tracking-widest mb-6">{t('gallery.author')} {tField(expo, 'autor')}</p>
@@ -274,7 +275,7 @@ const GaleriaPublica = () => {
 
                 <div className="pt-8">
                   <p className="text-[9px] font-black text-kalian-gold/20 uppercase tracking-[0.4em]">
-                    {new Date(expoSeleccionada.fechaInicio).toLocaleDateString(language === 'eu' ? 'eu-ES' : 'es-ES', { day: 'numeric', month: 'long', year: 'numeric' })} — {new Date(expoSeleccionada.fechaFin).toLocaleDateString(language === 'eu' ? 'eu-ES' : 'es-ES', { day: 'numeric', month: 'long', year: 'numeric' })}
+                    {formatDate(expoSeleccionada.fechaInicio, language, { day: 'numeric', month: 'long', year: 'numeric' })} — {formatDate(expoSeleccionada.fechaFin, language, { day: 'numeric', month: 'long', year: 'numeric' })}
                   </p>
                 </div>
               </div>

@@ -4,6 +4,7 @@ import { collection, addDoc, query, where, getDocs, doc, getDoc, DocumentData, r
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
 import { useLanguage } from '../../context/LanguageContext';
+import { formatDate } from '../../i18n/dateFormat';
 
 interface ReservaFormProps {
   item: any; // Evento o Curso
@@ -133,13 +134,13 @@ const ReservaForm = ({ item, alCerrar }: ReservaFormProps) => {
         if (puedeCupon || puedeSocio || puedeGral) {
           setMensajeBloqueo('');
         } else {
-          const locale = language === 'eu' ? 'eu-ES' : 'es-ES';
+          const fmt = (d: Date) => formatDate(d, language, { day: 'numeric', month: 'long', hour: '2-digit', minute: '2-digit' });
           if (usaCuponApertura && fechaCupon && ahora < fechaCupon) {
-            setMensajeBloqueo(t('reserva.cuponOpens', { date: fechaCupon.toLocaleString(locale) }));
+            setMensajeBloqueo(t('reserva.cuponOpens', { date: fmt(fechaCupon) }));
           } else if (esSocio && fechaSocio && ahora < fechaSocio) {
-            setMensajeBloqueo(t('reserva.memberOpens', { date: fechaSocio.toLocaleString(locale) }));
+            setMensajeBloqueo(t('reserva.memberOpens', { date: fmt(fechaSocio) }));
           } else if (fechaGral && ahora < fechaGral) {
-            setMensajeBloqueo(t('reserva.generalOpens', { date: fechaGral.toLocaleString(locale) }));
+            setMensajeBloqueo(t('reserva.generalOpens', { date: fmt(fechaGral) }));
           } else {
             setMensajeBloqueo('');
           }
@@ -197,16 +198,16 @@ const ReservaForm = ({ item, alCerrar }: ReservaFormProps) => {
         const puedeGral = !fechaGral || ahora >= fechaGral;
 
         if (!puedeCupon && !puedeSocio && !puedeGral) {
-          const locale = language === 'eu' ? 'eu-ES' : 'es-ES';
+          const fmt = (d: Date) => formatDate(d, language, { day: 'numeric', month: 'long', hour: '2-digit', minute: '2-digit' });
           if (usaCuponApertura && fechaCupon) {
-            setMensaje(`⚠️ ${t('reserva.cuponOpens', { date: fechaCupon.toLocaleString(locale) })}`);
+            setMensaje(`⚠️ ${t('reserva.cuponOpens', { date: fmt(fechaCupon) })}`);
           } else if (esSocio && fechaSocio) {
-            setMensaje(`⚠️ ${t('reserva.memberOpens', { date: fechaSocio.toLocaleString(locale) })}`);
+            setMensaje(`⚠️ ${t('reserva.memberOpens', { date: fmt(fechaSocio) })}`);
           } else if (fechaGral) {
             if (item.cupon) {
-              setMensaje(`⚠️ ${t('reserva.generalOpensCoupon', { date: fechaGral.toLocaleString(locale) })}`);
+              setMensaje(`⚠️ ${t('reserva.generalOpensCoupon', { date: fmt(fechaGral) })}`);
             } else {
-              setMensaje(`⚠️ ${t('reserva.generalOpens', { date: fechaGral.toLocaleString(locale) })}`);
+              setMensaje(`⚠️ ${t('reserva.generalOpens', { date: fmt(fechaGral) })}`);
             }
           }
           setCargando(false);

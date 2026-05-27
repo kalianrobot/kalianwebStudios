@@ -368,7 +368,7 @@ export const HomeSocio = () => {
                         >
                           <div className="flex items-center gap-10 w-full md:w-auto">
                             <div className="w-24 h-24 rounded-[2rem] flex items-center justify-center text-5xl border border-kalian-gold/10 bg-kalian-gold/10">
-                              {c.emoji || (academias.find(a => a.id === c.categoria || a.nombre === c.categoria)?.nombre?.toLowerCase().includes('danza') ? '💃' : '🎸')}
+                              {c.emoji || (academias.find(a => a.id === c.categoria || a.nombre === c.categoria)?.nombre?.toLowerCase().includes('danza') ? '💃' : '🎵')}
                             </div>
                             <div>
                               <h3 className="text-4xl kalian-poster-text text-kalian-cream group-hover:text-kalian-gold transition-colors leading-tight uppercase italic">{tField(c, 'titulo')}</h3>

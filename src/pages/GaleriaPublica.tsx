@@ -43,7 +43,7 @@ const GaleriaPublica = () => {
   return (
     <div className="min-h-screen bg-kalian-dark text-kalian-cream font-sans pb-24">
       {/* HERO */}
-      <div className="relative h-[32vh] min-h-[260px] flex flex-col items-center justify-center overflow-hidden border-b border-kalian-gold/10">
+      <div className="relative h-[20vh] min-h-[180px] flex flex-col items-center justify-center overflow-hidden border-b border-kalian-gold/10">
         <div className="absolute inset-0 bg-[url('https://picsum.photos/seed/gallery/1920/1080?blur=10')] bg-cover bg-center opacity-20"></div>
         <div className="absolute inset-0 bg-gradient-to-t from-kalian-dark via-transparent to-kalian-dark/80"></div>
 
@@ -60,11 +60,11 @@ const GaleriaPublica = () => {
           animate={{ y: 0, opacity: 1 }}
           className="relative z-10 text-center px-6"
         >
-          <span className="text-[10px] font-black text-kalian-gold uppercase tracking-[0.8em] mb-3 block animate-pulse">{t('gallery.subtitle')}</span>
-          <h1 className="text-5xl md:text-7xl kalian-poster-text text-kalian-gold leading-none tracking-tighter uppercase italic drop-shadow-2xl">
+          <span className="text-[9px] font-black text-kalian-gold uppercase tracking-[0.8em] mb-2 block animate-pulse">{t('gallery.subtitle')}</span>
+          <h1 className="text-4xl md:text-5xl kalian-poster-text text-kalian-gold leading-none tracking-tighter uppercase italic drop-shadow-2xl">
             KALIAN <span className="text-kalian-cream">GALLERY</span>
           </h1>
-          <p className="max-w-xl mx-auto mt-4 text-sm text-kalian-cream/60 font-medium leading-snug tracking-wide">
+          <p className="max-w-xl mx-auto mt-2 text-xs md:text-sm text-kalian-cream/60 font-medium leading-snug tracking-wide">
             {t('gallery.description')}
           </p>
         </motion.div>

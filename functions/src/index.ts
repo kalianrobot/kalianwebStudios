@@ -68,7 +68,25 @@ export const sendWelcomeEmail = onCall(
   }
 );
 
-// ─── sendMembershipUpdateEmail ───────────────────────────────────────────────
+// ─── traducirTextoEU ─────────────────────────────────────────────────────────
+export const traducirTextoEU = onCall(
+  { cors: true },
+  async (request) => {
+    if (!request.auth) throw new HttpsError('unauthenticated', 'Auth required');
+
+    const { texto } = request.data as { texto: string };
+    if (!texto?.trim()) return { traduccion: '' };
+
+    const url = `https://api.mymemory.translated.net/get?q=${encodeURIComponent(texto)}&langpair=es|eu`;
+    const res = await fetch(url);
+    if (!res.ok) throw new HttpsError('internal', `MyMemory HTTP ${res.status}`);
+
+    const data = await res.json() as any;
+    if (data.responseStatus !== 200) throw new HttpsError('internal', data.responseDetails || 'MyMemory error');
+
+    return { traduccion: data.responseData.translatedText as string };
+  }
+);
 export const sendMembershipUpdateEmail = onCall(
   { secrets: [BREVO_API_KEY] },
   async (request) => {

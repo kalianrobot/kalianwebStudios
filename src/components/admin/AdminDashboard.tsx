@@ -40,7 +40,8 @@ const AdminDashboard = () => {
     { t: 'Galería', icon: '🖼️', color: 'border-kalian-gold', path: '/staff/galeria' },
     { t: 'Identidad', icon: '🎨', color: 'border-kalian-gold', path: '/staff/identidad' },
     { t: 'Solicitudes', icon: '📩', color: 'border-emerald-500', path: '/staff/solicitudes', badge: pendientes },
-    { t: 'Contabilidad', icon: '💰', color: 'border-kalian-gold', path: '/staff/contabilidad' }
+    { t: 'Contabilidad', icon: '💰', color: 'border-kalian-gold', path: '/staff/contabilidad' },
+    { t: 'Traducir EU', icon: '🌐', color: 'border-teal-500', path: '/staff/traducir-eu' }
   ];
 
   const [migrating, setMigrating] = useState(false);

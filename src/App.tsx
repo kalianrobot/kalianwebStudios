@@ -23,6 +23,7 @@ const AdminStaff = lazy(() => import('./components/admin/AdminStaff'));
 const AdminContabilidad = lazy(() => import('./components/admin/AdminContabilidad'));
 const AdminExposiciones = lazy(() => import('./components/admin/AdminExposiciones'));
 const AdminConfig = lazy(() => import('./components/admin/AdminConfig'));
+const AdminTraducirEU = lazy(() => import('./components/admin/AdminTraducirEU'));
 const AdminLogin = lazy(() => import('./pages/AdminLogin'));
 
 // Componentes Teacher
@@ -137,6 +138,7 @@ function AppContent() {
         <Route path="/staff/galeria" element={hasAdminAccess ? <AdminExposiciones /> : <Navigate to="/staff/login" />} />
         <Route path="/staff/config" element={hasAdminAccess ? <AdminConfig /> : <Navigate to="/staff/login" />} />
         <Route path="/staff/identidad" element={hasAdminAccess ? <AdminConfig /> : <Navigate to="/staff/login" />} />
+        <Route path="/staff/traducir-eu" element={hasAdminAccess ? <AdminTraducirEU /> : <Navigate to="/staff/login" />} />
 
         {/* RUTA CONTROL ACCESO (PORTERO) */}
         <Route path="/control-acceso" element={

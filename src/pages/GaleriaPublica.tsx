@@ -7,7 +7,7 @@ import { useLanguage } from '../context/LanguageContext';
 
 const GaleriaPublica = () => {
   const navigate = useNavigate();
-  const { t, tField } = useLanguage();
+  const { t, tField, language } = useLanguage();
   const [exposiciones, setExposiciones] = useState<DocumentData[]>([]);
   const [loading, setLoading] = useState(true);
   const [expoSeleccionada, setExpoSeleccionada] = useState<DocumentData | null>(null);
@@ -73,7 +73,7 @@ const GaleriaPublica = () => {
         {/* EXPOSICIÓN ACTUAL */}
         <section className="mb-32">
           <div className="flex items-center gap-6 mb-16">
-            <h2 className="text-4xl kalian-poster-text text-kalian-gold uppercase italic tracking-tight">Exposición Actual</h2>
+            <h2 className="text-4xl kalian-poster-text text-kalian-gold uppercase italic tracking-tight">{t('gallery.currentExpo')}</h2>
             <div className="h-[1px] flex-1 bg-gradient-to-r from-kalian-gold/40 to-transparent"></div>
           </div>
 
@@ -106,16 +106,16 @@ const GaleriaPublica = () => {
                 <div className="absolute bottom-12 left-12 right-12 flex flex-col md:flex-row justify-between items-end gap-8">
                   <div className="space-y-4">
                     <span className="text-[10px] font-black text-kalian-gold uppercase tracking-[0.6em] block">
-                      EN CURSO • {new Date(actual.fechaInicio).toLocaleDateString('es-ES', { day: 'numeric', month: 'short' })} AL {new Date(actual.fechaFin).toLocaleDateString('es-ES', { day: 'numeric', month: 'short', year: 'numeric' })}
+                      {t('gallery.ongoing')} • {new Date(actual.fechaInicio).toLocaleDateString(language === 'eu' ? 'eu-ES' : 'es-ES', { day: 'numeric', month: 'short' })} AL {new Date(actual.fechaFin).toLocaleDateString(language === 'eu' ? 'eu-ES' : 'es-ES', { day: 'numeric', month: 'short', year: 'numeric' })}
                     </span>
                     <h3 className="text-5xl md:text-7xl kalian-poster-text text-kalian-gold uppercase italic leading-none tracking-tighter">{tField(actual, 'titulo')}</h3>
-                    <p className="text-xl font-black text-kalian-cream/80 uppercase tracking-widest">Autor/a: {tField(actual, 'autor')}</p>
+                    <p className="text-xl font-black text-kalian-cream/80 uppercase tracking-widest">{t('gallery.author')} {tField(actual, 'autor')}</p>
                   </div>
-                  
-                  <button 
+
+                  <button
                     className="px-12 py-5 bg-kalian-gold text-black rounded-2xl font-black uppercase text-xs tracking-[0.4em] hover:bg-white transition-all shadow-xl shadow-kalian-gold/20"
                   >
-                    Ver exposición
+                    {t('gallery.viewExpo')}
                   </button>
                 </div>
               </div>
@@ -131,7 +131,7 @@ const GaleriaPublica = () => {
         {proximas.length > 0 && (
           <section className="mb-32">
             <div className="flex items-center gap-6 mb-16">
-              <h2 className="text-4xl kalian-poster-text text-kalian-gold uppercase italic tracking-tight">Próximas Exposiciones</h2>
+              <h2 className="text-4xl kalian-poster-text text-kalian-gold uppercase italic tracking-tight">{t('gallery.upcoming')}</h2>
               <div className="h-[1px] flex-1 bg-gradient-to-r from-kalian-gold/40 to-transparent"></div>
             </div>
 
@@ -162,15 +162,15 @@ const GaleriaPublica = () => {
                     
                     <div className="absolute bottom-10 left-10 right-10">
                       <span className="text-[9px] font-black text-kalian-gold uppercase tracking-[0.4em] mb-3 block">
-                        PRÓXIMAMENTE • {new Date(expo.fechaInicio).toLocaleDateString('es-ES', { day: 'numeric', month: 'short' })}
+                        {t('gallery.comingSoon')} • {new Date(expo.fechaInicio).toLocaleDateString(language === 'eu' ? 'eu-ES' : 'es-ES', { day: 'numeric', month: 'short' })}
                       </span>
                       <h3 className="text-3xl kalian-poster-text text-kalian-gold uppercase italic leading-none mb-2">{tField(expo, 'titulo')}</h3>
-                      <p className="text-[10px] font-black text-kalian-cream/60 uppercase tracking-widest mb-6">Autor/a: {tField(expo, 'autor')}</p>
-                      
-                      <button 
+                      <p className="text-[10px] font-black text-kalian-cream/60 uppercase tracking-widest mb-6">{t('gallery.author')} {tField(expo, 'autor')}</p>
+
+                      <button
                         className="w-full py-4 bg-kalian-gold/10 text-kalian-gold border border-kalian-gold/20 rounded-xl font-black uppercase text-[10px] tracking-[0.3em] hover:bg-kalian-gold hover:text-black transition-all"
                       >
-                        Ver detalles
+                        {t('gallery.viewDetails')}
                       </button>
                     </div>
                   </div>
@@ -184,7 +184,7 @@ const GaleriaPublica = () => {
         {historico.length > 0 && (
           <section>
             <div className="flex items-center gap-6 mb-16">
-              <h2 className="text-4xl kalian-poster-text text-kalian-gold/40 uppercase italic tracking-tight">Histórico de la Galería</h2>
+              <h2 className="text-4xl kalian-poster-text text-kalian-gold/40 uppercase italic tracking-tight">{t('gallery.archive')}</h2>
               <div className="h-[1px] flex-1 bg-gradient-to-r from-kalian-gold/20 to-transparent"></div>
             </div>
 
@@ -229,11 +229,11 @@ const GaleriaPublica = () => {
               className="w-full max-w-5xl bg-black border border-kalian-gold/20 rounded-[3rem] shadow-2xl overflow-hidden flex flex-col md:flex-row relative my-auto"
             >
               {/* BOTÓN VOLVER (MODAL) */}
-              <button 
+              <button
                 onClick={() => setExpoSeleccionada(null)}
                 className="absolute top-8 left-8 z-20 flex items-center gap-2 bg-black/40 backdrop-blur-md text-kalian-gold px-4 py-2 rounded-full font-black uppercase text-[8px] tracking-[0.3em] hover:bg-kalian-gold hover:text-black transition-all"
               >
-                ← VOLVER
+                {t('gallery.back')}
               </button>
 
               <button 
@@ -253,7 +253,7 @@ const GaleriaPublica = () => {
               <div className="w-full md:w-1/2 p-12 md:p-16 flex flex-col justify-center space-y-8">
                 <div>
                   <span className="text-[10px] font-black text-kalian-gold uppercase tracking-[0.5em] mb-6 block">
-                    {expoSeleccionada.es_activa ? 'Exposición Actual' : 'Archivo Galería'}
+                    {expoSeleccionada.es_activa ? t('gallery.currentExpoLabel') : t('gallery.archiveLabel')}
                   </span>
                   <h2 className="text-5xl md:text-6xl kalian-poster-text text-kalian-gold uppercase italic leading-none tracking-tighter mb-4">
                     {tField(expoSeleccionada, 'titulo')}
@@ -266,7 +266,7 @@ const GaleriaPublica = () => {
                 <div className="h-[1px] w-20 bg-kalian-gold/30"></div>
 
                 <div className="space-y-6">
-                  <h4 className="text-[10px] font-black text-kalian-gold/40 uppercase tracking-[0.3em]">Sobre la exposición</h4>
+                  <h4 className="text-[10px] font-black text-kalian-gold/40 uppercase tracking-[0.3em]">{t('gallery.about')}</h4>
                   <p className="text-sm md:text-base text-kalian-cream/70 font-medium leading-relaxed whitespace-pre-line">
                     {tField(expoSeleccionada, 'descripcion')}
                   </p>
@@ -274,7 +274,7 @@ const GaleriaPublica = () => {
 
                 <div className="pt-8">
                   <p className="text-[9px] font-black text-kalian-gold/20 uppercase tracking-[0.4em]">
-                    Del {new Date(expoSeleccionada.fechaInicio).toLocaleDateString('es-ES', { day: 'numeric', month: 'long', year: 'numeric' })} al {new Date(expoSeleccionada.fechaFin).toLocaleDateString('es-ES', { day: 'numeric', month: 'long', year: 'numeric' })}
+                    {new Date(expoSeleccionada.fechaInicio).toLocaleDateString(language === 'eu' ? 'eu-ES' : 'es-ES', { day: 'numeric', month: 'long', year: 'numeric' })} — {new Date(expoSeleccionada.fechaFin).toLocaleDateString(language === 'eu' ? 'eu-ES' : 'es-ES', { day: 'numeric', month: 'long', year: 'numeric' })}
                   </p>
                 </div>
               </div>

@@ -53,25 +53,24 @@ export const HomeSocio = () => {
         const evId = snap.docs[0].id;
         navigate(`/eventos/${evId}?cupon=${cuponGlobal.trim().toUpperCase()}`);
       } else {
-        setErrorCupon('⚠️ Cupón no válido o evento no disponible para preventa.');
+        setErrorCupon(t('home.coupon.invalid'));
       }
     } catch (err) {
       console.error(err);
-      setErrorCupon('Error al buscar cupón');
+      setErrorCupon(t('home.coupon.error'));
     } finally {
       setBuscandoCupon(false);
     }
   };
 
   const formatMeses = (inicio: string, fin: string) => {
-    const meses = ["Enero", "Febrero", "Marzo", "Abril", "Mayo", "Junio", "Julio", "Agosto", "Septiembre", "Octubre", "Noviembre", "Diciembre"];
     try {
       const dInicio = new Date(inicio);
       const dFin = new Date(fin);
-      if (isNaN(dInicio.getTime()) || isNaN(dFin.getTime())) return "Fecha no disponible";
-      return `${meses[dInicio.getMonth()]} - ${meses[dFin.getMonth()]}`;
+      if (isNaN(dInicio.getTime()) || isNaN(dFin.getTime())) return t('home.noDateAvailable');
+      return `${t(`month.${dInicio.getMonth() + 1}`)} - ${t(`month.${dFin.getMonth() + 1}`)}`;
     } catch (e) {
-      return "Fecha no disponible";
+      return t('home.noDateAvailable');
     }
   };
 
@@ -209,9 +208,9 @@ export const HomeSocio = () => {
         fechaSolicitud: new Date().toISOString(),
         estado: 'pendiente'
       });
-      setMensajeSolicitud(solicitudCurso?.tipo === 'consulta' 
-        ? "✅ Tu solicitud de información ha sido enviada. Te contactaremos pronto."
-        : "✅ Tu solicitud de inscripción ha sido recibida. El equipo de Kalian validará tus datos y te contactará para finalizar el alta.");
+      setMensajeSolicitud(solicitudCurso?.tipo === 'consulta'
+        ? t('home.requestInfoSuccess')
+        : t('home.requestEnrollmentSuccess'));
       
       setTimeout(() => {
         setSolicitudCurso(null);
@@ -220,7 +219,7 @@ export const HomeSocio = () => {
       }, 5000);
     } catch (err) {
       console.error(err);
-      alert("Error al enviar la solicitud");
+      alert(t('home.errorSendRequest'));
     } finally {
       setEnviandoSolicitud(false);
     }
@@ -235,35 +234,35 @@ export const HomeSocio = () => {
         
         {/* SECCIÓN EVENTOS */}
         <section className="space-y-12">
-          <SectionTitle title="PRÓXIMOS" subtitle="EVENTOS" color={config?.titleColor} />
-          
+          <SectionTitle title={t('home.upcomingEvents')} subtitle={t('home.eventsLabel')} color={config?.titleColor} />
+
           {/* ACCESO POR CUPÓN GLOBAL */}
-          <motion.div 
+          <motion.div
             initial={{ opacity: 0, y: 20 }}
             whileInView={{ opacity: 1, y: 0 }}
             viewport={{ once: true }}
             className="max-w-xl mx-auto bg-emerald-500/5 border border-emerald-500/20 p-8 rounded-[2.5rem] text-center space-y-6 shadow-2xl shadow-emerald-500/5"
           >
             <div className="space-y-2">
-              <h4 className="text-[10px] font-black text-emerald-500 uppercase tracking-[0.4em]">¿Tienes un cupón de acceso anticipado?</h4>
-              <p className="text-kalian-cream/40 text-[9px] font-bold uppercase tracking-widest">Introduce tu código para acceder a preventas y precios especiales</p>
+              <h4 className="text-[10px] font-black text-emerald-500 uppercase tracking-[0.4em]">{t('home.coupon.title')}</h4>
+              <p className="text-kalian-cream/40 text-[9px] font-bold uppercase tracking-widest">{t('home.coupon.subtitle')}</p>
             </div>
-            
+
             <div className="flex gap-2">
-              <input 
-                type="text" 
-                placeholder="INTRODUCIR CÓDIGO" 
+              <input
+                type="text"
+                placeholder={t('home.coupon.placeholder')}
                 className="flex-1 bg-black/40 border border-emerald-500/20 rounded-2xl p-5 text-center font-black uppercase text-emerald-500 outline-none focus:border-emerald-500 transition-all placeholder:text-emerald-500/20"
                 value={cuponGlobal}
                 onChange={e => setCuponGlobal(e.target.value.toUpperCase())}
                 onKeyDown={e => e.key === 'Enter' && handleAccederCupon()}
               />
-              <button 
+              <button
                 onClick={handleAccederCupon}
                 disabled={buscandoCupon || !cuponGlobal.trim()}
                 className="bg-emerald-500 text-black px-8 rounded-2xl font-black uppercase text-[10px] tracking-widest hover:bg-white transition-all disabled:opacity-50 disabled:cursor-not-allowed"
               >
-                {buscandoCupon ? 'BUSCANDO...' : 'ACCEDER →'}
+                {buscandoCupon ? t('home.coupon.searching') : t('home.coupon.access')}
               </button>
             </div>
             {errorCupon && (
@@ -288,7 +287,7 @@ export const HomeSocio = () => {
 
         {/* SECCIÓN CURSOS */}
         <section className="space-y-12">
-          <SectionTitle title="KALIAN" subtitle="CLUB" color={config?.titleColor} />
+          <SectionTitle title={t('home.kalian')} subtitle={t('home.club')} color={config?.titleColor} />
 
           {!categoriaActiva ? (
             <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
@@ -313,11 +312,11 @@ export const HomeSocio = () => {
                     {aca.nombre}
                   </h3>
                   <p className={`${idx % 2 === 0 ? 'text-kalian-cream/60' : 'text-kalian-gold/60'} text-[10px] font-black uppercase tracking-[0.4em] leading-relaxed`}>
-                    {aca.subcategorias?.join(' • ') || 'Especialidades Kalian'}
+                    {aca.subcategorias?.join(' • ') || t('home.kalianSpecialties')}
                   </p>
                   <div className="pt-4">
                     <span className={`${idx % 2 === 0 ? 'text-kalian-gold/40 group-hover:text-kalian-gold' : 'text-kalian-cream/40 group-hover:text-kalian-cream'} text-[9px] font-black uppercase tracking-[0.5em] transition-colors`}>
-                      Seleccionar Categoría →
+                      {t('home.selectCategory')}
                     </span>
                   </div>
                 </motion.div>
@@ -330,11 +329,11 @@ export const HomeSocio = () => {
               className="space-y-12"
             >
               <div className="flex justify-between items-center">
-                <button 
+                <button
                   onClick={() => setCategoriaActiva(null)}
                   className="text-kalian-gold font-black uppercase text-[10px] tracking-[0.4em] flex items-center gap-2 hover:text-white transition-colors group"
                 >
-                  <span className="group-hover:-translate-x-2 transition-transform">←</span> VOLVER A CATEGORÍAS
+                  <span className="group-hover:-translate-x-2 transition-transform">←</span> {t('home.backCategories')}
                 </button>
                 <h3 className="text-3xl kalian-poster-text text-kalian-gold uppercase italic">
                   {academias.find(a => a.id === categoriaActiva || a.nombre === categoriaActiva)?.nombre}
@@ -358,7 +357,7 @@ export const HomeSocio = () => {
                   </motion.div>
                 )}
 
-                <p className="text-kalian-gold/40 text-[12px] font-black uppercase tracking-[0.6em]">Selecciona una especialidad</p>
+                <p className="text-kalian-gold/40 text-[12px] font-black uppercase tracking-[0.6em]">{t('home.selectSpecialty')}</p>
                 <div className="flex flex-wrap justify-center gap-6">
                   {(academias.find(a => a.id === categoriaActiva || a.nombre === categoriaActiva)?.subcategorias || []).map((sub: string) => (
                     <motion.button
@@ -381,11 +380,11 @@ export const HomeSocio = () => {
               className="space-y-12"
             >
               <div className="flex justify-between items-center">
-                <button 
+                <button
                   onClick={() => setSubcategoriaActiva(null)}
                   className="text-kalian-gold font-black uppercase text-[10px] tracking-[0.4em] flex items-center gap-2 hover:text-white transition-colors group"
                 >
-                  <span className="group-hover:-translate-x-2 transition-transform">←</span> CAMBIAR ESPECIALIDAD
+                  <span className="group-hover:-translate-x-2 transition-transform">←</span> {t('home.changeSpecialty')}
                 </button>
                 <div className="text-right">
                   <h3 className="text-2xl kalian-poster-text text-kalian-gold uppercase italic leading-none">
@@ -439,17 +438,17 @@ export const HomeSocio = () => {
                           <div className="flex items-center gap-16 w-full md:w-auto justify-between md:justify-end">
                             <div className="text-center">
                               <p className={`text-4xl kalian-poster-text ${c.aforo_disponible === false ? 'text-red-500' : 'text-kalian-gold'}`}>
-                                {c.aforo_disponible === false ? 'AGOTADO' : 'HAY PLAZAS'}
+                                {c.aforo_disponible === false ? t('home.full') : t('home.available')}
                               </p>
-                              <p className="text-[9px] font-black uppercase text-kalian-gold/30 tracking-[0.2em] mt-1">Disponibilidad</p>
+                              <p className="text-[9px] font-black uppercase text-kalian-gold/30 tracking-[0.2em] mt-1">{t('home.availability')}</p>
                             </div>
                             <div className="text-right">
                               <p className="text-4xl kalian-poster-text text-kalian-cream">
-                                {c.modalidades && c.modalidades.length > 0 
-                                  ? `Desde ${Math.min(...c.modalidades.map((m: any) => m.precio))}€/mes` 
+                                {c.modalidades && c.modalidades.length > 0
+                                  ? `${t('home.from')} ${Math.min(...c.modalidades.map((m: any) => m.precio))}€/mes`
                                   : `${c.precio || 0}€/mes`}
                               </p>
-                              <p className="text-[9px] font-black uppercase text-kalian-gold/80 tracking-[0.2em] mt-1">Aportación</p>
+                              <p className="text-[9px] font-black uppercase text-kalian-gold/80 tracking-[0.2em] mt-1">{t('home.contribution')}</p>
                             </div>
                             <span className="text-3xl text-kalian-gold group-hover:translate-x-4 transition-transform duration-500">→</span>
                           </div>
@@ -461,7 +460,7 @@ export const HomeSocio = () => {
                   <div className="col-span-full bg-kalian-gold/5 border border-kalian-gold/10 border-dashed rounded-[3rem] p-20 text-center space-y-6">
                     <div className="text-6xl mb-4 opacity-40">⏳</div>
                     <h3 className="text-3xl kalian-poster-text text-kalian-gold/40 uppercase italic tracking-widest">{t('home.noMoreCourses')}</h3>
-                    <p className="text-kalian-gold/20 font-black uppercase text-xs tracking-[0.5em]">Estamos actualizando nuestra oferta académica</p>
+                    <p className="text-kalian-gold/20 font-black uppercase text-xs tracking-[0.5em]">{t('home.updatingOffer')}</p>
                   </div>
                 )}
               </div>
@@ -471,7 +470,7 @@ export const HomeSocio = () => {
 
         {/* KALIAN GALLERY */}
         <section className="space-y-12">
-          <SectionTitle title="KALIAN" subtitle="GALLERY" color={config?.titleColor} />
+          <SectionTitle title={t('home.kalian')} subtitle={t('home.galleryHeader')} color={config?.titleColor} />
           
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
             {/* EXPOSICIÓN ACTUAL (DESTACADA) */}
@@ -491,12 +490,12 @@ export const HomeSocio = () => {
                     <div className="absolute inset-0 bg-gradient-to-t from-black via-black/40 to-transparent"></div>
                   </div>
                   <div className="relative z-10 p-12 h-full flex flex-col justify-end space-y-4">
-                    <span className="text-[10px] font-black text-kalian-gold uppercase tracking-[0.6em] animate-pulse">EXPOSICIÓN ACTUAL</span>
+                    <span className="text-[10px] font-black text-kalian-gold uppercase tracking-[0.6em] animate-pulse">{t('home.currentExposition')}</span>
                     <h3 className="text-5xl md:text-7xl kalian-poster-text text-kalian-gold uppercase italic leading-none tracking-tighter">{tField(expoActual, 'titulo')}</h3>
-                    <p className="text-xl font-black text-kalian-cream/80 uppercase tracking-widest italic">Autor/a: {tField(expoActual, 'autor')}</p>
+                    <p className="text-xl font-black text-kalian-cream/80 uppercase tracking-widest italic">{t('gallery.author')} {tField(expoActual, 'autor')}</p>
                     <div className="pt-6">
                       <span className="inline-block bg-kalian-gold text-black px-8 py-3 rounded-xl kalian-poster-text text-sm tracking-widest hover:bg-white transition-all">
-                        VER EXPOSICIÓN →
+                        {t('home.viewExposition')}
                       </span>
                     </div>
                   </div>
@@ -505,7 +504,7 @@ export const HomeSocio = () => {
                 <div className="h-full flex flex-col items-center justify-center p-20 text-center space-y-6">
                   <div className="text-6xl opacity-20">🖼️</div>
                   <h3 className="text-3xl kalian-poster-text text-kalian-gold/40 uppercase italic">{t('home.noExpoSoon')}</h3>
-                  <Link to="/galeria" className="text-kalian-gold font-black uppercase text-[10px] tracking-[0.4em] hover:text-white transition-colors">EXPLORAR ARCHIVO →</Link>
+                  <Link to="/galeria" className="text-kalian-gold font-black uppercase text-[10px] tracking-[0.4em] hover:text-white transition-colors">{t('home.exploreArchive')}</Link>
                 </div>
               )}
             </motion.div>
@@ -514,7 +513,7 @@ export const HomeSocio = () => {
             <div className="space-y-6">
               <div className="flex items-center justify-between px-4">
                 <h4 className="text-[10px] font-black text-kalian-gold uppercase tracking-[0.4em]">{t('home.soon')}</h4>
-                <Link to="/galeria" className="text-[8px] font-black text-kalian-cream/40 uppercase tracking-widest hover:text-kalian-gold transition-colors">Ver todas</Link>
+                <Link to="/galeria" className="text-[8px] font-black text-kalian-cream/40 uppercase tracking-widest hover:text-kalian-gold transition-colors">{t('home.viewAll')}</Link>
               </div>
               
               <div className="space-y-4">
@@ -539,15 +538,15 @@ export const HomeSocio = () => {
                   ))
                 ) : (
                   <div className="bg-kalian-gold/5 border border-kalian-gold/10 border-dashed rounded-3xl p-10 text-center">
-                    <p className="text-[9px] font-black text-kalian-gold/20 uppercase tracking-widest">No hay exposiciones programadas</p>
+                    <p className="text-[9px] font-black text-kalian-gold/20 uppercase tracking-widest">{t('home.noScheduledExpos')}</p>
                   </div>
                 )}
                 
-                <Link 
+                <Link
                   to="/galeria"
                   className="block w-full py-5 bg-kalian-gold/10 border border-kalian-gold/20 rounded-2xl text-center kalian-poster-text text-kalian-gold text-sm tracking-widest hover:bg-kalian-gold hover:text-black transition-all"
                 >
-                  VER GALERÍA COMPLETA
+                  {t('home.viewFullGallery')}
                 </Link>
               </div>
             </div>
@@ -556,7 +555,7 @@ export const HomeSocio = () => {
 
         {/* KALIAN HUB */}
         <section className="space-y-12">
-          <SectionTitle title="KALIAN" subtitle="HUB" color={config?.titleColor} />
+          <SectionTitle title={t('home.kalian')} subtitle={t('home.hubHeader')} color={config?.titleColor} />
           
           <motion.div 
             whileHover={{ scale: 1.02, y: -5 }}
@@ -582,12 +581,12 @@ export const HomeSocio = () => {
             
             <div className="flex flex-col items-center gap-4 relative z-10">
               <div className={`px-10 py-6 rounded-3xl border-2 kalian-poster-text text-3xl tracking-widest ${hayLocalesLibres ? 'border-emerald-500/30 bg-emerald-500/10 text-emerald-500' : 'border-red-500/30 bg-red-500/10 text-red-500'}`}>
-                {hayLocalesLibres ? 'HAY DISPONIBILIDAD' : 'SIN DISPONIBILIDAD'}
+                {hayLocalesLibres ? t('home.hasAvailability') : t('home.noAvailability')}
               </div>
               <p className="text-[9px] font-black uppercase text-kalian-gold/40 tracking-[0.4em]">
-                {hayLocalesLibres 
-                  ? `Disponemos de ${localesLibres.length} locales libres actualmente`
-                  : "Actualmente todos nuestros locales están ocupados. ¡Suscríbete para recibir avisos de próximas vacantes!"}
+                {hayLocalesLibres
+                  ? t('home.localesNFree', { n: localesLibres.length })
+                  : t('home.allLocalesOccupied')}
               </p>
             </div>
           </motion.div>
@@ -604,13 +603,13 @@ export const HomeSocio = () => {
             
             <div className="relative z-10 flex flex-col items-center gap-6">
               <p className="text-kalian-cream/70 text-sm max-w-md mx-auto leading-relaxed">
-                Si tienes dudas sobre tu suscripción, problemas con las reservas o quieres proponer una actividad, no dudes en escribirnos.
+                {t('home.contactSummary')}
               </p>
-              <a 
+              <a
                 href="mailto:info@kalian.es"
                 className="bg-kalian-gold text-black px-12 py-5 rounded-2xl kalian-poster-text text-2xl tracking-[0.1em] hover:bg-white transition-all shadow-xl shadow-kalian-gold/20 flex items-center gap-4 group/btn"
               >
-                CONTACTAR POR EMAIL
+                {t('btn.contact')}
                 <span className="group-hover/btn:translate-x-2 transition-transform duration-300">✉️</span>
               </a>
               <p className="text-kalian-gold/30 font-mono text-[10px] tracking-widest">info@kalian.es</p>
@@ -642,7 +641,7 @@ export const HomeSocio = () => {
                   <h2 className="text-6xl kalian-poster-text text-kalian-gold leading-none uppercase italic">{tField(cursoDetalle, 'titulo')}</h2>
                   <div className="flex flex-wrap items-center gap-6 pt-2">
                     <p className="text-sm font-black text-kalian-cream/60 uppercase tracking-widest bg-white/5 px-4 py-2 rounded-full border border-white/10">{tField(cursoDetalle, 'horario')}</p>
-                    <p className="text-sm font-black text-kalian-cream/60 uppercase tracking-widest bg-white/5 px-4 py-2 rounded-full border border-white/10">{cursoDetalle.profesorNombre || 'Pendiente de asignar'}</p>
+                    <p className="text-sm font-black text-kalian-cream/60 uppercase tracking-widest bg-white/5 px-4 py-2 rounded-full border border-white/10">{cursoDetalle.profesorNombre || t('home.pendingTeacher')}</p>
                   </div>
                 </div>
 
@@ -660,7 +659,7 @@ export const HomeSocio = () => {
                   {/* DESCRIPCIÓN DEL CURSO */}
                   {tField(cursoDetalle, 'descripcion') && (
                     <div className="space-y-4">
-                      <p className="text-[12px] font-black text-kalian-gold/60 uppercase tracking-[0.4em]">Descripción del curso</p>
+                      <p className="text-[12px] font-black text-kalian-gold/60 uppercase tracking-[0.4em]">{t('home.courseDescription')}</p>
                       <p className="text-base text-kalian-cream/80 leading-relaxed font-medium">
                         {tField(cursoDetalle, 'descripcion')}
                       </p>
@@ -669,15 +668,15 @@ export const HomeSocio = () => {
 
                   {/* MODALIDADES DE PRECIO */}
                   <div className="space-y-6">
-                    <p className="text-[12px] font-black text-kalian-gold/60 uppercase tracking-[0.4em]">Modalidades de Aportación</p>
+                    <p className="text-[12px] font-black text-kalian-gold/60 uppercase tracking-[0.4em]">{t('home.modalitiesTitle')}</p>
                     <div className="bg-black/40 rounded-[2rem] overflow-hidden border border-kalian-gold/10 shadow-2xl">
                       <table className="w-full text-left text-[11px] uppercase tracking-[0.2em] font-black">
                         <thead>
                           <tr className="bg-kalian-gold/10 text-kalian-gold border-b border-kalian-gold/20">
                             <th className="p-6 w-12"></th>
-                            <th className="p-6">Tipo</th>
-                            <th className="p-6">Frecuencia</th>
-                            <th className="p-6 text-right">Aportación</th>
+                            <th className="p-6">{t('home.tableType')}</th>
+                            <th className="p-6">{t('home.tableFreq')}</th>
+                            <th className="p-6 text-right">{t('home.tableContribution')}</th>
                           </tr>
                         </thead>
                         <tbody className="divide-y divide-kalian-gold/10">
@@ -731,7 +730,7 @@ export const HomeSocio = () => {
                     onClick={() => {
                       const mod = modalidadSeleccionada[cursoDetalle.id];
                       if (!mod) {
-                        setErrorSeleccion("Por favor, selecciona una modalidad de la tabla superior para poder informarte.");
+                        setErrorSeleccion(t('home.selectModalityInfo'));
                         return;
                       }
                       setSolicitudCurso({ curso: cursoDetalle, tipo: 'consulta', modalidad: mod });
@@ -740,15 +739,15 @@ export const HomeSocio = () => {
                     }}
                     className="flex-1 bg-kalian-gold/10 text-kalian-gold border border-kalian-gold/30 p-6 rounded-2xl kalian-poster-text text-xl tracking-widest hover:bg-kalian-gold/20 transition-all shadow-lg"
                   >
-                    Solicitar Info
+                    {t('btn.info')}
                   </motion.button>
-                  <motion.button 
+                  <motion.button
                     whileHover={cursoDetalle.aforo_disponible !== false ? { scale: 1.02 } : {}}
                     whileTap={cursoDetalle.aforo_disponible !== false ? { scale: 0.98 } : {}}
                     onClick={() => {
                       const mod = modalidadSeleccionada[cursoDetalle.id];
                       if (!mod) {
-                        setErrorSeleccion("Por favor, selecciona una modalidad de la tabla superior para realizar la inscripción.");
+                        setErrorSeleccion(t('home.selectModalityEnroll'));
                         return;
                       }
                       setSolicitudCurso({ curso: cursoDetalle, tipo: 'solicitud_inscripcion', modalidad: mod });
@@ -758,7 +757,7 @@ export const HomeSocio = () => {
                     disabled={cursoDetalle.aforo_disponible === false}
                     className={`flex-1 p-6 rounded-2xl kalian-poster-text text-xl tracking-widest transition-all shadow-2xl ${cursoDetalle.aforo_disponible === false ? 'bg-slate-800 text-slate-500 cursor-not-allowed' : 'bg-kalian-gold text-black hover:bg-white shadow-kalian-gold/20'}`}
                   >
-                    {cursoDetalle.aforo_disponible === false ? 'CURSO CERRADO' : 'Inscribirse Ahora'}
+                    {cursoDetalle.aforo_disponible === false ? t('home.courseClosed') : t('btn.enroll')}
                   </motion.button>
                 </div>
               </div>
@@ -808,7 +807,7 @@ export const HomeSocio = () => {
               <h2 className="text-4xl kalian-poster-text text-kalian-gold leading-none mb-2 tracking-tight uppercase italic">{tField(solicitudCurso.curso, 'titulo')}</h2>
               <div className="flex justify-between items-center mb-10">
                 <p className="text-[10px] font-black text-kalian-gold/90 uppercase tracking-[0.3em]">
-                  {solicitudCurso.tipo === 'consulta' ? 'Solicitud de Información' : 'Formulario de Inscripción'}
+                  {solicitudCurso.tipo === 'consulta' ? t('home.requestInfo') : t('home.enrollmentForm')}
                 </p>
                 <p className="text-[10px] font-black text-kalian-cream uppercase tracking-widest bg-kalian-gold/10 px-3 py-1 rounded-full border border-kalian-gold/20">
                   {solicitudCurso.modalidad?.tipo} | {solicitudCurso.modalidad?.frecuencia} | {solicitudCurso.modalidad?.precio}€/mes
@@ -823,56 +822,56 @@ export const HomeSocio = () => {
                 <form onSubmit={enviarSolicitud} className="space-y-6">
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <div className="space-y-2">
-                      <label className="text-[9px] font-black text-kalian-gold/90 uppercase tracking-[0.3em] ml-4">Nombre Completo</label>
-                      <input type="text" placeholder="TU NOMBRE" className="w-full p-4 bg-kalian-gold/10 rounded-xl border border-kalian-gold/20 text-kalian-cream outline-none focus:border-kalian-gold placeholder:text-kalian-cream/50" value={formSolicitud.nombre} onChange={e => setFormSolicitud({...formSolicitud, nombre: e.target.value})} required />
+                      <label className="text-[9px] font-black text-kalian-gold/90 uppercase tracking-[0.3em] ml-4">{t('home.nameLabel')}</label>
+                      <input type="text" placeholder={t('home.namePlaceholder')} className="w-full p-4 bg-kalian-gold/10 rounded-xl border border-kalian-gold/20 text-kalian-cream outline-none focus:border-kalian-gold placeholder:text-kalian-cream/50" value={formSolicitud.nombre} onChange={e => setFormSolicitud({...formSolicitud, nombre: e.target.value})} required />
                     </div>
                     {solicitudCurso.tipo === 'solicitud_inscripcion' && (
                       <div className="space-y-2">
-                        <label className="text-[9px] font-black text-kalian-gold/90 uppercase tracking-[0.3em] ml-4">DNI</label>
-                        <input type="text" placeholder="DNI" className="w-full p-4 bg-kalian-gold/10 rounded-xl border border-kalian-gold/20 text-kalian-cream outline-none focus:border-kalian-gold placeholder:text-kalian-cream/50" value={formSolicitud.dni} onChange={e => setFormSolicitud({...formSolicitud, dni: e.target.value.toUpperCase()})} required />
+                        <label className="text-[9px] font-black text-kalian-gold/90 uppercase tracking-[0.3em] ml-4">{t('home.dniLabel')}</label>
+                        <input type="text" placeholder={t('home.dniLabel')} className="w-full p-4 bg-kalian-gold/10 rounded-xl border border-kalian-gold/20 text-kalian-cream outline-none focus:border-kalian-gold placeholder:text-kalian-cream/50" value={formSolicitud.dni} onChange={e => setFormSolicitud({...formSolicitud, dni: e.target.value.toUpperCase()})} required />
                       </div>
                     )}
                   </div>
 
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <div className="space-y-2">
-                      <label className="text-[9px] font-black text-kalian-gold/90 uppercase tracking-[0.3em] ml-4">Email</label>
+                      <label className="text-[9px] font-black text-kalian-gold/90 uppercase tracking-[0.3em] ml-4">{t('home.emailLabel')}</label>
                       <input type="email" placeholder="tu@email.com" className="w-full p-4 bg-kalian-gold/10 rounded-xl border border-kalian-gold/20 text-kalian-cream outline-none focus:border-kalian-gold placeholder:text-kalian-cream/50" value={formSolicitud.email} onChange={e => setFormSolicitud({...formSolicitud, email: e.target.value})} required />
                     </div>
                     <div className="space-y-2">
-                      <label className="text-[9px] font-black text-kalian-gold/90 uppercase tracking-[0.3em] ml-4">Teléfono</label>
-                      <input type="tel" placeholder="600 000 000" className="w-full p-4 bg-kalian-gold/10 rounded-xl border border-kalian-gold/20 text-kalian-cream outline-none focus:border-kalian-gold placeholder:text-kalian-cream/50" value={formSolicitud.telefono} onChange={e => setFormSolicitud({...formSolicitud, telefono: e.target.value})} required />
+                      <label className="text-[9px] font-black text-kalian-gold/90 uppercase tracking-[0.3em] ml-4">{t('home.phoneLabel')}</label>
+                      <input type="tel" placeholder={t('home.phonePlaceholder')} className="w-full p-4 bg-kalian-gold/10 rounded-xl border border-kalian-gold/20 text-kalian-cream outline-none focus:border-kalian-gold placeholder:text-kalian-cream/50" value={formSolicitud.telefono} onChange={e => setFormSolicitud({...formSolicitud, telefono: e.target.value})} required />
                     </div>
                   </div>
 
                   <div className="space-y-2">
-                    <label className="text-[9px] font-black text-kalian-gold/90 uppercase tracking-[0.3em] ml-4">Mensaje (Opcional)</label>
-                    <textarea placeholder="¿TIENES ALGUNA DUDA?" className="w-full p-4 bg-kalian-gold/10 rounded-xl border border-kalian-gold/20 text-kalian-cream outline-none focus:border-kalian-gold h-24 placeholder:text-kalian-cream/50" value={formSolicitud.mensaje} onChange={e => setFormSolicitud({...formSolicitud, mensaje: e.target.value})} />
+                    <label className="text-[9px] font-black text-kalian-gold/90 uppercase tracking-[0.3em] ml-4">{t('home.messageOptional')}</label>
+                    <textarea placeholder={t('home.messagePlaceholder')} className="w-full p-4 bg-kalian-gold/10 rounded-xl border border-kalian-gold/20 text-kalian-cream outline-none focus:border-kalian-gold h-24 placeholder:text-kalian-cream/50" value={formSolicitud.mensaje} onChange={e => setFormSolicitud({...formSolicitud, mensaje: e.target.value})} />
                   </div>
 
                   {solicitudCurso.tipo === 'solicitud_inscripcion' && (
                     <div className="flex items-start gap-4 p-4 bg-kalian-gold/5 rounded-2xl border border-kalian-gold/10">
-                      <input 
-                        type="checkbox" 
+                      <input
+                        type="checkbox"
                         id="terminos"
-                        className="mt-1 w-5 h-5 accent-kalian-gold" 
+                        className="mt-1 w-5 h-5 accent-kalian-gold"
                         checked={formSolicitud.aceptoTerminos}
                         onChange={e => setFormSolicitud({...formSolicitud, aceptoTerminos: e.target.checked})}
                         required
                       />
                       <label htmlFor="terminos" className="text-[10px] text-kalian-cream/60 leading-relaxed uppercase tracking-widest font-black cursor-pointer">
-                        Acepto los <button type="button" onClick={() => setShowLegal(true)} className="text-kalian-gold hover:underline">términos de alta</button> como soci@ de la asociación Kalian y autorizo el tratamiento de mis datos para la gestión del curso.
+                        {t('home.acceptCourseTerms')} <button type="button" onClick={() => setShowLegal(true)} className="text-kalian-gold underline hover:text-white transition-colors">{t('home.termsAlta')}</button> {t('home.acceptCourseTerms2')}
                       </label>
                     </div>
                   )}
 
-                  <motion.button 
+                  <motion.button
                     whileHover={{ scale: 1.02 }}
                     whileTap={{ scale: 0.98 }}
                     disabled={enviandoSolicitud}
                     className="w-full bg-kalian-gold text-black p-5 rounded-2xl kalian-poster-text text-xl tracking-widest hover:bg-white transition-all shadow-xl shadow-kalian-gold/20"
                   >
-                    {enviandoSolicitud ? 'ENVIANDO...' : (solicitudCurso.tipo === 'consulta' ? 'SOLICITAR INFORMACIÓN' : 'ENVIAR INSCRIPCIÓN')}
+                    {enviandoSolicitud ? t('home.sending') : (solicitudCurso.tipo === 'consulta' ? t('home.requestInformation') : t('home.sendEnrollment'))}
                   </motion.button>
                 </form>
               )}

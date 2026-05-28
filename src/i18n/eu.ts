@@ -8,6 +8,20 @@ const eu: Record<string, string> = {
   'nav.logout': 'Irten',
   'nav.login': 'Bazkideen Sarbidea',
   'nav.changeRole': 'Rola Aldatu',
+  'nav.donations': 'Dohaintzak',
+
+  // Dohaintzak
+  'donations.cta': 'Lagundu Kalian',
+  'donations.title': 'Dohaintzak',
+  'donations.subtitle': 'Zure laguntzak kultura bizirik mantentzen du',
+  'donations.description': 'Kalian irabazi-asmorik gabeko kultur elkartea da. Transferentzia bidezko zure dohaintzarekin gure jarduerak, tailerrak eta erakusketak finantzatzen laguntzen duzu. Ekarpen oro, txikia izan arren, garrantzitsua da.',
+  'donations.ibanLabel': 'Transferentziarako IBANa',
+  'donations.beneficiaryLabel': 'Onuraduna',
+  'donations.conceptLabel': 'Kontzeptua',
+  'donations.copy': 'Kopiatu',
+  'donations.copied': 'Kopiatuta!',
+  'donations.scanHint': 'Eskaneatu QR kode hau zure bankuko aplikazioarekin transferentzia automatikoki betetzeko. Zenbatekoa zuk erabakitzen duzu.',
+  'donations.notAvailable': 'Dohaintzak ez daude erabilgarri une honetan. Itzuli laster.',
 
   // Programazioa / Hasiera
   'home.title': 'EGITARAUA',

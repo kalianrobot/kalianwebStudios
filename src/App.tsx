@@ -33,6 +33,7 @@ const TeacherLogin = lazy(() => import('./pages/TeacherLogin'));
 const ProgramacionPublica = lazy(() => import('./pages/ProgramacionPublica'));
 const EventPage = lazy(() => import('./pages/EventPage'));
 const GaleriaPublica = lazy(() => import('./pages/GaleriaPublica'));
+const DonacionesPage = lazy(() => import('./pages/DonacionesPage'));
 const AdminSolicitudes = lazy(() => import('./components/admin/AdminSolicitudes'));
 const ControlAcceso = lazy(() => import('./components/admin/ControlAcceso'));
 const PuertaAccess = lazy(() => import('./components/admin/PuertaAccess'));
@@ -105,6 +106,7 @@ function AppContent() {
         <Route path="/programacion" element={<ProgramacionPublica />} />
         <Route path="/eventos/:id" element={<EventPage />} />
         <Route path="/galeria" element={<GaleriaPublica />} />
+        <Route path="/donaciones" element={<DonacionesPage />} />
         <Route path="/newsletter-kalian-privado" element={<NewsletterPage />} />
 
         {/* RUTAS STAFF (ADMIN) */}

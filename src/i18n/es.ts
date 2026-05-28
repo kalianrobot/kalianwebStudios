@@ -8,6 +8,20 @@ const es: Record<string, string> = {
   'nav.logout': 'Salir',
   'nav.login': 'Acceso Soci@s',
   'nav.changeRole': 'Cambiar Rol',
+  'nav.donations': 'Donaciones',
+
+  // Donaciones
+  'donations.cta': 'Apoya a Kalian',
+  'donations.title': 'Donaciones',
+  'donations.subtitle': 'Tu apoyo mantiene viva la cultura',
+  'donations.description': 'Kalian es una asociación cultural sin ánimo de lucro. Con tu donación por transferencia ayudas a financiar nuestras actividades, talleres y exposiciones. Cada aportación, por pequeña que sea, cuenta.',
+  'donations.ibanLabel': 'IBAN para transferencia',
+  'donations.beneficiaryLabel': 'Beneficiario',
+  'donations.conceptLabel': 'Concepto',
+  'donations.copy': 'Copiar',
+  'donations.copied': '¡Copiado!',
+  'donations.scanHint': 'Escanea este código QR con la app de tu banco para autorrellenar la transferencia. Tú decides el importe.',
+  'donations.notAvailable': 'Las donaciones no están disponibles en este momento. Vuelve pronto.',
 
   // Programación / Home
   'home.title': 'PROGRAMACIÓN',

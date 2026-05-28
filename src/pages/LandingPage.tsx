@@ -186,6 +186,12 @@ const LandingPage = () => {
 
       {/* Footer (Minimalist) */}
       <div className="absolute bottom-10 left-0 right-0 text-center">
+        <Link
+          to="/donaciones"
+          className="inline-block mb-6 text-kalian-gold/70 hover:text-kalian-gold font-black uppercase tracking-[0.4em] text-[10px] border-b border-kalian-gold/30 hover:border-kalian-gold pb-1 transition-all"
+        >
+          {t('donations.cta')}
+        </Link>
         <div className="flex justify-center gap-4 mb-4 opacity-20">
           <div className="w-12 h-[1px] bg-kalian-gold"></div>
           <div className="w-12 h-[1px] bg-kalian-gold"></div>

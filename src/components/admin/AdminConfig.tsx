@@ -17,6 +17,11 @@ const AdminConfig = () => {
     galleryImageUrl: '',
     hubImageUrl: '',
     titleColor: '#c5a059',
+    donacionesActivo: false,
+    donacionesIban: '',
+    donacionesBeneficiario: '',
+    donacionesBic: '',
+    donacionesConcepto: 'Donación Kalian',
   });
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -369,7 +374,63 @@ const AdminConfig = () => {
             </div>
           </div>
 
-          <button 
+          {/* DONACIONES */}
+          <div className="pt-8 border-t border-kalian-gold/10 space-y-6">
+            <div className="flex items-center justify-between">
+              <h2 className="text-2xl kalian-poster-text text-kalian-gold italic uppercase">Donaciones (IBAN)</h2>
+              <label className="flex items-center gap-3 cursor-pointer">
+                <span className="text-[10px] font-black text-kalian-gold/40 uppercase tracking-[0.2em]">Mostrar en la web</span>
+                <input
+                  type="checkbox"
+                  className="w-5 h-5 accent-kalian-gold cursor-pointer"
+                  checked={!!config.donacionesActivo}
+                  onChange={e => setConfig({ ...config, donacionesActivo: e.target.checked })}
+                />
+              </label>
+            </div>
+            <div className="grid md:grid-cols-2 gap-8">
+              <div className="space-y-4 md:col-span-2">
+                <p className="text-[10px] font-black text-kalian-gold/40 uppercase tracking-[0.3em] ml-4">IBAN</p>
+                <input
+                  type="text"
+                  placeholder="ES00 0000 0000 0000 0000 0000"
+                  className="w-full p-4 bg-kalian-gold/5 rounded-xl border border-kalian-gold/10 outline-none focus:border-kalian-gold font-mono"
+                  value={config.donacionesIban || ''}
+                  onChange={e => setConfig({ ...config, donacionesIban: e.target.value.toUpperCase() })}
+                />
+              </div>
+              <div className="space-y-4">
+                <p className="text-[10px] font-black text-kalian-gold/40 uppercase tracking-[0.3em] ml-4">Beneficiario</p>
+                <input
+                  type="text"
+                  placeholder="Asociación Kalian"
+                  className="w-full p-4 bg-kalian-gold/5 rounded-xl border border-kalian-gold/10 outline-none focus:border-kalian-gold"
+                  value={config.donacionesBeneficiario || ''}
+                  onChange={e => setConfig({ ...config, donacionesBeneficiario: e.target.value })}
+                />
+              </div>
+              <div className="space-y-4">
+                <p className="text-[10px] font-black text-kalian-gold/40 uppercase tracking-[0.3em] ml-4">BIC / SWIFT (opcional)</p>
+                <input
+                  type="text"
+                  className="w-full p-4 bg-kalian-gold/5 rounded-xl border border-kalian-gold/10 outline-none focus:border-kalian-gold font-mono"
+                  value={config.donacionesBic || ''}
+                  onChange={e => setConfig({ ...config, donacionesBic: e.target.value.toUpperCase() })}
+                />
+              </div>
+              <div className="space-y-4 md:col-span-2">
+                <p className="text-[10px] font-black text-kalian-gold/40 uppercase tracking-[0.3em] ml-4">Concepto de la transferencia</p>
+                <input
+                  type="text"
+                  className="w-full p-4 bg-kalian-gold/5 rounded-xl border border-kalian-gold/10 outline-none focus:border-kalian-gold"
+                  value={config.donacionesConcepto || ''}
+                  onChange={e => setConfig({ ...config, donacionesConcepto: e.target.value })}
+                />
+              </div>
+            </div>
+          </div>
+
+          <button
             onClick={saveConfig}
             disabled={saving}
             className="w-full bg-kalian-gold text-black p-5 rounded-2xl kalian-poster-text text-xl tracking-widest hover:bg-white transition-all shadow-xl shadow-kalian-gold/20 disabled:opacity-50"

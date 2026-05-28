@@ -52,7 +52,10 @@ const Navbar = () => {
           <div className="flex flex-wrap items-center gap-2 md:gap-6 lg:gap-8">
             {/* Links contextuales según el área actual */}
             {!isAdminArea && (
-              <Link to="/galeria" className={`text-[10px] font-black uppercase hover:text-kalian-gold transition-colors tracking-[0.1em] md:tracking-[0.3em] ${location.pathname === '/galeria' ? 'text-kalian-gold' : ''}`}>{t('nav.gallery')}</Link>
+              <>
+                <Link to="/galeria" className={`text-[10px] font-black uppercase hover:text-kalian-gold transition-colors tracking-[0.1em] md:tracking-[0.3em] ${location.pathname === '/galeria' ? 'text-kalian-gold' : ''}`}>{t('nav.gallery')}</Link>
+                <Link to="/donaciones" className={`text-[10px] font-black uppercase hover:text-kalian-gold transition-colors tracking-[0.1em] md:tracking-[0.3em] ${location.pathname === '/donaciones' ? 'text-kalian-gold' : ''}`}>{t('nav.donations')}</Link>
+              </>
             )}
             
             {isSocioArea && (
@@ -91,6 +94,7 @@ const Navbar = () => {
         ) : (
           <div className="flex items-center gap-4">
             <Link to="/galeria" className="text-[10px] font-black uppercase hover:text-kalian-gold transition-colors tracking-[0.1em] md:tracking-[0.3em]">{t('nav.gallery')}</Link>
+            <Link to="/donaciones" className="text-[10px] font-black uppercase hover:text-kalian-gold transition-colors tracking-[0.1em] md:tracking-[0.3em]">{t('nav.donations')}</Link>
             <Link to="/login" className="text-[10px] font-black uppercase hover:text-kalian-gold transition-colors tracking-[0.1em] md:tracking-[0.3em]">{t('nav.login')}</Link>
           </div>
         )}

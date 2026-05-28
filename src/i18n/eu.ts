@@ -22,6 +22,16 @@ const eu: Record<string, string> = {
   'donations.copied': 'Kopiatuta!',
   'donations.scanHint': 'Eskaneatu QR kode hau zure bankuko aplikazioarekin transferentzia automatikoki betetzeko. Zenbatekoa zuk erabakitzen duzu.',
   'donations.notAvailable': 'Dohaintzak ez daude erabilgarri une honetan. Itzuli laster.',
+  'donations.tabIban': 'Transferentzia',
+  'donations.tabBtc': 'Bitcoin',
+  'donations.tabUsdc': 'USDC',
+  'donations.btcAddressLabel': 'Bitcoin helbidea (BTC)',
+  'donations.btcScanHint': 'Eskaneatu QR kode hau zure Bitcoin diru-zorroarekin bidalketa automatikoki betetzeko. Zenbatekoa zuk erabakitzen duzu.',
+  'donations.btcWarning': 'Egiaztatu helbidea arretaz bidali aurretik. Blockchain transferentziak itzulezinak dira.',
+  'donations.usdcAddressLabel': 'USDC helbidea',
+  'donations.usdcNetworkLabel': 'Sarea',
+  'donations.usdcScanHint': 'Eskaneatu QR kode hau zure diru-zorroarekin helbidea kopiatzeko. Zenbatekoa zuk erabakitzen duzu.',
+  'donations.usdcWarning': 'Bidali USDC {red} sarearen bidez soilik. Beste sare batez bidaltzeak funtsak galtzea eragingo du.',
 
   // Programazioa / Hasiera
   'home.title': 'EGITARAUA',

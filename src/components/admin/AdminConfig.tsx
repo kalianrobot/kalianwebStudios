@@ -22,6 +22,11 @@ const AdminConfig = () => {
     donacionesBeneficiario: '',
     donacionesBic: '',
     donacionesConcepto: 'Donación Kalian',
+    donacionesBtcActivo: false,
+    donacionesBtcAddress: '',
+    donacionesUsdcActivo: false,
+    donacionesUsdcAddress: '',
+    donacionesUsdcRed: 'Polygon',
   });
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -426,6 +431,72 @@ const AdminConfig = () => {
                   value={config.donacionesConcepto || ''}
                   onChange={e => setConfig({ ...config, donacionesConcepto: e.target.value })}
                 />
+              </div>
+            </div>
+
+            {/* BITCOIN */}
+            <div className="p-6 bg-orange-500/10 border border-orange-500/20 rounded-2xl space-y-4">
+              <div className="flex items-center justify-between">
+                <h3 className="text-lg kalian-poster-text text-orange-400 italic uppercase">Bitcoin (BTC)</h3>
+                <label className="flex items-center gap-3 cursor-pointer">
+                  <span className="text-[10px] font-black text-orange-400/60 uppercase tracking-[0.2em]">Mostrar</span>
+                  <input
+                    type="checkbox"
+                    className="w-5 h-5 accent-orange-500 cursor-pointer"
+                    checked={!!config.donacionesBtcActivo}
+                    onChange={e => setConfig({ ...config, donacionesBtcActivo: e.target.checked })}
+                  />
+                </label>
+              </div>
+              <div className="space-y-2">
+                <p className="text-[10px] font-black text-orange-400/60 uppercase tracking-[0.3em] ml-1">Dirección BTC</p>
+                <input
+                  type="text"
+                  placeholder="bc1q..."
+                  className="w-full p-4 bg-black/30 rounded-xl border border-orange-500/20 outline-none focus:border-orange-400 font-mono text-sm"
+                  value={config.donacionesBtcAddress || ''}
+                  onChange={e => setConfig({ ...config, donacionesBtcAddress: e.target.value.trim() })}
+                />
+              </div>
+            </div>
+
+            {/* USDC */}
+            <div className="p-6 bg-blue-500/10 border border-blue-500/20 rounded-2xl space-y-4">
+              <div className="flex items-center justify-between">
+                <h3 className="text-lg kalian-poster-text text-blue-400 italic uppercase">USDC</h3>
+                <label className="flex items-center gap-3 cursor-pointer">
+                  <span className="text-[10px] font-black text-blue-400/60 uppercase tracking-[0.2em]">Mostrar</span>
+                  <input
+                    type="checkbox"
+                    className="w-5 h-5 accent-blue-500 cursor-pointer"
+                    checked={!!config.donacionesUsdcActivo}
+                    onChange={e => setConfig({ ...config, donacionesUsdcActivo: e.target.checked })}
+                  />
+                </label>
+              </div>
+              <div className="grid md:grid-cols-3 gap-4">
+                <div className="space-y-2 md:col-span-2">
+                  <p className="text-[10px] font-black text-blue-400/60 uppercase tracking-[0.3em] ml-1">Dirección USDC</p>
+                  <input
+                    type="text"
+                    placeholder="0x... o dirección Solana"
+                    className="w-full p-4 bg-black/30 rounded-xl border border-blue-500/20 outline-none focus:border-blue-400 font-mono text-sm"
+                    value={config.donacionesUsdcAddress || ''}
+                    onChange={e => setConfig({ ...config, donacionesUsdcAddress: e.target.value.trim() })}
+                  />
+                </div>
+                <div className="space-y-2">
+                  <p className="text-[10px] font-black text-blue-400/60 uppercase tracking-[0.3em] ml-1">Red</p>
+                  <select
+                    className="w-full p-4 bg-black/30 rounded-xl border border-blue-500/20 outline-none focus:border-blue-400 text-sm"
+                    value={config.donacionesUsdcRed || 'Polygon'}
+                    onChange={e => setConfig({ ...config, donacionesUsdcRed: e.target.value })}
+                  >
+                    <option value="Solana">Solana</option>
+                    <option value="Polygon">Polygon</option>
+                    <option value="BSC">BSC</option>
+                  </select>
+                </div>
               </div>
             </div>
           </div>

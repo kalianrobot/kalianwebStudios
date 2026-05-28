@@ -22,6 +22,16 @@ const es: Record<string, string> = {
   'donations.copied': '¡Copiado!',
   'donations.scanHint': 'Escanea este código QR con la app de tu banco para autorrellenar la transferencia. Tú decides el importe.',
   'donations.notAvailable': 'Las donaciones no están disponibles en este momento. Vuelve pronto.',
+  'donations.tabIban': 'Transferencia',
+  'donations.tabBtc': 'Bitcoin',
+  'donations.tabUsdc': 'USDC',
+  'donations.btcAddressLabel': 'Dirección Bitcoin (BTC)',
+  'donations.btcScanHint': 'Escanea este código QR con tu monedero Bitcoin para autorrellenar el envío. Tú decides la cantidad.',
+  'donations.btcWarning': 'Verifica cuidadosamente la dirección antes de enviar. Las transferencias en blockchain son irreversibles.',
+  'donations.usdcAddressLabel': 'Dirección USDC',
+  'donations.usdcNetworkLabel': 'Red',
+  'donations.usdcScanHint': 'Escanea este código QR con tu monedero para copiar la dirección. Tú decides la cantidad.',
+  'donations.usdcWarning': 'Envía USDC únicamente por la red {red}. Enviar por otra red resultará en pérdida de fondos.',
 
   // Programación / Home
   'home.title': 'PROGRAMACIÓN',

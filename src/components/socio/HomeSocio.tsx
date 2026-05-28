@@ -595,7 +595,7 @@ export const HomeSocio = () => {
                       <span className="text-xl">★</span> {t('course.important')}
                     </p>
                     <p className="text-sm text-kalian-cream/90 italic leading-relaxed">
-                      {tField(cursoDetalle, 'ventajas') || t('home.courseIncludes')}
+                      {(language === 'eu' ? (cursoDetalle.ventajas_eu || '') : (cursoDetalle.ventajas || '')) || t('home.courseIncludes')}
                     </p>
                   </div>
 

@@ -22,7 +22,7 @@ const Navbar = () => {
   const hasMultipleRoles = [isAdmin, isTeacher, !!socioData].filter(Boolean).length > 1;
 
   return (
-    <nav className="flex justify-between items-center p-6 bg-kalian-dark text-kalian-cream border-b border-kalian-gold/10 shadow-2xl sticky top-0 z-50">
+    <nav className="flex flex-wrap gap-y-2 justify-between items-center p-3 md:p-6 bg-kalian-dark text-kalian-cream border-b border-kalian-gold/10 shadow-2xl sticky top-0 z-50">
       <div className="flex items-center gap-4">
         {user ? (
           <div className="flex items-center gap-3 group cursor-default">
@@ -35,7 +35,7 @@ const Navbar = () => {
         )}
       </div>
       
-      <div className="flex items-center gap-6">
+      <div className="flex flex-wrap items-center gap-2 md:gap-6">
         {/* Selector de Idioma */}
         <div className="flex items-center bg-black/40 rounded-full border border-kalian-gold/10 p-1">
           <button 
@@ -49,33 +49,33 @@ const Navbar = () => {
         </div>
 
         {user ? (
-          <div className="flex items-center gap-8">
+          <div className="flex flex-wrap items-center gap-2 md:gap-6 lg:gap-8">
             {/* Links contextuales según el área actual */}
             {!isAdminArea && (
-              <Link to="/galeria" className={`text-[10px] font-black uppercase hover:text-kalian-gold transition-colors tracking-[0.3em] ${location.pathname === '/galeria' ? 'text-kalian-gold' : ''}`}>{t('nav.gallery')}</Link>
+              <Link to="/galeria" className={`text-[10px] font-black uppercase hover:text-kalian-gold transition-colors tracking-[0.1em] md:tracking-[0.3em] ${location.pathname === '/galeria' ? 'text-kalian-gold' : ''}`}>{t('nav.gallery')}</Link>
             )}
             
             {isSocioArea && (
               <>
-                <Link to="/home" className={`text-[10px] font-black uppercase hover:text-kalian-gold transition-colors tracking-[0.3em] ${location.pathname === '/home' ? 'text-kalian-gold' : ''}`}>{t('nav.catalog')}</Link>
-                <Link to="/perfil" className={`text-[10px] font-black uppercase hover:text-kalian-gold transition-colors tracking-[0.3em] ${location.pathname === '/perfil' ? 'text-kalian-gold' : ''}`}>{t('nav.panel')}</Link>
+                <Link to="/home" className={`text-[10px] font-black uppercase hover:text-kalian-gold transition-colors tracking-[0.1em] md:tracking-[0.3em] ${location.pathname === '/home' ? 'text-kalian-gold' : ''}`}>{t('nav.catalog')}</Link>
+                <Link to="/perfil" className={`text-[10px] font-black uppercase hover:text-kalian-gold transition-colors tracking-[0.1em] md:tracking-[0.3em] ${location.pathname === '/perfil' ? 'text-kalian-gold' : ''}`}>{t('nav.panel')}</Link>
               </>
             )}
             
             {isAdminArea && (
-              <Link to="/staff" className={`text-[10px] font-black uppercase hover:text-kalian-gold transition-colors tracking-[0.3em] ${location.pathname === '/staff' ? 'text-kalian-gold' : ''}`}>{t('nav.admin')}</Link>
+              <Link to="/staff" className={`text-[10px] font-black uppercase hover:text-kalian-gold transition-colors tracking-[0.1em] md:tracking-[0.3em] ${location.pathname === '/staff' ? 'text-kalian-gold' : ''}`}>{t('nav.admin')}</Link>
             )}
 
             {isTeacherArea && (
-              <Link to="/profesor" className={`text-[10px] font-black uppercase hover:text-kalian-gold transition-colors tracking-[0.3em] ${location.pathname === '/profesor' ? 'text-kalian-gold' : ''}`}>{t('nav.teacher')}</Link>
+              <Link to="/profesor" className={`text-[10px] font-black uppercase hover:text-kalian-gold transition-colors tracking-[0.1em] md:tracking-[0.3em] ${location.pathname === '/profesor' ? 'text-kalian-gold' : ''}`}>{t('nav.teacher')}</Link>
             )}
 
-            <div className="h-4 w-[1px] bg-kalian-gold/20"></div>
+            <div className="hidden md:block h-4 w-[1px] bg-kalian-gold/20"></div>
 
             {hasMultipleRoles && (
               <Link 
                 to="/" 
-                className="text-[10px] font-black uppercase text-kalian-gold/40 hover:text-kalian-gold transition-colors tracking-[0.3em]"
+                className="text-[10px] font-black uppercase text-kalian-gold/40 hover:text-kalian-gold transition-colors tracking-[0.1em] md:tracking-[0.3em]"
               >
                 {t('nav.changeRole')}
               </Link>
@@ -90,8 +90,8 @@ const Navbar = () => {
           </div>
         ) : (
           <div className="flex items-center gap-4">
-            <Link to="/galeria" className="text-[10px] font-black uppercase hover:text-kalian-gold transition-colors tracking-[0.3em]">{t('nav.gallery')}</Link>
-            <Link to="/login" className="text-[10px] font-black uppercase hover:text-kalian-gold transition-colors tracking-[0.3em]">{t('nav.login')}</Link>
+            <Link to="/galeria" className="text-[10px] font-black uppercase hover:text-kalian-gold transition-colors tracking-[0.1em] md:tracking-[0.3em]">{t('nav.gallery')}</Link>
+            <Link to="/login" className="text-[10px] font-black uppercase hover:text-kalian-gold transition-colors tracking-[0.1em] md:tracking-[0.3em]">{t('nav.login')}</Link>
           </div>
         )}
       </div>

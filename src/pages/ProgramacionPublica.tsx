@@ -367,35 +367,35 @@ const ProgramacionPublica = () => {
                         className="bg-black/40 border border-kalian-gold/10 rounded-[2.5rem] overflow-hidden transition-all duration-500 hover:border-kalian-gold/40 cursor-pointer shadow-xl hover:shadow-kalian-gold/5"
                         onClick={() => setCursoDetalle(c)}
                       >
-                        <div 
-                          className="p-10 md:p-12 flex flex-col md:flex-row justify-between items-center gap-8 group"
+                        <div
+                          className="p-5 md:p-10 lg:p-12 flex flex-col md:flex-row justify-between items-center gap-4 md:gap-8 group"
                         >
-                          <div className="flex items-center gap-10 w-full md:w-auto">
-                            <div className="w-24 h-24 rounded-[2rem] flex items-center justify-center text-5xl border border-kalian-gold/10 bg-kalian-gold/10">
+                          <div className="flex items-center gap-4 md:gap-10 w-full md:w-auto">
+                            <div className="w-14 h-14 md:w-24 md:h-24 rounded-[1.25rem] md:rounded-[2rem] flex items-center justify-center text-3xl md:text-5xl border border-kalian-gold/10 bg-kalian-gold/10 flex-shrink-0">
                               {c.emoji || ((academias.find(a => a.id === c.categoria || a.nombre === c.categoria)?.nombre || "").toLowerCase().includes('danza') ? '💃' : '🎵')}
                             </div>
-                            <div>
-                              <h3 className="text-4xl kalian-poster-text text-kalian-cream group-hover:text-kalian-gold transition-colors leading-tight uppercase italic">{tField(c, 'titulo')}</h3>
-                              <p className="text-[10px] font-black text-kalian-gold/40 uppercase tracking-[0.4em] mt-4">{t('home.category')} {c.categoria} • {tField(c, 'subcategoria')}</p>
+                            <div className="min-w-0">
+                              <h3 className="text-2xl md:text-4xl kalian-poster-text text-kalian-cream group-hover:text-kalian-gold transition-colors leading-tight uppercase italic break-words">{tField(c, 'titulo')}</h3>
+                              <p className="text-[9px] md:text-[10px] font-black text-kalian-gold/40 uppercase tracking-[0.2em] md:tracking-[0.4em] mt-1 md:mt-4">{t('home.category')} {c.categoria} • {tField(c, 'subcategoria')}</p>
                             </div>
                           </div>
 
-                          <div className="flex items-center gap-16 w-full md:w-auto justify-between md:justify-end">
+                          <div className="flex items-center gap-4 md:gap-10 lg:gap-16 w-full md:w-auto justify-between md:justify-end">
                             <div className="text-center">
-                              <p className={`text-4xl kalian-poster-text ${c.aforo_disponible === false ? 'text-red-500' : 'text-kalian-gold'}`}>
+                              <p className={`text-xl md:text-4xl kalian-poster-text ${c.aforo_disponible === false ? 'text-red-500' : 'text-kalian-gold'}`}>
                                 {c.aforo_disponible === false ? t('home.full') : t('home.available')}
                               </p>
                               <p className="text-[9px] font-black uppercase text-kalian-gold/30 tracking-[0.2em] mt-1">{t('home.availability')}</p>
                             </div>
                             <div className="text-right">
-                              <p className="text-4xl kalian-poster-text text-kalian-cream">
+                              <p className="text-xl md:text-4xl kalian-poster-text text-kalian-cream">
                                 {c.modalidades && c.modalidades.length > 0
                                   ? `${t('home.from')} ${Math.min(...c.modalidades.map((m: any) => m.precio))}€/mes`
                                   : `${c.precio || 0}€/mes`}
                               </p>
                               <p className="text-[9px] font-black uppercase text-kalian-gold/80 tracking-[0.2em] mt-1">{t('home.contribution')}</p>
                             </div>
-                            <span className="text-3xl text-kalian-gold group-hover:translate-x-4 transition-transform duration-500">→</span>
+                            <span className="hidden md:block text-3xl text-kalian-gold group-hover:translate-x-4 transition-transform duration-500">→</span>
                           </div>
                         </div>
                       </motion.div>
@@ -630,39 +630,39 @@ const ProgramacionPublica = () => {
                   {/* MODALIDADES DE PRECIO */}
                   <div className="space-y-6">
                     <p className="text-[12px] font-black text-kalian-gold/60 uppercase tracking-[0.4em]">{t('home.modalitiesTitle')}</p>
-                    <div className="bg-black/40 rounded-[2rem] overflow-hidden border border-kalian-gold/10 shadow-2xl">
-                      <table className="w-full text-left text-[11px] uppercase tracking-[0.2em] font-black">
+                    <div className="bg-black/40 rounded-[2rem] overflow-x-auto border border-kalian-gold/10 shadow-2xl">
+                      <table className="w-full text-left text-[10px] md:text-[11px] uppercase tracking-[0.05em] md:tracking-[0.2em] font-black">
                         <thead>
                           <tr className="bg-kalian-gold/10 text-kalian-gold border-b border-kalian-gold/20">
-                            <th className="p-6 w-12"></th>
-                            <th className="p-6">{t('home.tableType')}</th>
-                            <th className="p-6">{t('home.tableFreq')}</th>
-                            <th className="p-6 text-right">{t('home.tableContribution')}</th>
+                            <th className="p-2 md:p-6 w-6 md:w-12"></th>
+                            <th className="p-2 md:p-6">{t('home.tableType')}</th>
+                            <th className="p-2 md:p-6">{t('home.tableFreq')}</th>
+                            <th className="p-2 md:p-6 text-right">{t('home.tableContribution')}</th>
                           </tr>
                         </thead>
                         <tbody className="divide-y divide-kalian-gold/10">
                           {cursoDetalle.modalidades?.map((m: any, i: number) => {
-                            const isSelected = modalidadSeleccionada[cursoDetalle.id]?.tipo === m.tipo && 
+                            const isSelected = modalidadSeleccionada[cursoDetalle.id]?.tipo === m.tipo &&
                                              modalidadSeleccionada[cursoDetalle.id]?.frecuencia === m.frecuencia &&
                                              modalidadSeleccionada[cursoDetalle.id]?.precio === m.precio;
-                            
+
                             return (
-                              <tr 
-                                key={i} 
+                              <tr
+                                key={i}
                                 className={`text-kalian-cream/90 cursor-pointer hover:bg-white/10 transition-all ${isSelected ? 'bg-kalian-gold/10' : ''}`}
                                 onClick={() => {
                                   setModalidadSeleccionada({ ...modalidadSeleccionada, [cursoDetalle.id]: m });
                                   setErrorSeleccion(null);
                                 }}
                               >
-                                <td className="p-6">
-                                  <div className={`w-6 h-6 rounded-full border-2 flex items-center justify-center transition-all ${isSelected ? 'border-kalian-gold bg-kalian-gold' : 'border-white/20'}`}>
-                                    {isSelected && <div className="w-2.5 h-2.5 bg-black rounded-full"></div>}
+                                <td className="p-2 md:p-6">
+                                  <div className={`w-5 h-5 md:w-6 md:h-6 rounded-full border-2 flex items-center justify-center transition-all ${isSelected ? 'border-kalian-gold bg-kalian-gold' : 'border-white/20'}`}>
+                                    {isSelected && <div className="w-2 h-2 md:w-2.5 md:h-2.5 bg-black rounded-full"></div>}
                                   </div>
                                 </td>
-                                <td className="p-6">{m.tipo}</td>
-                                <td className="p-6">{m.frecuencia}</td>
-                                <td className="p-6 text-right font-black text-kalian-gold text-lg">{m.precio}€/mes</td>
+                                <td className="p-2 md:p-6">{m.tipo}</td>
+                                <td className="p-2 md:p-6">{m.frecuencia}</td>
+                                <td className="p-2 md:p-6 text-right font-black text-kalian-gold text-sm md:text-lg whitespace-nowrap">{m.precio}€/mes</td>
                               </tr>
                             );
                           })}
@@ -767,13 +767,19 @@ const ProgramacionPublica = () => {
               <button onClick={() => setSolicitudCurso(null)} className="absolute top-8 right-8 text-kalian-gold/90 font-black text-2xl hover:text-kalian-gold transition-colors">✕</button>
               
               <h2 className="text-4xl kalian-poster-text text-kalian-gold leading-none mb-2 tracking-tight uppercase italic">{tField(solicitudCurso.curso, 'titulo')}</h2>
-              <div className="flex justify-between items-center mb-10">
+              <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-3 mb-10">
                 <p className="text-[10px] font-black text-kalian-gold/90 uppercase tracking-[0.3em]">
                   {solicitudCurso.tipo === 'consulta' ? t('home.requestInfo') : t('home.enrollmentForm')}
                 </p>
-                <p className="text-[10px] font-black text-kalian-cream uppercase tracking-widest bg-kalian-gold/10 px-3 py-1 rounded-full border border-kalian-gold/20">
-                  {solicitudCurso.modalidad?.tipo} | {solicitudCurso.modalidad?.frecuencia} | {solicitudCurso.modalidad?.precio}€/mes
-                </p>
+                {solicitudCurso.modalidad && (
+                  <div className="flex flex-wrap gap-2">
+                    {[solicitudCurso.modalidad.tipo, solicitudCurso.modalidad.frecuencia, `${solicitudCurso.modalidad.precio}€/mes`].filter(Boolean).map((val: string, idx: number) => (
+                      <span key={idx} className="text-[10px] font-black text-kalian-cream uppercase tracking-widest bg-kalian-gold/10 px-3 py-1 rounded-full border border-kalian-gold/20 whitespace-nowrap">
+                        {val}
+                      </span>
+                    ))}
+                  </div>
+                )}
               </div>
 
               {mensajeSolicitud ? (

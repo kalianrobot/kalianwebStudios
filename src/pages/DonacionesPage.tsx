@@ -13,12 +13,14 @@ interface DonacionesConfig {
   donacionesConcepto?: string;
   donacionesBtcActivo?: boolean;
   donacionesBtcAddress?: string;
+  donacionesLnActivo?: boolean;
+  donacionesLnAddress?: string;
   donacionesUsdcActivo?: boolean;
   donacionesUsdcAddress?: string;
   donacionesUsdcRed?: string;
 }
 
-type Method = 'iban' | 'btc' | 'usdc';
+type Method = 'iban' | 'btc' | 'ln' | 'usdc';
 
 const formatIban = (iban: string) => iban.replace(/\s+/g, '').replace(/(.{4})/g, '$1 ').trim();
 
@@ -68,16 +70,19 @@ const DonacionesPage = () => {
   const bic = (config?.donacionesBic || '').replace(/\s+/g, '');
   const concepto = config?.donacionesConcepto || 'Donación Kalian';
   const btcAddress = (config?.donacionesBtcAddress || '').trim();
+  const lnAddress = (config?.donacionesLnAddress || '').trim();
   const usdcAddress = (config?.donacionesUsdcAddress || '').trim();
   const usdcRed = config?.donacionesUsdcRed || 'Polygon';
 
   const ibanActivo = !!config?.donacionesActivo && !!iban;
   const btcActivo = !!config?.donacionesBtcActivo && !!btcAddress;
+  const lnActivo = !!config?.donacionesLnActivo && !!lnAddress;
   const usdcActivo = !!config?.donacionesUsdcActivo && !!usdcAddress;
 
   const methods: Method[] = [
     ...(ibanActivo ? ['iban' as Method] : []),
     ...(btcActivo ? ['btc' as Method] : []),
+    ...(lnActivo ? ['ln' as Method] : []),
     ...(usdcActivo ? ['usdc' as Method] : []),
   ];
 
@@ -88,8 +93,12 @@ const DonacionesPage = () => {
 
   const epcPayload = ['BCD', '002', '1', 'SCT', bic, beneficiario, iban, '', '', concepto].join('\n');
 
-  const tabLabel = (m: Method) =>
-    m === 'iban' ? t('donations.tabIban') : m === 'btc' ? t('donations.tabBtc') : t('donations.tabUsdc');
+  const tabLabel = (m: Method) => {
+    if (m === 'iban') return t('donations.tabIban');
+    if (m === 'btc') return t('donations.tabBtc');
+    if (m === 'ln') return t('donations.tabLn');
+    return t('donations.tabUsdc');
+  };
 
   return (
     <div className="min-h-screen bg-kalian-dark text-kalian-cream font-sans pb-24">
@@ -184,6 +193,22 @@ const DonacionesPage = () => {
                   </div>
                   <p className="text-amber-300/80 text-xs text-center bg-amber-500/10 border border-amber-500/20 rounded-xl p-4">
                     {t('donations.btcWarning')}
+                  </p>
+                </>
+              )}
+
+              {/* LIGHTNING */}
+              {currentTab === 'ln' && (
+                <>
+                  <CopyField label={t('donations.lnAddressLabel')} value={lnAddress} accent="bg-yellow-400 text-black" />
+                  <div className="pt-6 border-t border-kalian-gold/10 flex flex-col items-center gap-4">
+                    <div className="bg-white p-4 rounded-2xl">
+                      <QRCodeSVG value={`lightning:${lnAddress}`} size={220} level="M" />
+                    </div>
+                    <p className="text-kalian-cream/50 text-xs text-center max-w-sm italic">{t('donations.lnScanHint')}</p>
+                  </div>
+                  <p className="text-yellow-300/80 text-xs text-center bg-yellow-500/10 border border-yellow-500/20 rounded-xl p-4">
+                    {t('donations.lnNote')}
                   </p>
                 </>
               )}

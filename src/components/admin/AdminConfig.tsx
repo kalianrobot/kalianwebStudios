@@ -24,6 +24,8 @@ const AdminConfig = () => {
     donacionesConcepto: 'Donación Kalian',
     donacionesBtcActivo: false,
     donacionesBtcAddress: '',
+    donacionesLnActivo: false,
+    donacionesLnAddress: '',
     donacionesUsdcActivo: false,
     donacionesUsdcAddress: '',
     donacionesUsdcRed: 'Polygon',
@@ -457,6 +459,33 @@ const AdminConfig = () => {
                   value={config.donacionesBtcAddress || ''}
                   onChange={e => setConfig({ ...config, donacionesBtcAddress: e.target.value.trim() })}
                 />
+              </div>
+            </div>
+
+            {/* LIGHTNING NETWORK */}
+            <div className="p-6 bg-yellow-500/10 border border-yellow-500/20 rounded-2xl space-y-4">
+              <div className="flex items-center justify-between">
+                <h3 className="text-lg kalian-poster-text text-yellow-400 italic uppercase">Lightning Network</h3>
+                <label className="flex items-center gap-3 cursor-pointer">
+                  <span className="text-[10px] font-black text-yellow-400/60 uppercase tracking-[0.2em]">Mostrar</span>
+                  <input
+                    type="checkbox"
+                    className="w-5 h-5 accent-yellow-500 cursor-pointer"
+                    checked={!!config.donacionesLnActivo}
+                    onChange={e => setConfig({ ...config, donacionesLnActivo: e.target.checked })}
+                  />
+                </label>
+              </div>
+              <div className="space-y-2">
+                <p className="text-[10px] font-black text-yellow-400/60 uppercase tracking-[0.3em] ml-1">Lightning Address</p>
+                <input
+                  type="text"
+                  placeholder="usuario@getalby.com"
+                  className="w-full p-4 bg-black/30 rounded-xl border border-yellow-500/20 outline-none focus:border-yellow-400 font-mono text-sm"
+                  value={config.donacionesLnAddress || ''}
+                  onChange={e => setConfig({ ...config, donacionesLnAddress: e.target.value.trim().toLowerCase() })}
+                />
+                <p className="text-[9px] text-yellow-400/40 ml-1 italic">Puedes usar cualquier Lightning Address (Alby, Phoenix, Strike, etc.)</p>
               </div>
             </div>
 

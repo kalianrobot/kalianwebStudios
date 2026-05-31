@@ -21,6 +21,7 @@ const AdminLocales = lazy(() => import('./components/admin/AdminLocales'));
 const AdminProfesores = lazy(() => import('./components/admin/AdminProfesores'));
 const AdminAcademias = lazy(() => import('./components/admin/AdminAcademias'));
 const AdminStaff = lazy(() => import('./components/admin/AdminStaff'));
+const AdminNewsletter = lazy(() => import('./components/admin/AdminNewsletter'));
 const AdminContabilidad = lazy(() => import('./components/admin/AdminContabilidad'));
 const AdminExposiciones = lazy(() => import('./components/admin/AdminExposiciones'));
 const AdminConfig = lazy(() => import('./components/admin/AdminConfig'));
@@ -136,6 +137,7 @@ function AppContent() {
         <Route path="/staff/locales" element={hasAdminAccess ? <AdminLocales /> : <Navigate to="/staff/login" />} />
         <Route path="/staff/academias" element={hasAdminAccess ? <AdminAcademias /> : <Navigate to="/staff/login" />} />
         <Route path="/staff/staff" element={hasAdminAccess ? <AdminStaff /> : <Navigate to="/staff/login" />} />
+        <Route path="/staff/newsletter" element={hasAdminAccess ? <AdminNewsletter /> : <Navigate to="/staff/login" />} />
         <Route path="/staff/solicitudes" element={hasAdminAccess ? <AdminSolicitudes /> : <Navigate to="/staff/login" />} />
         <Route path="/staff/contabilidad" element={hasAdminAccess ? <AdminContabilidad /> : <Navigate to="/staff/login" />} />
         <Route path="/staff/galeria" element={hasAdminAccess ? <AdminExposiciones /> : <Navigate to="/staff/login" />} />

@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { useNavigate } from 'react-router-dom';
 import { useLanguage } from '../context/LanguageContext';
+import { MASTER_EMAIL } from '../lib/constants';
 
 const AdminLogin = () => {
   const [email, setEmail] = useState('');
@@ -13,11 +14,8 @@ const AdminLogin = () => {
   const { t } = useLanguage();
   const isDev = import.meta.env.DEV;
 
-  // Email de administrador por defecto (se puede usar si se desea, o cualquier otro con permisos)
-  const SUGGESTED_EMAIL = "kalianrobot@gmail.com";
-
   useEffect(() => {
-    const isMaster = user?.email?.toLowerCase() === SUGGESTED_EMAIL;
+    const isMaster = user?.email?.toLowerCase() === MASTER_EMAIL;
     const hasAdminAccess = role === 'admin' || isMaster;
 
     isDev && console.log("AdminLogin: Access check:", { role, user: user?.email, isMaster, hasAdminAccess });

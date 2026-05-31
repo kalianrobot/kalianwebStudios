@@ -3,6 +3,7 @@ import { auth, db } from '../firebase';
 import { onAuthStateChanged, signOut, User, signInWithEmailAndPassword, sendPasswordResetEmail } from 'firebase/auth';
 import { collection, query, where, getDocs, DocumentData, updateDoc, doc, getDoc, setDoc } from 'firebase/firestore';
 import { syncSocioStatus } from '../lib/socioService';
+import { MASTER_EMAIL } from '../lib/constants';
 
 interface AuthContextType {
   user: User | null;
@@ -82,7 +83,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         setUser(firebaseUser);
         try {
           const emailLower = firebaseUser.email?.toLowerCase() || '';
-          const isMaster = emailLower === "kalianrobot@gmail.com";
+          const isMaster = emailLower === MASTER_EMAIL;
 
           let currentRole: any = isMaster ? 'admin' : 'invitado';
 

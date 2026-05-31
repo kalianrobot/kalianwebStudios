@@ -2,6 +2,7 @@ import React, { Suspense, lazy } from 'react';
 import { BrowserRouter as Router, Routes, Route, Navigate, useLocation } from 'react-router-dom';
 import { AuthProvider, useAuth } from './context/AuthContext';
 import { LanguageProvider } from './context/LanguageContext';
+import { MASTER_EMAIL } from './lib/constants';
 
 // Componentes Públicos
 const LandingPage = lazy(() => import('./pages/LandingPage'));
@@ -77,7 +78,7 @@ const ErrorFallback = ({ error, resetErrorBoundary }: any) => (
 function AppContent() {
   const { user, role, socioData } = useAuth();
   const location = useLocation();
-  const isMaster = user?.email?.toLowerCase() === 'kalianrobot@gmail.com';
+  const isMaster = user?.email?.toLowerCase() === MASTER_EMAIL;
   const hasAdminAccess = role === 'admin' || isMaster;
   
   const isLanding = location.pathname === '/';

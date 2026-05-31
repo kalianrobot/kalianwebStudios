@@ -17,7 +17,7 @@ const LandingPage = () => {
   const [heroUrl, setHeroUrl] = useState<string>(FALLBACK_HERO);
 
   useEffect(() => {
-    getDoc(doc(db, "config", "main")).then(snap => {
+    getDoc(doc(db, "config", "site")).then(snap => {
       if (snap.exists() && snap.data().heroImageUrl) {
         setHeroUrl(snap.data().heroImageUrl);
       }

@@ -4,6 +4,7 @@ import { collection, setDoc, doc, getDocs, getDocsFromServer, deleteDoc, query, 
 import { Link, useSearchParams } from 'react-router-dom';
 import { Trash2 } from 'lucide-react';
 import { syncMultipleSocios } from '../../lib/socioService';
+import { normalizeToSlug } from '../../lib/slug';
 
 import { createSocioAuth } from '../../lib/adminAuth';
 import { sendWelcomeEmail, sendMembershipUpdateEmail } from '../../lib/brevoService';
@@ -441,9 +442,9 @@ const AdminCursos = () => {
         const { id, alumnos, aforo_actual, ...data } = curso;
         
         const academia = academias.find(a => a.id === data.categoria || a.nombre === data.categoria);
-        const academiaSlug = academia ? academia.nombre.toUpperCase().replace(/\s+/g, '-') : 'GENERAL';
+        const academiaSlug = academia ? normalizeToSlug(academia.nombre) : 'GENERAL';
         const anioMes = data.fechaInicio.substring(0, 7) || '0000-00';
-        const slug = (data.titulo + " COPIA").trim().replace(/\s+/g, '-').toUpperCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+        const slug = normalizeToSlug(data.titulo + " COPIA");
         const nuevoId = `${anioMes}-${academiaSlug}-${slug}`;
 
         const nuevoCurso = {
@@ -554,13 +555,9 @@ const AdminCursos = () => {
 
     // 1. Normalizar Academia
     const academia = academias.find(a => a.id === categoria || a.nombre === categoria);
-    const academiaSlug = (academia ? academia.nombre : (categoria || 'GENERAL'))
-      .normalize("NFD").replace(/[\u0300-\u036f]/g, "")
-      .toUpperCase().replace(/[^A-Z0-9]/g, '-').replace(/-+/g, '-').replace(/^-+|-+$/g, '');
-    
-    let titleSlug = rawTitulo.trim()
-      .normalize("NFD").replace(/[\u0300-\u036f]/g, "")
-      .toUpperCase().replace(/[^A-Z0-9]/g, '-').replace(/-+/g, '-').replace(/^-+|-+$/g, '');
+    const academiaSlug = normalizeToSlug(academia ? academia.nombre : (categoria || 'GENERAL'));
+
+    let titleSlug = normalizeToSlug(rawTitulo);
 
     const anioMes = (fecha || '2025-09').substring(0, 7);
     

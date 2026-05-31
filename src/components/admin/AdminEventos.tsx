@@ -4,6 +4,7 @@ import { collection, setDoc, doc, getDocs, getDocsFromServer, deleteDoc, query, 
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 import { Link, useSearchParams } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
+import { normalizeToSlug } from '../../lib/slug';
 
 const AdminEventos = () => {
   const [searchParams] = useSearchParams();
@@ -215,7 +216,7 @@ ENTRADA HASTA LAS 00:00. RESERVAS DISPONIBLES HASTA COMPLETAR AFORO.`;
         await updateDoc(doc(db, "eventos", editando), eventoData);
         setMsg("✅ Evento actualizado con éxito");
       } else {
-        const slug = form.titulo.trim().replace(/\s+/g, '-').toUpperCase();
+        const slug = normalizeToSlug(form.titulo);
         const customId = `${form.fecha.substring(0,10)}-${slug}`;
         await setDoc(doc(db, "eventos", customId), eventoData);
         setMsg("✅ Evento publicado con éxito");

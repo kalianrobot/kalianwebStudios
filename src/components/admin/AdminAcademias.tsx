@@ -3,6 +3,7 @@ import { db, storage } from '../../firebase';
 import { collection, setDoc, doc, getDocs, deleteDoc, query, orderBy, DocumentData, updateDoc, deleteField } from 'firebase/firestore';
 import { ref, uploadBytes, getDownloadURL, deleteObject } from 'firebase/storage';
 import { Link } from 'react-router-dom';
+import { normalizeToSlug } from '../../lib/slug';
 
 const AdminAcademias = () => {
   const [academias, setAcademias] = useState<DocumentData[]>([]);
@@ -129,7 +130,7 @@ const AdminAcademias = () => {
         await updateDoc(doc(db, "academias", editando), academiaData);
         setMsg("✅ Academia actualizada con éxito");
       } else {
-        const customId = form.nombre.toLowerCase().trim().replace(/\s+/g, '-');
+        const customId = normalizeToSlug(form.nombre, { lowercase: true });
         // Ensure subcategorias is initialized as empty array for new academies
         const newData = { ...academiaData, subcategorias: academiaData.subcategorias || [] };
         await setDoc(doc(db, "academias", customId), newData);

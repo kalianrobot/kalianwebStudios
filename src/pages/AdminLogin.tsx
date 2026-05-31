@@ -85,7 +85,7 @@ const AdminLogin = () => {
             <p className="text-[9px] font-black text-kalian-gold/70 uppercase tracking-[0.4em] ml-4">{t('auth.staffEmail')}</p>
             <input
               type="email"
-              placeholder={SUGGESTED_EMAIL}
+              placeholder="correo@dominio.com"
               className="w-full p-5 bg-kalian-gold/5 rounded-2xl text-center text-xl font-bold border border-kalian-gold/10 focus:border-kalian-gold focus:bg-kalian-gold/10 outline-none text-kalian-gold transition-all"
               required
               value={email}

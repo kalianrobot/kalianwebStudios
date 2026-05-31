@@ -1,8 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { db } from '../../firebase';
-import { collection, getDocs, getDocsFromServer, doc, setDoc, getDoc, updateDoc, query, orderBy, DocumentData, deleteDoc } from 'firebase/firestore';
+import { collection, getDocs, doc, setDoc, getDoc, DocumentData, deleteDoc } from 'firebase/firestore';
 import { Link } from 'react-router-dom';
-import { Shield, UserCog, Trash2, UserCheck } from 'lucide-react';
+import { Trash2 } from 'lucide-react';
 
 const AdminStaff = () => {
   const [staff, setStaff] = useState<DocumentData[]>([]);
@@ -50,21 +50,6 @@ const AdminStaff = () => {
   useEffect(() => {
     fetchStaff();
   }, []);
-
-  const handleUpdateRole = async (userId: string, newRole: string) => {
-    if (!window.confirm(`¿Seguro que quieres cambiar el rol a ${newRole.toUpperCase()}?`)) return;
-    try {
-      await updateDoc(doc(db, "users", userId), {
-        role: newRole
-      });
-      setMsg(`✅ Rol actualizado a ${newRole}`);
-      fetchStaff();
-      setTimeout(() => setMsg(''), 3000);
-    } catch (err) {
-      console.error(err);
-      alert("Error al actualizar rol");
-    }
-  };
 
   const handleDeleteUser = async (userId: string) => {
     if (!window.confirm("¿Seguro que quieres eliminar este acceso de staff? El usuario seguirá existiendo como socio si tiene ficha, pero perderá sus permisos especiales.")) return;
@@ -124,7 +109,7 @@ const AdminStaff = () => {
             <div className="grid grid-cols-12 gap-4 text-[10px] font-black uppercase tracking-widest text-kalian-gold/60">
               <div className="col-span-5">Usuario / Email</div>
               <div className="col-span-3 text-center">Rol Actual</div>
-              <div className="col-span-4 text-right">Acciones de Permisos</div>
+              <div className="col-span-4 text-right">Acciones</div>
             </div>
           </div>
 
@@ -150,33 +135,10 @@ const AdminStaff = () => {
                   </span>
                 </div>
 
-                <div className="col-span-4 flex justify-end gap-2">
-                  <div className="flex bg-black/40 rounded-xl p-1 border border-white/5">
-                    <button 
-                      onClick={() => handleUpdateRole(u.id, 'admin')}
-                      title="Hacer Admin"
-                      className={`p-2 rounded-lg transition-all ${u.role === 'admin' ? 'bg-red-500 text-white shadow-lg' : 'text-white/20 hover:text-red-500'}`}
-                    >
-                      <Shield size={18} />
-                    </button>
-                    <button 
-                      onClick={() => handleUpdateRole(u.id, 'teacher')}
-                      title="Hacer Profesor"
-                      className={`p-2 rounded-lg transition-all ${u.role === 'teacher' ? 'bg-indigo-500 text-white shadow-lg' : 'text-white/20 hover:text-indigo-500'}`}
-                    >
-                      <UserCog size={18} />
-                    </button>
-                    <button 
-                      onClick={() => handleUpdateRole(u.id, 'portero')}
-                      title="Hacer Portero"
-                      className={`p-2 rounded-lg transition-all ${u.role === 'portero' ? 'bg-emerald-500 text-white shadow-lg' : 'text-white/20 hover:text-emerald-500'}`}
-                    >
-                      <UserCheck size={18} />
-                    </button>
-                  </div>
-                  
-                  <button 
+                <div className="col-span-4 flex justify-end">
+                  <button
                     onClick={() => handleDeleteUser(u.id)}
+                    title="Eliminar acceso"
                     className="p-3 bg-red-500/10 text-red-500 rounded-xl border border-red-500/20 hover:bg-red-500 hover:text-white transition-all"
                   >
                     <Trash2 size={18} />
@@ -188,10 +150,10 @@ const AdminStaff = () => {
         </div>
 
         <div className="mt-12 bg-kalian-gold/5 border border-kalian-gold/10 p-8 rounded-[2.5rem]">
-          <h3 className="text-xl kalian-poster-text text-kalian-gold mb-4 uppercase">¿Cómo añadir a alguien nuevo?</h3>
+          <h3 className="text-xl kalian-poster-text text-kalian-gold mb-4 uppercase">¿Cómo funciona?</h3>
           <p className="text-sm text-kalian-cream/60 leading-relaxed">
-            Para que alguien aparezca en esta lista, primero debe haber iniciado sesión al menos una vez en el panel de staff (<span className="text-kalian-gold">/staff/login</span>). 
-            Una vez que el sistema detecte su UID, aparecerá aquí y podrás asignarle el rol de <span className="text-emerald-500 font-bold">Portero</span>, <span className="text-indigo-500 font-bold">Profesor</span> o <span className="text-red-500 font-bold">Administrador</span>.
+            Los profesores se gestionan desde el panel de <span className="text-kalian-gold">Profesores</span> y aparecen aquí automáticamente con su rol asignado.
+            El acceso a la puerta (<span className="text-kalian-gold">/puerta</span>) se hace con la clave maestra configurada arriba — no es necesario dar de alta usuarios para esto.
           </p>
         </div>
       </div>

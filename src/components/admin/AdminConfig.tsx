@@ -1,10 +1,9 @@
 import React, { useState, useEffect } from 'react';
 import { db, storage } from '../../firebase';
-import { doc, getDoc, setDoc, getDocs, collection, writeBatch, query, where, serverTimestamp } from 'firebase/firestore';
+import { doc, getDoc, setDoc, getDocs, collection } from 'firebase/firestore';
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 import { Link } from 'react-router-dom';
-import { Database, Download, ShieldCheck, RefreshCw, Wand2 } from 'lucide-react';
-import { fetchConfig, updateConfig, subscribeToConfig } from '../../lib/configService';
+import { Database, Download, ShieldCheck } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 
 const AdminConfig = () => {
@@ -33,99 +32,6 @@ const AdminConfig = () => {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [msg, setMsg] = useState('');
-  const [mantenimientoLoading, setMantenimientoLoading] = useState(false);
-  const [mantenimientoLog, setMantenimientoLog] = useState<string[]>([]);
-
-  const addLog = (msg: string) => {
-    setMantenimientoLog(prev => [`[${new Date().toLocaleTimeString()}] ${msg}`, ...prev].slice(0, 20));
-  };
-
-  const testConexion = async () => {
-    setMantenimientoLoading(true);
-    setMantenimientoLog([]); // Limpiar al empezar
-    addLog("Iniciando prueba de conexión...");
-    try {
-      const snap = await getDocs(query(collection(db, "socios"), where("email", "==", "test@test.com")));
-      addLog("✅ Conexión establecida correctamente.");
-      setMsg("✅ Conexión con base de datos OK");
-    } catch (err) {
-      console.error(err);
-      addLog("❌ Error de conexión: " + (err instanceof Error ? err.message : "Desconocido"));
-    }
-    setMantenimientoLoading(false);
-  };
-
-  const normalizarSocios = async () => {
-    if (!window.confirm("¿Deseas normalizar la colección de Soci@s?")) return;
-    setMantenimientoLoading(true);
-    addLog("--- INICIANDO NORMALIZACIÓN DE SOCIOS ---");
-    
-    try {
-      addLog("Solicitando documentos a Firestore...");
-      const snap = await getDocs(collection(db, "socios"));
-      addLog(`Documentos recibidos: ${snap.size}`);
-      
-      if (snap.empty) {
-        addLog("ℹ️ No hay socios en la colección.");
-        setMantenimientoLoading(false);
-        return;
-      }
-
-      let batch = writeBatch(db);
-      let count = 0;
-      let totalProcessed = 0;
-      let batchCount = 0;
-
-      for (const d of snap.docs) {
-        const data = d.data();
-        const updates: any = {};
-        
-        if (data.deletedAt === undefined) updates.deletedAt = null;
-        if (!data.estado) updates.estado = 'activo';
-        if (!data.status) updates.status = 'activo';
-        if (data.email && data.email !== data.email.toLowerCase()) {
-          updates.email = data.email.toLowerCase();
-        }
-
-        if (Object.keys(updates).length > 0) {
-          batch.update(d.ref, { ...updates, updatedAt: serverTimestamp() });
-          count++;
-          batchCount++;
-        }
-        
-        totalProcessed++;
-
-        if (batchCount === 450) {
-          addLog(`Guardando lote de 450 cambios... (${totalProcessed}/${snap.size})`);
-          await batch.commit();
-          batch = writeBatch(db);
-          batchCount = 0;
-        }
-      }
-
-      if (batchCount > 0) {
-        addLog(`Guardando último lote de ${batchCount} cambios...`);
-        await batch.commit();
-      }
-
-      addLog(`✅ PROCESO FINALIZADO.`);
-      addLog(`Resumen: ${count} socios actualizados de ${snap.size} analizados.`);
-      setMsg(`✅ Éxito: ${count} socios normalizados.`);
-    } catch (err) {
-      console.error("Error en normalizarSocios:", err);
-      addLog("❌ ERROR CRÍTICO: " + (err instanceof Error ? err.message : "Error desconocido"));
-    }
-    setMantenimientoLoading(false);
-  };
-
-  // Nombres oficiales de academias para normalización
-  const ACADEMIAS_OFICIALES: Record<string, string> = {
-    'musica': 'Music is Cool',
-    'baile': 'Club de Baile',
-    'academia': 'Kalian Academy',
-    'music': 'Music is Cool',
-    'dance': 'Club de Baile'
-  };
 
   useEffect(() => {
     if (!user) return;
@@ -144,80 +50,6 @@ const AdminConfig = () => {
     };
     fetchConfigData();
   }, [user]);
-
-  const normalizarFinanzas = async () => {
-    if (!window.confirm("¿Deseas normalizar la colección de Finanzas? Se corregirán nombres de categorías y se vincularán IDs de cursos migrados.")) return;
-    setMantenimientoLoading(true);
-    setMantenimientoLog([]);
-    addLog("Iniciando normalización de Finanzas...");
-
-    try {
-      addLog("Obteniendo mapa de cursos migrados...");
-      const cursosSnap = await getDocs(collection(db, "cursos"));
-      const mapMigracion: Record<string, string> = {};
-      cursosSnap.docs.forEach(d => {
-        const c = d.data();
-        if (c.migradoDesde) {
-          mapMigracion[c.migradoDesde] = d.id;
-        }
-      });
-      addLog(`Mapa de migración listo (${Object.keys(mapMigracion).length} cursos).`);
-
-      const finanzasSnap = await getDocs(collection(db, "finanzas"));
-      addLog(`Analizando ${finanzasSnap.size} transacciones...`);
-      
-      let batch = writeBatch(db);
-      let count = 0;
-      let totalProcessed = 0;
-      let batchCount = 0;
-
-      for (const d of finanzasSnap.docs) {
-        const data = d.data();
-        const updates: any = {};
-
-        const catLower = (data.categoria || '').toLowerCase();
-        if (ACADEMIAS_OFICIALES[catLower] && data.categoria !== ACADEMIAS_OFICIALES[catLower]) {
-          updates.categoria = ACADEMIAS_OFICIALES[catLower];
-        }
-
-        if (data.cursoId && mapMigracion[data.cursoId]) {
-          updates.cursoId = mapMigracion[data.cursoId];
-        }
-
-        if (Object.keys(updates).length > 0) {
-          batch.update(d.ref, { ...updates, updatedAt: serverTimestamp() });
-          count++;
-          batchCount++;
-        }
-
-        totalProcessed++;
-
-        if (batchCount === 450) {
-          await batch.commit();
-          batch = writeBatch(db);
-          batchCount = 0;
-          addLog(`Lote intermedio procesado... (${totalProcessed}/${finanzasSnap.size})`);
-        }
-      }
-
-      if (batchCount > 0) {
-        await batch.commit();
-      }
-
-      if (count > 0) {
-        setMsg(`✅ Finanzas normalizadas: ${count} registros actualizados.`);
-        addLog(`Éxito: ${count} transacciones corregidas de ${finanzasSnap.size} analizadas.`);
-      } else {
-        setMsg("ℹ️ No se requirieron cambios en finanzas.");
-        addLog("Todas las transacciones ya estaban correctas.");
-      }
-    } catch (err) {
-      console.error(err);
-      addLog("❌ ERROR: " + (err instanceof Error ? err.message : "Error desconocido"));
-      alert("Error al normalizar finanzas");
-    }
-    setMantenimientoLoading(false);
-  };
 
   const handleUpload = async (e: React.ChangeEvent<HTMLInputElement>, field: keyof typeof config) => {
     const file = e.target.files?.[0];
@@ -546,31 +378,6 @@ const AdminConfig = () => {
             <h2 className="text-3xl kalian-poster-text text-red-500 italic uppercase">Seguridad y Backups</h2>
           </div>
 
-          {/* Registro de Actividad siempre visible si hay logs */}
-          {mantenimientoLog.length > 0 && (
-            <div className="bg-black/60 rounded-2xl border border-kalian-gold/20 p-6 font-mono text-[10px] space-y-2 shadow-2xl">
-              <div className="flex justify-between items-center mb-4">
-                <p className="text-kalian-gold uppercase tracking-widest flex items-center gap-2 font-black">
-                  <RefreshCw size={10} className={mantenimientoLoading ? 'animate-spin' : ''} />
-                  Consola de Mantenimiento
-                </p>
-                <button 
-                  onClick={() => setMantenimientoLog([])}
-                  className="text-[8px] text-kalian-gold/40 hover:text-kalian-gold uppercase tracking-widest transition-colors"
-                >
-                  Cerrar Consola
-                </button>
-              </div>
-              <div className="max-h-40 overflow-y-auto space-y-1 pr-2 custom-scrollbar">
-                {mantenimientoLog.map((log, i) => (
-                  <div key={i} className={log.includes('❌') ? 'text-red-400' : log.includes('✅') || log.includes('Éxito') ? 'text-emerald-400' : 'text-kalian-cream/80'}>
-                    {log}
-                  </div>
-                ))}
-              </div>
-            </div>
-          )}
-
           <p className="text-xs font-bold text-kalian-cream/60 leading-relaxed italic">
             "Realiza copias de seguridad periódicas de los datos críticos de la asociación. Los archivos se descargarán en formato JSON para su posterior recuperación si fuera necesario."
           </p>
@@ -596,48 +403,6 @@ const AdminConfig = () => {
             ))}
           </div>
 
-          <div className="pt-8 border-t border-white/10">
-            <div className="flex justify-between items-center mb-6">
-              <h3 className="text-[10px] font-black uppercase tracking-[0.3em] text-kalian-gold">Herramientas de Normalización</h3>
-              <button 
-                onClick={testConexion}
-                disabled={mantenimientoLoading}
-                className="text-[8px] font-black uppercase tracking-widest text-kalian-gold/40 hover:text-kalian-gold transition-colors flex items-center gap-2"
-              >
-                <ShieldCheck size={10} />
-                Verificar Conexión
-              </button>
-            </div>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <button
-                onClick={normalizarSocios}
-                disabled={mantenimientoLoading}
-                className="flex items-center gap-4 p-6 bg-indigo-500/10 border border-indigo-500/20 rounded-2xl hover:bg-indigo-500/20 transition-all text-left group"
-              >
-                <div className="w-12 h-12 rounded-xl bg-indigo-500/20 flex items-center justify-center text-indigo-400 group-hover:scale-110 transition-transform">
-                  <RefreshCw size={24} className={mantenimientoLoading ? 'animate-spin' : ''} />
-                </div>
-                <div>
-                  <p className="text-[10px] font-black uppercase tracking-widest text-indigo-400">Normalizar Soci@s</p>
-                  <p className="text-[9px] text-indigo-300/60 mt-1">Limpia emails y rellena campos faltantes.</p>
-                </div>
-              </button>
-
-              <button
-                onClick={normalizarFinanzas}
-                disabled={mantenimientoLoading}
-                className="flex items-center gap-4 p-6 bg-amber-500/10 border border-amber-500/20 rounded-2xl hover:bg-amber-500/20 transition-all text-left group"
-              >
-                <div className="w-12 h-12 rounded-xl bg-amber-500/20 flex items-center justify-center text-amber-400 group-hover:scale-110 transition-transform">
-                  <Wand2 size={24} className={mantenimientoLoading ? 'animate-spin' : ''} />
-                </div>
-                <div>
-                  <p className="text-[10px] font-black uppercase tracking-widest text-amber-400">Normalizar Finanzas</p>
-                  <p className="text-[9px] text-amber-300/60 mt-1">Corrige categorías y vincula cursos migrados.</p>
-                </div>
-              </button>
-            </div>
-          </div>
         </div>
       </div>
     </div>

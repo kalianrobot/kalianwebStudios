@@ -115,9 +115,9 @@ service cloud.firestore {
     function isSafeAforoUpdate() {
       return incoming().diff(existing()).affectedKeys().hasOnly(['aforo_reservado'])
           && incoming().aforo_reservado is number
-          && incoming().aforo_reservado >= existing().get('aforo_reservado', 0)
-          && incoming().aforo_reservado <= existing().get('aforo_reservado', 0) + 20
-          && incoming().aforo_reservado <= existing().get('aforo_maximo', existing().get('aforo_max', 9999));
+          && incoming().aforo_reservado >= int(existing().get('aforo_reservado', 0))
+          && incoming().aforo_reservado <= int(existing().get('aforo_reservado', 0)) + 20
+          && incoming().aforo_reservado <= int(existing().get('aforo_maximo', existing().get('aforo_max', 9999)));
     }
     match /eventos/{id} {
       allow read: if true;

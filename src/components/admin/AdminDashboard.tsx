@@ -42,6 +42,7 @@ const AdminDashboard = () => {
     { t: 'Identidad', icon: '🎨', color: 'border-kalian-gold', path: '/staff/identidad' },
     { t: 'Solicitudes', icon: '📩', color: 'border-emerald-500', path: '/staff/solicitudes', badge: pendientes },
     { t: 'Contabilidad', icon: '💰', color: 'border-kalian-gold', path: '/staff/contabilidad' },
+    { t: 'Reservas', icon: '🎟️', color: 'border-purple-500', path: '/staff/reservas' },
     { t: 'Traducir EU', icon: '🌐', color: 'border-teal-500', path: '/staff/traducir-eu' }
   ];
 

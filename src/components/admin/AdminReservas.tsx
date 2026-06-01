@@ -7,6 +7,7 @@ import {
   orderBy,
   onSnapshot,
   doc,
+  getDoc,
   deleteDoc,
   updateDoc,
   increment,
@@ -74,6 +75,58 @@ const AdminReservas = () => {
     } catch (err: any) {
       console.error(err);
       setMsg('❌ Error al eliminar: ' + err.message);
+    }
+  };
+
+  const cambiarAcompañantes = async (reserva: Reserva, nuevoNum: number) => {
+    if (nuevoNum < 0) return;
+
+    const actuales = Number(reserva.acompañantes || 0);
+    if (nuevoNum === actuales) return;
+
+    const yaIngresados = Number(reserva.asistentes_ingresados || 0);
+    const nuevoTotal = 1 + nuevoNum;
+    if (nuevoTotal < yaIngresados) {
+      setMsg(`❌ No se puede bajar de ${yaIngresados}: ya hay esos asistentes registrados como entrados.`);
+      return;
+    }
+
+    if (!reserva.eventoId) {
+      setMsg('❌ La reserva no tiene eventoId — no se puede actualizar el aforo.');
+      return;
+    }
+
+    try {
+      const esCurso = !!reserva.esCurso;
+      const coleccionActividad = esCurso ? 'cursos' : 'eventos';
+      const docRef = doc(db, coleccionActividad, reserva.eventoId);
+      const snapDoc = await getDoc(docRef);
+
+      if (!snapDoc.exists()) {
+        setMsg('❌ La actividad ya no existe.');
+        return;
+      }
+
+      const dataActividad = snapDoc.data();
+      const aforoMax = Number(dataActividad.aforo_maximo || dataActividad.aforo_max || dataActividad.aforo_total || 0);
+      const aforoRes = Number(dataActividad.aforo_reservado || 0);
+      const diferencia = nuevoNum - actuales;
+
+      if (!esCurso && aforoRes + diferencia > aforoMax) {
+        setMsg(`❌ Sin aforo suficiente. Máx: ${aforoMax}, libres: ${Math.max(0, aforoMax - aforoRes)}.`);
+        return;
+      }
+
+      await updateDoc(doc(db, 'reservas', reserva.id), { acompañantes: nuevoNum });
+      if (diferencia !== 0) {
+        await updateDoc(docRef, { aforo_reservado: increment(diferencia) });
+      }
+
+      setMsg(`✅ Acompañantes actualizados: ${actuales} → ${nuevoNum} (aforo ${diferencia >= 0 ? '+' : ''}${diferencia})`);
+      setTimeout(() => setMsg(''), 4000);
+    } catch (err: any) {
+      console.error(err);
+      setMsg('❌ Error al actualizar: ' + err.message);
     }
   };
 
@@ -171,6 +224,22 @@ const AdminReservas = () => {
                       <td className="p-4 text-slate-700 text-[12px]">
                         <div>Total: <b>{totalReserva}</b></div>
                         <div className="text-slate-400">Entrados: {ingresados}</div>
+                        <div className="mt-2 flex items-center gap-1">
+                          <button
+                            onClick={() => cambiarAcompañantes(r, Number(r.acompañantes || 0) - 1)}
+                            disabled={Number(r.acompañantes || 0) <= 0}
+                            className="w-7 h-7 rounded-lg bg-slate-100 hover:bg-slate-200 disabled:opacity-30 disabled:cursor-not-allowed font-black text-slate-700"
+                            title="Quitar un acompañante"
+                          >−</button>
+                          <span className="px-2 text-[11px] text-slate-600">
+                            {Number(r.acompañantes || 0)} acomp.
+                          </span>
+                          <button
+                            onClick={() => cambiarAcompañantes(r, Number(r.acompañantes || 0) + 1)}
+                            className="w-7 h-7 rounded-lg bg-slate-100 hover:bg-slate-200 font-black text-slate-700"
+                            title="Añadir un acompañante"
+                          >+</button>
+                        </div>
                       </td>
                       <td className="p-4 font-mono text-[11px] text-slate-600">{r.ticketID || '—'}</td>
                       <td className="p-4 text-right">

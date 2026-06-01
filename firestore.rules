@@ -131,7 +131,7 @@ service cloud.firestore {
     function isValidReserva(data) {
       return data.eventoId is string && data.eventoId.size() <= 128
           && data.nombreTitular is string && data.nombreTitular.size() > 0 && data.nombreTitular.size() <= 200
-          && data.dniTitular is string && data.dniTitular.size() >= 7 && data.dniTitular.size() <= 20
+          && data.dniTitular is string && (data.dniTitular.size() == 0 || (data.dniTitular.size() >= 7 && data.dniTitular.size() <= 20))
           && data.emailTitular is string && data.emailTitular.size() <= 100
           && data.numPersonas is number && data.numPersonas >= 1 && data.numPersonas <= 20
           && data.uidTitular is string

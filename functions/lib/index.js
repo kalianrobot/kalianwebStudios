@@ -26,7 +26,7 @@ async function callBrevo(apiKey, payload) {
     return res.json();
 }
 // ─── sendWelcomeEmail ────────────────────────────────────────────────────────
-exports.sendWelcomeEmail = (0, https_1.onCall)({ secrets: [BREVO_API_KEY] }, async (request) => {
+exports.sendWelcomeEmail = (0, https_1.onCall)({ secrets: [BREVO_API_KEY], region: EU_REGION }, async (request) => {
     if (!request.auth)
         throw new https_1.HttpsError('unauthenticated', 'Auth required');
     const { email, nombre, activationLink } = request.data;
@@ -61,7 +61,7 @@ exports.sendWelcomeEmail = (0, https_1.onCall)({ secrets: [BREVO_API_KEY] }, asy
         </div></body></html>`,
     });
 });
-exports.sendMembershipUpdateEmail = (0, https_1.onCall)({ secrets: [BREVO_API_KEY] }, async (request) => {
+exports.sendMembershipUpdateEmail = (0, https_1.onCall)({ secrets: [BREVO_API_KEY], region: EU_REGION }, async (request) => {
     if (!request.auth)
         throw new https_1.HttpsError('unauthenticated', 'Auth required');
     const { email, nombre, uid, membresias } = request.data;

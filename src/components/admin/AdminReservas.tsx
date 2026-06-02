@@ -11,6 +11,7 @@ import {
   deleteDoc,
   updateDoc,
   increment,
+  writeBatch,
   DocumentData
 } from 'firebase/firestore';
 
@@ -28,6 +29,8 @@ const AdminReservas = () => {
   const [loading, setLoading] = useState(true);
   const [msg, setMsg] = useState('');
   const [filtro, setFiltro] = useState('');
+  const [soloFuturas, setSoloFuturas] = useState(true);
+  const [limpiando, setLimpiando] = useState(false);
 
   useEffect(() => {
     const q = query(collection(db, 'reservas'), orderBy('fechaReserva', 'desc'));
@@ -130,7 +133,61 @@ const AdminReservas = () => {
     }
   };
 
+  // Nota: lógica de purga manual; podría moverse a un Cloud Function onSchedule
+  // si más adelante se quiere automatizar.
+  const limpiarReservasPasadas = async () => {
+    const umbral = new Date();
+    umbral.setDate(umbral.getDate() - 90);
+    const umbralIso = umbral.toISOString();
+    const umbralLegible = umbral.toLocaleDateString('es-ES', { day: '2-digit', month: '2-digit', year: 'numeric' });
+
+    const candidatas = reservas.filter(r => r.fechaActividad && r.fechaActividad < umbralIso);
+
+    if (candidatas.length === 0) {
+      setMsg('No hay reservas con más de 90 días para limpiar.');
+      setTimeout(() => setMsg(''), 4000);
+      return;
+    }
+
+    const confirmado = window.confirm(
+      `¿Borrar definitivamente ${candidatas.length} reserva(s) de actividades anteriores al ${umbralLegible}?\n\n` +
+      `Esta acción no se puede deshacer. El registro de asistencia (asistencia_eventos) se conserva.`
+    );
+    if (!confirmado) return;
+
+    setLimpiando(true);
+    let borradas = 0;
+    let errores = 0;
+
+    try {
+      for (let i = 0; i < candidatas.length; i += 500) {
+        const lote = candidatas.slice(i, i + 500);
+        const batch = writeBatch(db);
+        lote.forEach(r => batch.delete(doc(db, 'reservas', r.id)));
+        try {
+          await batch.commit();
+          borradas += lote.length;
+        } catch (e: any) {
+          console.error('Batch de limpieza falló:', e.message);
+          errores += lote.length;
+        }
+      }
+      const partes = [`✅ ${borradas} reservas eliminadas`];
+      if (errores > 0) partes.push(`⚠️ ${errores} fallidas`);
+      setMsg(partes.join(' · '));
+      setTimeout(() => setMsg(''), 6000);
+    } finally {
+      setLimpiando(false);
+    }
+  };
+
+  const hoyIso = new Date().toISOString().slice(0, 10);
+
   const filtradas = reservas.filter(r => {
+    if (soloFuturas) {
+      const fecha = (r.fechaActividad || '').slice(0, 10);
+      if (!fecha || fecha < hoyIso) return false;
+    }
     if (!filtro) return true;
     const f = filtro.toLowerCase();
     return (
@@ -161,14 +218,31 @@ const AdminReservas = () => {
           </div>
         )}
 
-        <div className="mb-6">
+        <div className="mb-6 flex flex-col md:flex-row md:items-center gap-3">
           <input
             type="text"
             value={filtro}
             onChange={e => setFiltro(e.target.value)}
             placeholder="Buscar por nombre, DNI, email, evento o ticket…"
-            className="w-full px-5 py-3 rounded-xl border border-slate-200 bg-white text-sm focus:outline-none focus:ring-2 focus:ring-slate-900"
+            className="flex-1 px-5 py-3 rounded-xl border border-slate-200 bg-white text-sm focus:outline-none focus:ring-2 focus:ring-slate-900"
           />
+          <label className="flex items-center gap-2 px-4 py-3 bg-white rounded-xl border border-slate-200 text-[11px] font-black uppercase tracking-widest text-slate-700 cursor-pointer select-none">
+            <input
+              type="checkbox"
+              checked={soloFuturas}
+              onChange={e => setSoloFuturas(e.target.checked)}
+              className="accent-slate-900"
+            />
+            Solo futuras
+          </label>
+          <button
+            onClick={limpiarReservasPasadas}
+            disabled={limpiando}
+            className="bg-red-500/10 text-red-600 hover:bg-red-500 hover:text-white disabled:opacity-40 disabled:cursor-not-allowed px-5 py-3 rounded-xl font-black text-[10px] uppercase tracking-widest transition-all"
+            title="Borra definitivamente reservas de actividades anteriores a hace 90 días"
+          >
+            🧹 {limpiando ? 'Limpiando…' : 'Limpiar > 90 días'}
+          </button>
         </div>
 
         <div className="bg-white rounded-[2rem] shadow-xl overflow-hidden">

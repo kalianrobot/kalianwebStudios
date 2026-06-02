@@ -37,6 +37,7 @@ const ProgramacionPublica = lazy(() => import('./pages/ProgramacionPublica'));
 const EventPage = lazy(() => import('./pages/EventPage'));
 const GaleriaPublica = lazy(() => import('./pages/GaleriaPublica'));
 const DonacionesPage = lazy(() => import('./pages/DonacionesPage'));
+const MiReserva = lazy(() => import('./pages/MiReserva'));
 const AdminSolicitudes = lazy(() => import('./components/admin/AdminSolicitudes'));
 const ControlAcceso = lazy(() => import('./components/admin/ControlAcceso'));
 const PuertaAccess = lazy(() => import('./components/admin/PuertaAccess'));
@@ -110,6 +111,7 @@ function AppContent() {
         <Route path="/eventos/:id" element={<EventPage />} />
         <Route path="/galeria" element={<GaleriaPublica />} />
         <Route path="/donaciones" element={<DonacionesPage />} />
+        <Route path="/mi-reserva" element={<MiReserva />} />
         <Route path="/newsletter-kalian-privado" element={<NewsletterPage />} />
 
         {/* RUTAS STAFF (ADMIN) */}

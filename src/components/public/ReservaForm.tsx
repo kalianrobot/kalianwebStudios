@@ -5,6 +5,7 @@ import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
 import { useLanguage } from '../../context/LanguageContext';
 import { formatDate } from '../../i18n/dateFormat';
+import { generarManageToken, cancelarReservaInvitado, editarAcompanantesInvitado } from '../../lib/reservaInvitado';
 
 interface ReservaFormProps {
   item: any; // Evento o Curso
@@ -21,9 +22,11 @@ const ReservaForm = ({ item, alCerrar }: ReservaFormProps) => {
   const [form, setForm] = useState({ dni: '', nombre: '', email: '', acompañantes: 0 });
   const [mensaje, setMensaje] = useState('');
   const [cargando, setCargando] = useState(false);
-  const [resultado, setResultado] = useState<{ ticketID: string, qrUrl: string, nombre: string } | null>(null);
+  const [resultado, setResultado] = useState<{ ticketID: string, qrUrl: string, nombre: string, manageToken: string, acompanantes: number } | null>(null);
   const [emailEnvio, setEmailEnvio] = useState('');
   const [emailEnviado, setEmailEnviado] = useState(false);
+  const [gestionCargando, setGestionCargando] = useState(false);
+  const [gestionMsg, setGestionMsg] = useState('');
   const [claveInput, setClaveInput] = useState(cuponUrl.toUpperCase());
   const [claveValida, setClaveValida] = useState(false);
   const [precioCalculado, setPrecioCalculado] = useState({ total: 0, esSocio: false, esClave: false });
@@ -286,6 +289,9 @@ const ReservaForm = ({ item, alCerrar }: ReservaFormProps) => {
       // 4. GUARDAR RESERVA (TRANSACCIÓN ATÓMICA)
       const tID = Math.random().toString(36).substring(2, 8).toUpperCase();
       const qrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=KALIAN-RES-${tID}`;
+      // Token de gestión seguro (capability token) para que un invitado pueda
+      // editar/cancelar su reserva sin cuenta. Distinto del ticketID visible.
+      const manageToken = generarManageToken();
 
       const reservaData = {
         eventoId: item.id,
@@ -296,6 +302,7 @@ const ReservaForm = ({ item, alCerrar }: ReservaFormProps) => {
         nombreTitular: form.nombre,
         emailTitular: form.email,
         ticketID: tID,
+        manageToken: manageToken,
         qrUrl: qrUrl,
         numPersonas: 1 + Number(form.acompañantes),
         totalPagar: precioCalculado.total,
@@ -346,7 +353,7 @@ const ReservaForm = ({ item, alCerrar }: ReservaFormProps) => {
         setMensaje(t('reserva.courseSuccess'));
         setTimeout(alCerrar, 6000);
       } else {
-        setResultado({ ticketID: tID, qrUrl: qrUrl, nombre: form.nombre });
+        setResultado({ ticketID: tID, qrUrl: qrUrl, nombre: form.nombre, manageToken, acompanantes: Number(form.acompañantes) });
         // Pre-rellenar email para el envío del QR si el usuario lo puso en el form
         if (form.email) setEmailEnvio(form.email);
       }
@@ -382,6 +389,10 @@ const ReservaForm = ({ item, alCerrar }: ReservaFormProps) => {
                 <img src="${resultado.qrUrl}" alt="QR" style="margin-top: 20px; width: 200px;">
               </div>
               <p style="font-size: 12px; color: #6b7280;">Presenta este código en la entrada. El pago de los acompañantes (si los hay) se realizará en efectivo.</p>
+              <div style="text-align: center; margin-top: 24px; padding-top: 20px; border-top: 1px solid #eee;">
+                <a href="https://kalian.es/mi-reserva?token=${resultado.manageToken}" style="display: inline-block; background: #4f46e5; color: #fff; padding: 12px 24px; border-radius: 10px; text-decoration: none; font-weight: 700; font-size: 13px;">Gestionar mi reserva</a>
+                <p style="font-size: 11px; color: #9ca3af; margin-top: 10px;">Desde ahí puedes cambiar el número de acompañantes o cancelar.</p>
+              </div>
             </div>
           `
         }
@@ -410,6 +421,42 @@ const ReservaForm = ({ item, alCerrar }: ReservaFormProps) => {
       console.error("Error al descargar:", err);
       // Fallback simple si falla el fetch (CORS)
       window.open(resultado.qrUrl, '_blank');
+    }
+  };
+
+  const gestionCambiarAcompanantes = async (delta: number) => {
+    if (!resultado) return;
+    const nuevo = resultado.acompanantes + delta;
+    if (nuevo < 0) return;
+    const maxPermitidos = Number(item.max_acompanantes || 4);
+    if (nuevo > maxPermitidos) {
+      setGestionMsg(t('reserva.manage.maxGuests', { n: maxPermitidos }));
+      return;
+    }
+    setGestionCargando(true);
+    setGestionMsg('');
+    try {
+      await editarAcompanantesInvitado(resultado.manageToken, nuevo);
+      setResultado({ ...resultado, acompanantes: nuevo });
+      setGestionMsg(t('reserva.manage.updated'));
+    } catch (err: any) {
+      setGestionMsg(err?.message || t('reserva.manage.error'));
+    }
+    setGestionCargando(false);
+  };
+
+  const gestionCancelar = async () => {
+    if (!resultado) return;
+    if (!window.confirm(t('reserva.manage.confirmCancel'))) return;
+    setGestionCargando(true);
+    setGestionMsg('');
+    try {
+      await cancelarReservaInvitado(resultado.manageToken);
+      alert(t('reserva.manage.cancelled'));
+      alCerrar();
+    } catch (err: any) {
+      setGestionMsg(err?.message || t('reserva.manage.error'));
+      setGestionCargando(false);
     }
   };
 
@@ -459,6 +506,33 @@ const ReservaForm = ({ item, alCerrar }: ReservaFormProps) => {
             </div>
           )}
         </div>
+
+        {!esCurso && (
+          <div className="bg-slate-50 p-6 rounded-[2rem] space-y-4 border border-slate-100 max-w-sm mx-auto">
+            <p className="text-[10px] font-black uppercase text-slate-400 tracking-widest">{t('reserva.manage.title')}</p>
+            <div className="flex items-center justify-center gap-3">
+              <button
+                onClick={() => gestionCambiarAcompanantes(-1)}
+                disabled={gestionCargando || resultado.acompanantes <= 0}
+                className="w-10 h-10 rounded-xl bg-white border border-slate-200 font-black text-slate-700 disabled:opacity-30 hover:bg-slate-100 transition-colors"
+              >−</button>
+              <span className="text-sm font-black text-slate-700 min-w-[8rem]">
+                {t('reserva.manage.guestsCount', { n: resultado.acompanantes })}
+              </span>
+              <button
+                onClick={() => gestionCambiarAcompanantes(1)}
+                disabled={gestionCargando}
+                className="w-10 h-10 rounded-xl bg-white border border-slate-200 font-black text-slate-700 disabled:opacity-30 hover:bg-slate-100 transition-colors"
+              >+</button>
+            </div>
+            <button
+              onClick={gestionCancelar}
+              disabled={gestionCargando}
+              className="w-full bg-red-500/10 text-red-600 p-3 rounded-xl font-black uppercase text-[10px] tracking-widest hover:bg-red-500 hover:text-white disabled:opacity-40 transition-all"
+            >{t('reserva.manage.cancelBooking')}</button>
+            {gestionMsg && <p className="text-[11px] font-bold text-slate-600">{gestionMsg}</p>}
+          </div>
+        )}
 
         <button
           onClick={alCerrar}

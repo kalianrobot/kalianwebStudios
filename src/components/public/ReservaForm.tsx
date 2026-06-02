@@ -226,7 +226,14 @@ const ReservaForm = ({ item, alCerrar }: ReservaFormProps) => {
         return;
       }
 
-      // 1. VALIDACIÓN DE UNICIDAD (Solo si hay DNI)
+      // 1. VALIDACIÓN DE DNI (si lo introduce, mínimo 7 chars para pasar las rules)
+      if (dniUpper && dniUpper.length < 7) {
+        setMensaje(t('reserva.error.dniTooShort'));
+        setCargando(false);
+        return;
+      }
+
+      // 1b. VALIDACIÓN DE UNICIDAD (Solo si hay DNI)
       if (dniUpper) {
         let snapDuplicado;
         try {
@@ -363,8 +370,23 @@ const ReservaForm = ({ item, alCerrar }: ReservaFormProps) => {
       if (err.message?.includes("AFORO_FULL")) {
         const plazas = err.message.split("|")[1] || "0";
         setMensaje(t('reserva.aforo.raceCondition', { n: plazas }));
+      } else if (err.message?.includes("El evento ya no existe")) {
+        setMensaje(t('reserva.error.eventGone'));
+      } else if (
+        err.code === 'permission-denied' ||
+        err.message?.toLowerCase().includes("missing or insufficient") ||
+        err.message?.toLowerCase().includes("permission_denied") ||
+        err.message?.includes("operationType")
+      ) {
+        setMensaje(t('reserva.error.permissions'));
+      } else if (
+        err.code === 'unavailable' ||
+        err.message?.toLowerCase().includes("failed to fetch") ||
+        err.message?.toLowerCase().includes("network")
+      ) {
+        setMensaje(t('reserva.error.network'));
       } else {
-        setMensaje(t('reserva.error', { msg: err.message }));
+        setMensaje(t('reserva.error.generic'));
       }
     }
     setCargando(false);

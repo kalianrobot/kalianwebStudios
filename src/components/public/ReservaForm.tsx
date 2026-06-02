@@ -23,7 +23,6 @@ const ReservaForm = ({ item, alCerrar }: ReservaFormProps) => {
   const [mensaje, setMensaje] = useState('');
   const [cargando, setCargando] = useState(false);
   const [resultado, setResultado] = useState<{ ticketID: string, qrUrl: string, nombre: string, manageToken: string, acompanantes: number } | null>(null);
-  const [emailEnvio, setEmailEnvio] = useState('');
   const [emailEnviado, setEmailEnviado] = useState(false);
   const [gestionCargando, setGestionCargando] = useState(false);
   const [gestionMsg, setGestionMsg] = useState('');
@@ -179,6 +178,11 @@ const ReservaForm = ({ item, alCerrar }: ReservaFormProps) => {
         setMensaje(t('reserva.missingFields'));
         return;
       }
+    }
+
+    if (!esCurso && (!form.nombre || !form.email)) {
+      setMensaje(t('reserva.missingNameOrEmail'));
+      return;
     }
 
     setCargando(true);
@@ -361,8 +365,30 @@ const ReservaForm = ({ item, alCerrar }: ReservaFormProps) => {
         setTimeout(alCerrar, 6000);
       } else {
         setResultado({ ticketID: tID, qrUrl: qrUrl, nombre: form.nombre, manageToken, acompanantes: Number(form.acompañantes) });
-        // Pre-rellenar email para el envío del QR si el usuario lo puso en el form
-        if (form.email) setEmailEnvio(form.email);
+        await addDoc(collection(db, "mail"), {
+          to: form.email,
+          message: {
+            subject: `Confirmación Kalian: ${item.titulo}`,
+            html: `
+              <div style="font-family: sans-serif; max-width: 600px; margin: auto; border: 1px solid #eee; padding: 20px; border-radius: 10px;">
+                <h2 style="color: #4f46e5; text-transform: uppercase;">¡Reserva Confirmada!</h2>
+                <p>Hola <b>${form.nombre}</b>,</p>
+                <p>Tu reserva para <b>${item.titulo}</b> ha sido registrada con éxito.</p>
+                <div style="background: #f9fafb; padding: 20px; text-align: center; border-radius: 10px; margin: 20px 0;">
+                  <p style="font-size: 10px; color: #9ca3af; text-transform: uppercase; margin-bottom: 10px;">ID de Ticket</p>
+                  <p style="font-size: 32px; font-weight: 900; letter-spacing: 5px; margin: 0;">${tID}</p>
+                  <img src="${qrUrl}" alt="QR" style="margin-top: 20px; width: 200px;">
+                </div>
+                <p style="font-size: 12px; color: #6b7280;">Presenta este código en la entrada. El pago de los acompañantes (si los hay) se realizará en efectivo.</p>
+                <div style="text-align: center; margin-top: 24px; padding-top: 20px; border-top: 1px solid #eee;">
+                  <a href="https://kalian.es/mi-reserva?token=${manageToken}" style="display: inline-block; background: #4f46e5; color: #fff; padding: 12px 24px; border-radius: 10px; text-decoration: none; font-weight: 700; font-size: 13px;">Gestionar mi reserva</a>
+                  <p style="font-size: 11px; color: #9ca3af; margin-top: 10px;">Desde ahí puedes cambiar el número de acompañantes o cancelar.</p>
+                </div>
+              </div>
+            `
+          }
+        });
+        setEmailEnviado(true);
       }
 
     } catch (err: any) {
@@ -392,39 +418,7 @@ const ReservaForm = ({ item, alCerrar }: ReservaFormProps) => {
     setCargando(false);
   };
 
-  const enviarEmailManual = async () => {
-    if (!emailEnvio || !resultado) return;
-    setCargando(true);
-    try {
-      await addDoc(collection(db, "mail"), {
-        to: emailEnvio,
-        message: {
-          subject: `Confirmación Kalian: ${item.titulo}`,
-          html: `
-            <div style="font-family: sans-serif; max-width: 600px; margin: auto; border: 1px solid #eee; padding: 20px; border-radius: 10px;">
-              <h2 style="color: #4f46e5; text-transform: uppercase;">¡Reserva Confirmada!</h2>
-              <p>Hola <b>${resultado.nombre}</b>,</p>
-              <p>Tu reserva para <b>${item.titulo}</b> ha sido registrada con éxito.</p>
-              <div style="background: #f9fafb; padding: 20px; text-align: center; border-radius: 10px; margin: 20px 0;">
-                <p style="font-size: 10px; color: #9ca3af; text-transform: uppercase; margin-bottom: 10px;">ID de Ticket</p>
-                <p style="font-size: 32px; font-weight: 900; letter-spacing: 5px; margin: 0;">${resultado.ticketID}</p>
-                <img src="${resultado.qrUrl}" alt="QR" style="margin-top: 20px; width: 200px;">
-              </div>
-              <p style="font-size: 12px; color: #6b7280;">Presenta este código en la entrada. El pago de los acompañantes (si los hay) se realizará en efectivo.</p>
-              <div style="text-align: center; margin-top: 24px; padding-top: 20px; border-top: 1px solid #eee;">
-                <a href="https://kalian.es/mi-reserva?token=${resultado.manageToken}" style="display: inline-block; background: #4f46e5; color: #fff; padding: 12px 24px; border-radius: 10px; text-decoration: none; font-weight: 700; font-size: 13px;">Gestionar mi reserva</a>
-                <p style="font-size: 11px; color: #9ca3af; margin-top: 10px;">Desde ahí puedes cambiar el número de acompañantes o cancelar.</p>
-              </div>
-            </div>
-          `
-        }
-      });
-      setEmailEnviado(true);
-    } catch (err) {
-      console.error(err);
-    }
-    setCargando(false);
-  };
+
 
   const descargarTicket = async () => {
     if (!resultado) return;
@@ -502,31 +496,9 @@ const ReservaForm = ({ item, alCerrar }: ReservaFormProps) => {
             {t('reserva.download')}
           </button>
 
-          {!emailEnviado ? (
-            <div className="bg-slate-50 p-6 rounded-[2rem] space-y-4 border border-slate-100">
-              <p className="text-[10px] font-black uppercase text-slate-400 tracking-widest">{t('reserva.emailPrompt')}</p>
-              <div className="flex gap-2">
-                <input
-                  type="email"
-                  placeholder="tu@email.com"
-                  className="flex-1 p-4 bg-white rounded-xl text-xs outline-none border border-slate-200 focus:border-indigo-500 transition-colors"
-                  value={emailEnvio}
-                  onChange={e => setEmailEnvio(e.target.value)}
-                />
-                <button
-                  onClick={enviarEmailManual}
-                  disabled={cargando || !emailEnvio}
-                  className="bg-slate-900 text-white px-6 rounded-xl font-black text-[10px] uppercase disabled:opacity-50 hover:bg-black transition-colors"
-                >
-                  {t('reserva.send')}
-                </button>
-              </div>
-            </div>
-          ) : (
-            <div className="bg-emerald-50 p-6 rounded-[2rem] text-emerald-600 font-black text-xs uppercase tracking-widest border border-emerald-100">
-              {t('reserva.emailSent')}
-            </div>
-          )}
+          <div className="bg-emerald-50 p-6 rounded-[2rem] text-emerald-600 font-black text-xs uppercase tracking-widest border border-emerald-100">
+            {t('reserva.emailSent')}
+          </div>
         </div>
 
         {!esCurso && (
@@ -706,21 +678,16 @@ const ReservaForm = ({ item, alCerrar }: ReservaFormProps) => {
 
                 <div className="space-y-2">
                   <label className="text-[9px] font-black text-kalian-gold/90 uppercase tracking-[0.3em] ml-4">
-                    {esCurso ? t('reserva.emailRequired') : t('reserva.emailOptional')}
+                    {t('reserva.emailForQR')}
                   </label>
                   <input
                     type="email" placeholder="tu@email.com"
                     className="w-full p-5 bg-kalian-gold/10 rounded-2xl font-bold outline-none border border-kalian-gold/20 focus:border-kalian-gold transition-all text-kalian-cream placeholder:text-kalian-cream/40"
                     value={form.email}
                     onChange={e => setForm({...form, email: e.target.value})}
-                    required={esCurso}
+                    required
                     disabled={!!socioData}
                   />
-                  {!esCurso && (
-                    <p className="text-sm text-kalian-gold/80 font-bold ml-4 leading-relaxed">
-                      {t('reserva.emailManageHint')}
-                    </p>
-                  )}
                 </div>
 
                 {!esCurso && item.cupon && (

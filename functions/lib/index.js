@@ -1,11 +1,12 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.sendMembershipUpdateEmail = exports.traducirTextoEU = exports.sendWelcomeEmail = void 0;
+exports.gestionarReservaInvitado = exports.sendMembershipUpdateEmail = exports.sendWelcomeEmail = void 0;
 const https_1 = require("firebase-functions/v2/https");
 const params_1 = require("firebase-functions/params");
 const admin = require("firebase-admin");
 const node_fetch_1 = require("node-fetch");
 admin.initializeApp();
+const EU_REGION = 'europe-west1';
 const BREVO_API_KEY = (0, params_1.defineSecret)('BREVO_API_KEY');
 const SENDER = { name: 'Centro Cultural Kalian', email: 'hola@kalian.es' };
 async function callBrevo(apiKey, payload) {
@@ -25,7 +26,7 @@ async function callBrevo(apiKey, payload) {
     return res.json();
 }
 // ─── sendWelcomeEmail ────────────────────────────────────────────────────────
-exports.sendWelcomeEmail = (0, https_1.onCall)({ secrets: [BREVO_API_KEY] }, async (request) => {
+exports.sendWelcomeEmail = (0, https_1.onCall)({ secrets: [BREVO_API_KEY], region: EU_REGION }, async (request) => {
     if (!request.auth)
         throw new https_1.HttpsError('unauthenticated', 'Auth required');
     const { email, nombre, activationLink } = request.data;
@@ -60,23 +61,7 @@ exports.sendWelcomeEmail = (0, https_1.onCall)({ secrets: [BREVO_API_KEY] }, asy
         </div></body></html>`,
     });
 });
-// ─── traducirTextoEU ─────────────────────────────────────────────────────────
-exports.traducirTextoEU = (0, https_1.onCall)({ cors: true }, async (request) => {
-    if (!request.auth)
-        throw new https_1.HttpsError('unauthenticated', 'Auth required');
-    const { texto } = request.data;
-    if (!texto?.trim())
-        return { traduccion: '' };
-    const url = `https://api.mymemory.translated.net/get?q=${encodeURIComponent(texto)}&langpair=es|eu`;
-    const res = await (0, node_fetch_1.default)(url);
-    if (!res.ok)
-        throw new https_1.HttpsError('internal', `MyMemory HTTP ${res.status}`);
-    const data = await res.json();
-    if (data.responseStatus !== 200)
-        throw new https_1.HttpsError('internal', data.responseDetails || 'MyMemory error');
-    return { traduccion: data.responseData.translatedText };
-});
-exports.sendMembershipUpdateEmail = (0, https_1.onCall)({ secrets: [BREVO_API_KEY] }, async (request) => {
+exports.sendMembershipUpdateEmail = (0, https_1.onCall)({ secrets: [BREVO_API_KEY], region: EU_REGION }, async (request) => {
     if (!request.auth)
         throw new https_1.HttpsError('unauthenticated', 'Auth required');
     const { email, nombre, uid, membresias } = request.data;
@@ -121,5 +106,126 @@ exports.sendMembershipUpdateEmail = (0, https_1.onCall)({ secrets: [BREVO_API_KE
           <div class="f"><p>CENTRO CULTURAL KALIAN</p><p>Este carnet es personal e intransferible.</p></div>
         </div></body></html>`,
     });
+});
+exports.gestionarReservaInvitado = (0, https_1.onCall)({ region: EU_REGION }, async (request) => {
+    const { manageToken, accion, nuevoAcompanantes } = request.data;
+    if (typeof manageToken !== 'string' || manageToken.length < 16 || manageToken.length > 64) {
+        throw new https_1.HttpsError('invalid-argument', 'Token no válido.');
+    }
+    if (accion !== 'consultar' && accion !== 'cancelar' && accion !== 'editar') {
+        throw new https_1.HttpsError('invalid-argument', 'Acción no válida.');
+    }
+    const db = admin.firestore();
+    // Localizar la reserva por su manageToken. Error genérico si no existe
+    // (no revelamos si el token es real o no).
+    const snap = await db.collection('reservas')
+        .where('manageToken', '==', manageToken)
+        .limit(1)
+        .get();
+    if (snap.empty) {
+        throw new https_1.HttpsError('not-found', 'No hemos encontrado esa reserva.');
+    }
+    const reservaRef = snap.docs[0].ref;
+    const reserva = snap.docs[0].data();
+    const esCurso = !!reserva.esCurso;
+    const coleccionActividad = esCurso ? 'cursos' : 'eventos';
+    const eventoId = reserva.eventoId;
+    const resumenActividad = async () => {
+        let maxAcomp = 4;
+        let aforoMax = 0;
+        let aforoRes = 0;
+        if (eventoId) {
+            const actSnap = await db.collection(coleccionActividad).doc(eventoId).get();
+            if (actSnap.exists) {
+                const a = actSnap.data();
+                maxAcomp = Number(a.max_acompanantes || 4);
+                aforoMax = Number(a.aforo_maximo || a.aforo_max || a.aforo_total || 0);
+                aforoRes = Number(a.aforo_reservado || 0);
+            }
+        }
+        // Releer la reserva para reflejar cambios recientes (p.ej. tras editar).
+        const rSnap = await reservaRef.get();
+        const r = (rSnap.exists ? rSnap.data() : reserva);
+        return {
+            eventoTitulo: r.eventoTitulo || '',
+            fechaActividad: r.fechaActividad || '',
+            acompanantes: Number(r.acompañantes || 0),
+            numPersonas: Number(r.numPersonas || 1),
+            asistentesIngresados: Number(r.asistentes_ingresados || 0),
+            esCurso,
+            maxAcompanantes: maxAcomp,
+            plazasLibres: Math.max(0, aforoMax - aforoRes),
+        };
+    };
+    if (accion === 'consultar') {
+        return { ok: true, reserva: await resumenActividad() };
+    }
+    if (accion === 'cancelar') {
+        await db.runTransaction(async (tx) => {
+            const rDoc = await tx.get(reservaRef);
+            if (!rDoc.exists)
+                return; // ya borrada
+            const r = rDoc.data();
+            const totalReserva = 1 + Number(r.acompañantes || 0);
+            const yaIngresados = Number(r.asistentes_ingresados || 0);
+            const pendientes = Math.max(0, totalReserva - yaIngresados);
+            if (pendientes > 0 && eventoId) {
+                const actRef = db.collection(coleccionActividad).doc(eventoId);
+                const actDoc = await tx.get(actRef);
+                if (actDoc.exists) {
+                    tx.update(actRef, {
+                        aforo_reservado: admin.firestore.FieldValue.increment(-pendientes),
+                    });
+                }
+            }
+            tx.delete(reservaRef);
+        });
+        return { ok: true, cancelada: true };
+    }
+    // accion === 'editar'
+    const nuevo = Number(nuevoAcompanantes);
+    if (!Number.isInteger(nuevo) || nuevo < 0 || nuevo > 19) {
+        throw new https_1.HttpsError('invalid-argument', 'Número de acompañantes no válido.');
+    }
+    await db.runTransaction(async (tx) => {
+        const rDoc = await tx.get(reservaRef);
+        if (!rDoc.exists)
+            throw new https_1.HttpsError('not-found', 'La reserva ya no existe.');
+        const r = rDoc.data();
+        const actuales = Number(r.acompañantes || 0);
+        const diferencia = nuevo - actuales;
+        if (diferencia === 0)
+            return;
+        const yaIngresados = Number(r.asistentes_ingresados || 0);
+        if (1 + nuevo < yaIngresados) {
+            throw new https_1.HttpsError('failed-precondition', `No puedes bajar de ${yaIngresados}: ya hay esos asistentes registrados.`);
+        }
+        if (!eventoId)
+            throw new https_1.HttpsError('failed-precondition', 'Reserva sin actividad asociada.');
+        const actRef = db.collection(coleccionActividad).doc(eventoId);
+        const actDoc = await tx.get(actRef);
+        if (!actDoc.exists)
+            throw new https_1.HttpsError('not-found', 'La actividad ya no existe.');
+        const a = actDoc.data();
+        const maxAcomp = Number(a.max_acompanantes || 4);
+        if (nuevo > maxAcomp) {
+            throw new https_1.HttpsError('failed-precondition', `El máximo de acompañantes para esta actividad es ${maxAcomp}.`);
+        }
+        if (!esCurso) {
+            const aforoMax = Number(a.aforo_maximo || a.aforo_max || a.aforo_total || 0);
+            const aforoRes = Number(a.aforo_reservado || 0);
+            if (aforoRes + diferencia > aforoMax) {
+                throw new https_1.HttpsError('failed-precondition', `Sin aforo suficiente. Plazas libres: ${Math.max(0, aforoMax - aforoRes)}.`);
+            }
+            tx.update(actRef, {
+                aforo_reservado: admin.firestore.FieldValue.increment(diferencia),
+            });
+        }
+        tx.update(reservaRef, {
+            acompañantes: nuevo,
+            numPersonas: 1 + nuevo,
+        });
+    });
+    return { ok: true, reserva: await resumenActividad() };
 });
 //# sourceMappingURL=index.js.map

@@ -2,6 +2,7 @@ import { initializeApp } from "firebase/app";
 import { getAuth } from "firebase/auth";
 import { getStorage } from "firebase/storage";
 import { initializeFirestore } from "firebase/firestore";
+import { getFunctions } from "firebase/functions";
 import firebaseConfig from "../firebase-applet-config.json";
 
 const app = initializeApp(firebaseConfig);
@@ -10,3 +11,4 @@ export const db = initializeFirestore(app, {}, (firebaseConfig as any).firestore
 
 export const auth = getAuth(app);
 export const storage = getStorage(app);
+export const functions = getFunctions(app, "europe-west1");

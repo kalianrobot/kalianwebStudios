@@ -366,15 +366,19 @@ const ReservaForm = ({ item, alCerrar }: ReservaFormProps) => {
         setTimeout(alCerrar, 6000);
       } else {
         setResultado({ ticketID: tID, qrUrl: qrUrl, nombre: form.nombre, manageToken, acompanantes: Number(form.acompañantes) });
-        await sendReservationConfirmation({
-          email: form.email.trim(),
-          nombre: form.nombre,
-          eventoTitulo: item.titulo,
-          ticketID: tID,
-          qrUrl,
-          manageToken,
-        });
-        setEmailEnviado(true);
+        try {
+          await sendReservationConfirmation({
+            email: form.email.trim(),
+            nombre: form.nombre,
+            eventoTitulo: item.titulo,
+            ticketID: tID,
+            qrUrl,
+            manageToken,
+          });
+          setEmailEnviado(true);
+        } catch (emailErr: any) {
+          console.error('[sendReservationConfirmation]', emailErr?.message || emailErr);
+        }
       }
 
     } catch (err: any) {

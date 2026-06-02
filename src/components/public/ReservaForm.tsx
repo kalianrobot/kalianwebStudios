@@ -370,7 +370,7 @@ const ReservaForm = ({ item, alCerrar }: ReservaFormProps) => {
           await sendReservationConfirmation({
             email: form.email.trim(),
             nombre: form.nombre,
-            eventoTitulo: item.titulo,
+            eventoTitulo: itemTitulo,
             ticketID: tID,
             qrUrl,
             manageToken,

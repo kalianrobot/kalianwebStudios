@@ -114,6 +114,7 @@ const eu: Record<string, string> = {
   'reserva.fullNamePlaceholder': 'IZENA ETA ABIZENAK',
   'reserva.emailRequired': 'EMAILA (NAHITAEZKOA)',
   'reserva.emailOptional': 'EMAILA (AUKERAZKOA QR JASOTZEKO)',
+  'reserva.emailManageHint': 'Lagun-kopurua aldatu edo geroago ezeztatu nahi baduzu, sartu zure emaila. Gabe, ezin izango dizugu kudeaketa esteka bidali.',
   'reserva.discountCode': 'DESKONTO GILTZA',
   'reserva.hasCoupon': 'KUPOIA AL DUZU?',
   'reserva.companions': 'Laguntzaileak',

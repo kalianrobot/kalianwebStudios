@@ -717,7 +717,7 @@ const ReservaForm = ({ item, alCerrar }: ReservaFormProps) => {
                     disabled={!!socioData}
                   />
                   {!esCurso && (
-                    <p className="text-[9px] text-kalian-gold/50 font-bold ml-4 leading-relaxed">
+                    <p className="text-sm text-kalian-gold/80 font-bold ml-4 leading-relaxed">
                       {t('reserva.emailManageHint')}
                     </p>
                   )}

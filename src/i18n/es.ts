@@ -114,6 +114,7 @@ const es: Record<string, string> = {
   'reserva.fullNamePlaceholder': 'NOMBRE Y APELLIDOS',
   'reserva.emailRequired': 'EMAIL (OBLIGATORIO)',
   'reserva.emailOptional': 'EMAIL (OPCIONAL PARA RECIBIR EL QR)',
+  'reserva.emailManageHint': 'Si quieres poder modificar el número de acompañantes o cancelar más adelante, introduce tu email. Sin él no podremos enviarte el enlace de gestión.',
   'reserva.discountCode': 'CLAVE DE DESCUENTO',
   'reserva.hasCoupon': '¿TIENES UN CUPÓN?',
   'reserva.companions': 'Acompañantes',

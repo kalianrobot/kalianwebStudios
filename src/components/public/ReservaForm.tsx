@@ -686,14 +686,19 @@ const ReservaForm = ({ item, alCerrar }: ReservaFormProps) => {
                   <label className="text-[9px] font-black text-kalian-gold/90 uppercase tracking-[0.3em] ml-4">
                     {esCurso ? t('reserva.emailRequired') : t('reserva.emailOptional')}
                   </label>
-                  <input 
-                    type="email" placeholder="tu@email.com" 
-                    className="w-full p-5 bg-kalian-gold/10 rounded-2xl font-bold outline-none border border-kalian-gold/20 focus:border-kalian-gold transition-all text-kalian-cream placeholder:text-kalian-cream/40" 
-                    value={form.email} 
-                    onChange={e => setForm({...form, email: e.target.value})} 
+                  <input
+                    type="email" placeholder="tu@email.com"
+                    className="w-full p-5 bg-kalian-gold/10 rounded-2xl font-bold outline-none border border-kalian-gold/20 focus:border-kalian-gold transition-all text-kalian-cream placeholder:text-kalian-cream/40"
+                    value={form.email}
+                    onChange={e => setForm({...form, email: e.target.value})}
                     required={esCurso}
                     disabled={!!socioData}
                   />
+                  {!esCurso && (
+                    <p className="text-[9px] text-kalian-gold/50 font-bold ml-4 leading-relaxed">
+                      {t('reserva.emailManageHint')}
+                    </p>
+                  )}
                 </div>
 
                 {!esCurso && item.cupon && (

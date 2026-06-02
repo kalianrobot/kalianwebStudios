@@ -1,11 +1,11 @@
 import React, { useState, useEffect } from 'react';
 import { db, auth } from '../../firebase';
-import { collection, addDoc, query, where, getDocs, doc, getDoc, DocumentData, runTransaction, increment } from 'firebase/firestore';
+import { collection, query, where, getDocs, doc, getDoc, DocumentData, runTransaction, increment } from 'firebase/firestore';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
 import { useLanguage } from '../../context/LanguageContext';
 import { formatDate } from '../../i18n/dateFormat';
-import { generarManageToken, cancelarReservaInvitado, editarAcompanantesInvitado } from '../../lib/reservaInvitado';
+import { generarManageToken, cancelarReservaInvitado, editarAcompanantesInvitado, sendReservationConfirmation } from '../../lib/reservaInvitado';
 
 interface ReservaFormProps {
   item: any; // Evento o Curso
@@ -237,41 +237,42 @@ const ReservaForm = ({ item, alCerrar }: ReservaFormProps) => {
         return;
       }
 
-      // 1b. VALIDACIÓN DE UNICIDAD (Solo si hay DNI)
-      if (dniUpper) {
+      // 1b. VALIDACIÓN DE UNICIDAD (siempre: uid > DNI > email)
+      {
         let snapDuplicado;
         try {
-          const q = user 
+          const q = user
             ? query(collection(db, "reservas"), where("eventoId", "==", item.id), where("uidTitular", "==", user.uid))
-            : query(collection(db, "reservas"), where("eventoId", "==", item.id), where("dniTitular", "==", dniUpper));
+            : dniUpper
+              ? query(collection(db, "reservas"), where("eventoId", "==", item.id), where("dniTitular", "==", dniUpper))
+              : query(collection(db, "reservas"), where("eventoId", "==", item.id), where("emailTitular", "==", form.email.trim()));
           snapDuplicado = await getDocs(q);
         } catch (err) {
           throw handleFirestoreError(err, 'list', 'reservas');
         }
-        
         if (!snapDuplicado.empty) {
           setMensaje(t('reserva.alreadyBooked'));
           setCargando(false);
           return;
         }
+      }
 
-        // 1.1 VALIDACIÓN DE AFORO DINÁMICO
-        const aMax = Number(item.aforo_maximo || item.aforo_max || item.aforo_total || 0);
-        const aRes = Number(item.aforo_reservado || 0);
-        const nuevosSolicitados = 1 + Number(form.acompañantes);
+      // 1.1 VALIDACIÓN DE AFORO DINÁMICO
+      const aMax = Number(item.aforo_maximo || item.aforo_max || item.aforo_total || 0);
+      const aRes = Number(item.aforo_reservado || 0);
+      const nuevosSolicitados = 1 + Number(form.acompañantes);
 
-        if (!esCurso && (aRes + nuevosSolicitados > aMax)) {
-          setMensaje(t('reserva.aforo.notEnough', { n: Math.max(0, aMax - aRes) }));
-          setCargando(false);
-          return;
-        }
+      if (!esCurso && (aRes + nuevosSolicitados > aMax)) {
+        setMensaje(t('reserva.aforo.notEnough', { n: Math.max(0, aMax - aRes) }));
+        setCargando(false);
+        return;
+      }
 
-        const aforoDisponibleManual = item.aforo_disponible !== false;
-        if (!aforoDisponibleManual) {
-          setMensaje(t('reserva.aforo.courseNoCapacity'));
-          setCargando(false);
-          return;
-        }
+      const aforoDisponibleManual = item.aforo_disponible !== false;
+      if (!aforoDisponibleManual) {
+        setMensaje(t('reserva.aforo.courseNoCapacity'));
+        setCargando(false);
+        return;
       }
 
       // 2. VERIFICACIÓN DE SOCIO (Ya calculada en precioCalculado)
@@ -365,28 +366,13 @@ const ReservaForm = ({ item, alCerrar }: ReservaFormProps) => {
         setTimeout(alCerrar, 6000);
       } else {
         setResultado({ ticketID: tID, qrUrl: qrUrl, nombre: form.nombre, manageToken, acompanantes: Number(form.acompañantes) });
-        await addDoc(collection(db, "mail"), {
-          to: form.email,
-          message: {
-            subject: `Confirmación Kalian: ${item.titulo}`,
-            html: `
-              <div style="font-family: sans-serif; max-width: 600px; margin: auto; border: 1px solid #eee; padding: 20px; border-radius: 10px;">
-                <h2 style="color: #4f46e5; text-transform: uppercase;">¡Reserva Confirmada!</h2>
-                <p>Hola <b>${form.nombre}</b>,</p>
-                <p>Tu reserva para <b>${item.titulo}</b> ha sido registrada con éxito.</p>
-                <div style="background: #f9fafb; padding: 20px; text-align: center; border-radius: 10px; margin: 20px 0;">
-                  <p style="font-size: 10px; color: #9ca3af; text-transform: uppercase; margin-bottom: 10px;">ID de Ticket</p>
-                  <p style="font-size: 32px; font-weight: 900; letter-spacing: 5px; margin: 0;">${tID}</p>
-                  <img src="${qrUrl}" alt="QR" style="margin-top: 20px; width: 200px;">
-                </div>
-                <p style="font-size: 12px; color: #6b7280;">Presenta este código en la entrada. El pago de los acompañantes (si los hay) se realizará en efectivo.</p>
-                <div style="text-align: center; margin-top: 24px; padding-top: 20px; border-top: 1px solid #eee;">
-                  <a href="https://kalian.es/mi-reserva?token=${manageToken}" style="display: inline-block; background: #4f46e5; color: #fff; padding: 12px 24px; border-radius: 10px; text-decoration: none; font-weight: 700; font-size: 13px;">Gestionar mi reserva</a>
-                  <p style="font-size: 11px; color: #9ca3af; margin-top: 10px;">Desde ahí puedes cambiar el número de acompañantes o cancelar.</p>
-                </div>
-              </div>
-            `
-          }
+        await sendReservationConfirmation({
+          email: form.email.trim(),
+          nombre: form.nombre,
+          eventoTitulo: item.titulo,
+          ticketID: tID,
+          qrUrl,
+          manageToken,
         });
         setEmailEnviado(true);
       }

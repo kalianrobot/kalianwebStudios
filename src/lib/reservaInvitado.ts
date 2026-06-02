@@ -1,6 +1,11 @@
 import { httpsCallable } from 'firebase/functions';
 import { functions } from '../firebase';
 
+export const sendReservationConfirmation = (data: {
+  email: string; nombre: string; eventoTitulo: string;
+  ticketID: string; qrUrl: string; manageToken: string;
+}) => httpsCallable(functions, 'sendReservationConfirmation')(data);
+
 export type ResumenReserva = {
   eventoTitulo: string;
   fechaActividad: string;

@@ -125,6 +125,58 @@ export const sendMembershipUpdateEmail = onCall(
   }
 );
 
+// ─── sendReservationConfirmation ────────────────────────────────────────────
+// Callable SIN auth: el invitado acaba de reservar y no tiene cuenta Firebase.
+export const sendReservationConfirmation = onCall(
+  { secrets: [BREVO_API_KEY], region: EU_REGION },
+  async (request) => {
+    const { email, nombre, eventoTitulo, ticketID, qrUrl, manageToken } = request.data as {
+      email: string; nombre: string; eventoTitulo: string;
+      ticketID: string; qrUrl: string; manageToken: string;
+    };
+
+    if (!email || !ticketID || !manageToken) {
+      throw new HttpsError('invalid-argument', 'Faltan datos obligatorios.');
+    }
+
+    return callBrevo(BREVO_API_KEY.value(), {
+      sender: SENDER,
+      to: [{ email, name: nombre }],
+      subject: `Confirmación Kalian: ${eventoTitulo}`,
+      htmlContent: `<!DOCTYPE html><html><head>
+        <style>
+          body{margin:0;padding:0;background:#0A0A0A;font-family:Inter,sans-serif;color:#F5F5F0}
+          .c{max-width:600px;margin:0 auto;background:#0A0A0A;border:1px solid #D4AF3733}
+          .h{padding:40px;text-align:center;border-bottom:1px solid #D4AF3733}
+          .b{padding:40px;text-align:center}
+          .f{padding:30px;text-align:center;background:#000;border-top:1px solid #D4AF3733;font-size:10px;color:#666}
+          h1{color:#D4AF37;font-size:32px;font-weight:900;text-transform:uppercase;margin:0;font-style:italic}
+          p{font-size:16px;line-height:1.6;color:#F5F5F0CC;margin-bottom:20px}
+          .acc{color:#D4AF37;font-weight:700}
+          .tid{font-size:32px;font-weight:900;letter-spacing:5px;color:#F5F5F0;margin:0}
+          .qr{background:#FFF;padding:16px;display:inline-block;border-radius:16px;margin:20px 0}
+          .btn{display:inline-block;background:#D4AF37;color:#000;padding:16px 32px;text-decoration:none;font-weight:900;text-transform:uppercase;letter-spacing:2px;font-size:13px;border-radius:8px}
+          .note{font-size:11px;color:#666;margin-top:10px}
+        </style></head><body>
+        <div class="c">
+          <div class="h"><h1>RESERVA CONFIRMADA</h1></div>
+          <div class="b">
+            <p>Hola <span class="acc">${nombre}</span>,</p>
+            <p>Tu entrada para <span class="acc">${eventoTitulo}</span> está confirmada.</p>
+            <p class="tid">${ticketID}</p>
+            <div class="qr"><img src="${qrUrl}" width="200" height="200" style="display:block"></div>
+            <p style="font-size:12px;color:#666">Presenta este código en la entrada. El pago de acompañantes (si los hay) se realiza en efectivo.</p>
+            <div style="margin-top:24px;padding-top:20px;border-top:1px solid #D4AF3733">
+              <a href="https://kalian.es/mi-reserva?token=${manageToken}" class="btn">Gestionar mi reserva</a>
+              <p class="note">Desde ahí puedes cambiar el número de acompañantes o cancelar.</p>
+            </div>
+          </div>
+          <div class="f"><p>CENTRO CULTURAL KALIAN</p></div>
+        </div></body></html>`,
+    });
+  }
+);
+
 // ─── gestionarReservaInvitado ────────────────────────────────────────────────
 // Callable SIN auth: un invitado (sin cuenta) gestiona su propia reserva mediante
 // un manageToken largo y aleatorio (capability token) que recibió al reservar.

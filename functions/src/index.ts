@@ -8,7 +8,7 @@ admin.initializeApp();
 const EU_REGION = 'europe-west1';
 
 const BREVO_API_KEY = defineSecret('BREVO_API_KEY');
-const SENDER = { name: 'Centro Cultural Kalian', email: 'hola@kalian.es' };
+const SENDER = { name: 'Centro Cultural Kalian', email: 'info@kalian.es' };
 
 async function callBrevo(apiKey: string, payload: object) {
   const res = await fetch('https://api.brevo.com/v3/smtp/email', {

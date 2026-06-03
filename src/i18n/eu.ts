@@ -104,6 +104,7 @@ const eu: Record<string, string> = {
   'reserva.emailPrompt': 'Emailez jaso nahi duzu?',
   'reserva.send': 'Bidali',
   'reserva.emailSent': '✅ Emaila arrakastaz bidali da',
+  'reserva.emailFailed': '⚠️ Ezin izan dugu emaila bidali. Idatzi zure tiketaren kodea sartzean aurkezteko.',
   'reserva.close': 'Leihoa Itxi',
   'reserva.course': '📚 IKASTAROA',
   'reserva.event': '🎟️ EKITALDIA',

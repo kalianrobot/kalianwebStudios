@@ -89,7 +89,7 @@ function AppContent() {
   const isLogin = ['/login', '/profesor/login', '/staff/login'].includes(location.pathname);
 
   // Bloqueo de Panel para socios inactivos (solo aplica a usuarios con rol socio o invitado_registrado)
-  const isSocioArea = ['/home', '/perfil'].includes(location.pathname);
+  const isSocioArea = location.pathname === '/home';
   const needsActiveCheck = (role === 'socio' || role === 'invitado_registrado') && !isMaster;
   
   if (user && needsActiveCheck && socioData?.estado === 'inactivo' && isSocioArea) {

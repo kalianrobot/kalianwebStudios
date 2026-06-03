@@ -78,33 +78,25 @@ const PerfilSocio = () => {
             if (lSnap.exists()) setLocalDetalle({ id: lSnap.id, ...lSnap.data() });
           }
 
-          // CARGAR RESERVAS (UID + DNI + Email fallback)
-          const qResUid = query(collection(db, "reservas"), where("uidTitular", "==", auth.currentUser.uid));
-          const snapResUid = await getDocs(qResUid);
+          // CARGAR RESERVAS — cada query en su propio try/catch para que
+          // un fallo de permisos no vacíe el resto de resultados.
           const hoy = new Date().toISOString().split('T')[0];
+          const todasLasReservas: any[] = [];
+          const addUniq = (docs: any[]) =>
+            docs.forEach(d => { if (!todasLasReservas.some(r => r.id === d.id)) todasLasReservas.push(d); });
 
-          const todasLasReservas: any[] = snapResUid.docs.map(d => ({ id: d.id, ...d.data() }));
+          // 1. Por UID (regla: uidTitular == request.auth.uid)
+          try {
+            const snap = await getDocs(query(collection(db, "reservas"), where("uidTitular", "==", auth.currentUser.uid)));
+            addUniq(snap.docs.map(d => ({ id: d.id, ...d.data() })));
+          } catch (e) { console.warn("reservas/uid query:", e); }
 
-          // Fallback por DNI
-          if (sData.dni) {
-            const qResDni = query(collection(db, "reservas"), where("dniTitular", "==", sData.dni));
-            const snapResDni = await getDocs(qResDni);
-            snapResDni.docs.forEach(d => {
-              if (!todasLasReservas.some(r => r.id === d.id)) {
-                todasLasReservas.push({ id: d.id, ...d.data() });
-              }
-            });
-          }
-
-          // Fallback por email (cubre reservas hechas sin sesión activa)
-          if (sData.email) {
-            const qResEmail = query(collection(db, "reservas"), where("emailTitular", "==", sData.email.trim()));
-            const snapResEmail = await getDocs(qResEmail);
-            snapResEmail.docs.forEach(d => {
-              if (!todasLasReservas.some(r => r.id === d.id)) {
-                todasLasReservas.push({ id: d.id, ...d.data() });
-              }
-            });
+          // 2. Por email del token de auth (regla: emailTitular.lower() == token.email.lower())
+          if (auth.currentUser.email) {
+            try {
+              const snap = await getDocs(query(collection(db, "reservas"), where("emailTitular", "==", auth.currentUser.email)));
+              addUniq(snap.docs.map(d => ({ id: d.id, ...d.data() })));
+            } catch (e) { console.warn("reservas/email query:", e); }
           }
 
           // Verificar si el evento existe y separar activas de historial

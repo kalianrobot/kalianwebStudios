@@ -78,7 +78,7 @@ const PerfilSocio = () => {
             if (lSnap.exists()) setLocalDetalle({ id: lSnap.id, ...lSnap.data() });
           }
 
-          // CARGAR RESERVAS (UID + Email + DNI fallback)
+          // CARGAR RESERVAS (UID + DNI + Email fallback)
           const qResUid = query(collection(db, "reservas"), where("uidTitular", "==", auth.currentUser.uid));
           const snapResUid = await getDocs(qResUid);
           const hoy = new Date().toISOString().split('T')[0];
@@ -90,6 +90,17 @@ const PerfilSocio = () => {
             const qResDni = query(collection(db, "reservas"), where("dniTitular", "==", sData.dni));
             const snapResDni = await getDocs(qResDni);
             snapResDni.docs.forEach(d => {
+              if (!todasLasReservas.some(r => r.id === d.id)) {
+                todasLasReservas.push({ id: d.id, ...d.data() });
+              }
+            });
+          }
+
+          // Fallback por email (cubre reservas hechas sin sesión activa)
+          if (sData.email) {
+            const qResEmail = query(collection(db, "reservas"), where("emailTitular", "==", sData.email.trim()));
+            const snapResEmail = await getDocs(qResEmail);
+            snapResEmail.docs.forEach(d => {
               if (!todasLasReservas.some(r => r.id === d.id)) {
                 todasLasReservas.push({ id: d.id, ...d.data() });
               }

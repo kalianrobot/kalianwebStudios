@@ -104,6 +104,7 @@ const es: Record<string, string> = {
   'reserva.emailPrompt': '¿Quieres recibirlo por email?',
   'reserva.send': 'Enviar',
   'reserva.emailSent': '✅ Email enviado con éxito',
+  'reserva.emailFailed': '⚠️ No hemos podido enviar el email. Apunta tu código de ticket para presentarlo al entrar.',
   'reserva.close': 'Cerrar Ventana',
   'reserva.course': '📚 CURSO',
   'reserva.event': '🎟️ EVENTO',

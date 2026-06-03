@@ -486,9 +486,15 @@ const ReservaForm = ({ item, alCerrar }: ReservaFormProps) => {
             {t('reserva.download')}
           </button>
 
-          <div className="bg-emerald-50 p-6 rounded-[2rem] text-emerald-600 font-black text-xs uppercase tracking-widest border border-emerald-100">
-            {t('reserva.emailSent')}
-          </div>
+          {emailEnviado ? (
+            <div className="bg-emerald-50 p-6 rounded-[2rem] text-emerald-600 font-black text-xs uppercase tracking-widest border border-emerald-100">
+              {t('reserva.emailSent')}
+            </div>
+          ) : (
+            <div className="bg-amber-50 p-6 rounded-[2rem] text-amber-700 font-black text-xs uppercase tracking-widest border border-amber-200">
+              {t('reserva.emailFailed')}
+            </div>
+          )}
         </div>
 
         {!esCurso && (

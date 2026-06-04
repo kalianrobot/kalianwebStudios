@@ -85,7 +85,7 @@ function AppContent() {
   const hasAdminAccess = role === 'admin' || isMaster;
   
   const isLanding = location.pathname === '/';
-  const isPuerta = location.pathname === '/puerta';
+  const isPuerta = location.pathname === '/control-acceso';
   const isLogin = ['/login', '/profesor/login', '/staff/login'].includes(location.pathname);
 
   // Bloqueo de Panel para socios inactivos (solo aplica a usuarios con rol socio o invitado_registrado)
@@ -116,8 +116,8 @@ function AppContent() {
 
         {/* RUTAS STAFF (ADMIN) */}
         <Route path="/staff/login" element={
-          (hasAdminAccess || role === 'portero') ? (
-            <Navigate to={hasAdminAccess ? "/staff" : "/control-acceso"} />
+          hasAdminAccess ? (
+            <Navigate to="/staff" />
           ) : (
             <AdminLogin />
           )
@@ -149,16 +149,8 @@ function AppContent() {
         <Route path="/staff/identidad" element={hasAdminAccess ? <AdminConfig /> : <Navigate to="/staff/login" />} />
         <Route path="/staff/traducir-eu" element={hasAdminAccess ? <AdminTraducirEU /> : <Navigate to="/staff/login" />} />
 
-        {/* RUTA CONTROL ACCESO (PORTERO) */}
-        <Route path="/control-acceso" element={
-          (hasAdminAccess || role === 'portero') ? (
-            <ControlAcceso />
-          ) : (
-            <Navigate to="/staff/login" />
-          )
-        } />
-
-        <Route path="/puerta" element={<PuertaAccess />} />
+        {/* RUTA CONTROL ACCESO — acceso por contraseña compartida, sin login de usuario */}
+        <Route path="/control-acceso" element={<PuertaAccess />} />
 
         {/* RUTAS PROFESORES (TEACHER) */}
         <Route path="/profesor/login" element={role !== 'teacher' ? <TeacherLogin /> : <Navigate to="/profesor" />} />

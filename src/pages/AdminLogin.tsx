@@ -23,10 +23,7 @@ const AdminLogin = () => {
     if (hasAdminAccess) {
       isDev && console.log("AdminLogin: Navegando a /staff");
       navigate('/staff');
-    } else if (role === 'portero') {
-      isDev && console.log("AdminLogin: Navegando a /control-acceso");
-      navigate('/control-acceso');
-    } else if (user && !hasAdminAccess && role !== 'portero') {
+    } else if (user && !hasAdminAccess) {
       setError(t('auth.noStaffPerms'));
     }
   }, [role, navigate, user]);

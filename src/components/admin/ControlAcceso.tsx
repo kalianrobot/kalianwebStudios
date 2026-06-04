@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { db } from '../../firebase';
+import { db, auth as firebaseAuth } from '../../firebase';
+import { signOut } from 'firebase/auth';
 import { collection, query, where, getDocs, doc, updateDoc, increment, onSnapshot, getDoc, addDoc, setDoc, serverTimestamp } from 'firebase/firestore';
 import { useAuth } from '../../context/AuthContext';
 import { useNavigate } from 'react-router-dom';
@@ -10,7 +11,7 @@ import { jsPDF } from 'jspdf';
 import autoTable from 'jspdf-autotable';
 
 const ControlAcceso = ({ isPuertaMode = false }: { isPuertaMode?: boolean }) => {
-  const { role, isAdmin, isPortero, user } = useAuth();
+  const { role, isAdmin, user } = useAuth();
   const navigate = useNavigate();
   
   const [eventos, setEventos] = useState<any[]>([]);
@@ -26,10 +27,8 @@ const ControlAcceso = ({ isPuertaMode = false }: { isPuertaMode?: boolean }) => 
   const [resumenHoy, setResumenHoy] = useState({ total: 0, count: 0 });
   const scannerRef = useRef<Html5Qrcode | null>(null);
 
-  // Seguridad: Solo admin o portero, o modo puerta validado
   useEffect(() => {
-    const puertaToken = sessionStorage.getItem('kalian_puerta_token');
-    if (!isPuertaMode && !puertaToken && role !== 'admin' && role !== 'portero') {
+    if (!isPuertaMode && role !== 'admin' && role !== 'portero') {
       navigate('/');
     }
   }, [role, navigate, isPuertaMode]);
@@ -339,8 +338,8 @@ const ControlAcceso = ({ isPuertaMode = false }: { isPuertaMode?: boolean }) => 
     return Math.max(0, (eventoSeleccionado.aforo_maximo || 0) - totalOcupado);
   };
 
-  const handleLogoutPuerta = () => {
-    sessionStorage.removeItem('kalian_puerta_token');
+  const handleLogoutPuerta = async () => {
+    await signOut(firebaseAuth);
     window.location.reload();
   };
 

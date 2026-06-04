@@ -27,6 +27,43 @@ async function callBrevo(apiKey: string, payload: object) {
   return res.json();
 }
 
+// ─── validatePuertaAccess ────────────────────────────────────────────────────
+// Sin auth: la tablet de puerta no tiene usuario Firebase. Valida la contraseña
+// compartida server-side y devuelve un Custom Token para operar como "portero".
+const PUERTA_UID = 'puerta-service';
+
+export const validatePuertaAccess = onCall(
+  { region: EU_REGION },
+  async (request) => {
+    const { password } = request.data as { password?: string };
+
+    if (typeof password !== 'string' || password.length < 1 || password.length > 128) {
+      throw new HttpsError('invalid-argument', 'Contraseña no válida.');
+    }
+
+    const db = admin.firestore();
+    const configSnap = await db.doc('configuracion/seguridad').get();
+    if (!configSnap.exists) {
+      throw new HttpsError('internal', 'Clave de puerta no configurada.');
+    }
+
+    const { clave_puerta } = configSnap.data() as { clave_puerta?: string };
+    if (!clave_puerta || password !== clave_puerta) {
+      throw new HttpsError('permission-denied', 'Contraseña incorrecta.');
+    }
+
+    // Ensure the puerta service user doc exists so isPortero() rules pass
+    const userRef = db.doc(`users/${PUERTA_UID}`);
+    const userSnap = await userRef.get();
+    if (!userSnap.exists) {
+      await userRef.set({ uid: PUERTA_UID, role: 'portero', nombre: 'Puerta Service' });
+    }
+
+    const customToken = await admin.auth().createCustomToken(PUERTA_UID, { role: 'portero' });
+    return { token: customToken };
+  }
+);
+
 // ─── sendWelcomeEmail ────────────────────────────────────────────────────────
 export const sendWelcomeEmail = onCall(
   { secrets: [BREVO_API_KEY], region: EU_REGION },

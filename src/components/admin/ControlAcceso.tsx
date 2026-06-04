@@ -579,16 +579,40 @@ const ControlAcceso = ({ isPuertaMode = false }: { isPuertaMode?: boolean }) => 
       const totalPersonas = reservas.reduce((s: number, r: any) => s + Number(r.numPersonas || (1 + Number(r.acompañantes || 0))), 0);
       doc.text(`Reservas: ${reservas.length} • Titulares: ${reservas.length} • Acompañantes: ${totalAcomp} • Total personas: ${totalPersonas}`, 14, 53);
 
-      const tableData = reservas.map((r: any) => [
-        r.nombreTitular || 'N/A',
-        r.dniTitular || 'N/A',
-        r.esSocio ? 'SOCIO' : 'NO SOCIO',
-        String(r.acompañantes ?? Math.max(0, Number(r.numPersonas || 1) - 1)),
-        String(r.numPersonas ?? (1 + Number(r.acompañantes || 0))),
-        `${r.montoPagado || 0}€ (${r.estado === 'validado' ? 'PAGADO' : 'PENDIENTE'})`,
-        r.ticketID || '',
-        '' // Check Manual
-      ]);
+      const tableData = reservas.flatMap((r: any) => {
+        const numAcomp = Number(r.acompañantes ?? Math.max(0, Number(r.numPersonas || 1) - 1));
+        const totalPax = Number(r.numPersonas ?? (1 + numAcomp));
+        const slots = Array.isArray(r.slots) ? r.slots : [];
+        const precioBase = Number(eventoSeleccionado.precio_estandar) || 0;
+
+        const filaTitular = [
+          r.nombreTitular || 'N/A',
+          r.dniTitular || 'N/A',
+          r.esSocio ? 'SOCIO' : 'NO SOCIO',
+          String(numAcomp),
+          String(totalPax),
+          `${r.montoPagado || 0}€ (${r.estado === 'validado' ? 'PAGADO' : 'PENDIENTE'})`,
+          r.ticketID || '',
+          ''
+        ];
+
+        const filasAcomp = Array.from({ length: numAcomp }, (_, i) => {
+          const slot = slots[i + 1];
+          const precio = Number(slot?.precio ?? precioBase);
+          return [
+            `  ↳ Acompañante ${i + 1}`,
+            '',
+            'NO SOCIO',
+            '',
+            '',
+            `${precio}€`,
+            r.ticketID || '',
+            ''
+          ];
+        });
+
+        return [filaTitular, ...filasAcomp];
+      });
 
       autoTable(doc, {
         startY: 60,

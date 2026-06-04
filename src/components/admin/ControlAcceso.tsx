@@ -101,10 +101,11 @@ const ControlAcceso = ({ isPuertaMode = false }: { isPuertaMode?: boolean }) => 
     }
   }, [verifMostrarScanner, verificarSocioSlot]);
 
-  // Cargar eventos de HOY (filtro estricto al día)
+  // Cargar eventos de HOY (rango: fecha empieza con YYYY-MM-DD de hoy)
   useEffect(() => {
     const hoy = new Date().toISOString().split('T')[0];
-    const q = query(collection(db, "eventos"), where("fecha", "==", hoy));
+    const manana = new Date(Date.now() + 86400000).toISOString().split('T')[0];
+    const q = query(collection(db, "eventos"), where("fecha", ">=", hoy), where("fecha", "<", manana));
 
     if (!user) return;
 

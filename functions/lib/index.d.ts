@@ -1,5 +1,9 @@
+export declare const validatePuertaAccess: import("firebase-functions/v2/https").CallableFunction<any, Promise<{
+    token: string;
+}>, unknown>;
 export declare const sendWelcomeEmail: import("firebase-functions/v2/https").CallableFunction<any, Promise<unknown>, unknown>;
 export declare const sendMembershipUpdateEmail: import("firebase-functions/v2/https").CallableFunction<any, Promise<unknown>, unknown>;
+export declare const sendReservationConfirmation: import("firebase-functions/v2/https").CallableFunction<any, Promise<unknown>, unknown>;
 export declare const gestionarReservaInvitado: import("firebase-functions/v2/https").CallableFunction<any, Promise<{
     ok: boolean;
     reserva: {

@@ -1,20 +1,22 @@
 import React, { useState, useEffect } from 'react';
-import { db } from '../../firebase';
-import { doc, getDoc } from 'firebase/firestore';
+import { auth, functions } from '../../firebase';
+import { signInWithCustomToken } from 'firebase/auth';
+import { httpsCallable } from 'firebase/functions';
 import ControlAcceso from './ControlAcceso';
-import { ShieldCheck, Lock } from 'lucide-react';
+import { Lock } from 'lucide-react';
 
 const PuertaAccess = () => {
   const [password, setPassword] = useState('');
   const [isValidated, setIsValidated] = useState(false);
-  const [loading, setLoading] = useState(false);
+  const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
 
   useEffect(() => {
-    const token = sessionStorage.getItem('kalian_puerta_token');
-    if (token === 'true') {
+    const currentUser = auth.currentUser;
+    if (currentUser && currentUser.uid === 'puerta-service') {
       setIsValidated(true);
     }
+    setLoading(false);
   }, []);
 
   const handleLogin = async (e: React.FormEvent) => {
@@ -23,28 +25,31 @@ const PuertaAccess = () => {
     setError('');
 
     try {
-      const configRef = doc(db, "configuracion", "seguridad");
-      const configSnap = await getDoc(configRef);
-
-      if (configSnap.exists()) {
-        const { clave_puerta } = configSnap.data();
-        if (password === clave_puerta) {
-          sessionStorage.setItem('kalian_puerta_token', 'true');
-          setIsValidated(true);
-        } else {
-          setError('Contraseña incorrecta');
-        }
+      const validate = httpsCallable<{ password: string }, { token: string }>(
+        functions, 'validatePuertaAccess'
+      );
+      const { data } = await validate({ password });
+      await signInWithCustomToken(auth, data.token);
+      setIsValidated(true);
+    } catch (err: any) {
+      const code = err?.code || '';
+      if (code === 'functions/permission-denied') {
+        setError('Contraseña incorrecta');
       } else {
-        // Si no existe el documento, por seguridad no dejamos pasar
-        // pero avisamos que falta configuración
-        setError('Error de configuración: Clave no establecida en el sistema');
+        console.error(err);
+        setError('Error al conectar con el servidor');
       }
-    } catch (err) {
-      console.error(err);
-      setError('Error al conectar con el servidor');
     }
     setLoading(false);
   };
+
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-kalian-dark flex items-center justify-center">
+        <p className="text-kalian-gold/40 text-xs font-black uppercase tracking-widest">Cargando...</p>
+      </div>
+    );
+  }
 
   if (isValidated) {
     return <ControlAcceso isPuertaMode={true} />;
@@ -56,15 +61,15 @@ const PuertaAccess = () => {
         <div className="w-20 h-20 bg-kalian-gold/10 rounded-full flex items-center justify-center mx-auto mb-8 border border-kalian-gold/20">
           <Lock className="text-kalian-gold" size={32} />
         </div>
-        
+
         <h1 className="text-4xl kalian-poster-text text-kalian-gold mb-2">ACCESO <span className="text-kalian-cream">PUERTA</span></h1>
         <p className="text-[10px] font-black uppercase tracking-[0.4em] text-kalian-gold/40 mb-10">Control de Entradas Simplificado</p>
 
         <form onSubmit={handleLogin} className="space-y-6">
           <div className="space-y-2 text-left">
             <p className="text-[9px] font-black text-kalian-gold/60 uppercase tracking-[0.3em] ml-4">Contraseña de Acceso</p>
-            <input 
-              type="password" 
+            <input
+              type="password"
               placeholder="••••••••"
               value={password}
               onChange={(e) => setPassword(e.target.value)}
@@ -75,7 +80,7 @@ const PuertaAccess = () => {
 
           {error && <p className="text-red-500 text-[10px] font-black uppercase tracking-widest animate-pulse">{error}</p>}
 
-          <button 
+          <button
             type="submit"
             disabled={loading}
             className="w-full bg-kalian-gold text-black p-6 rounded-2xl kalian-poster-text text-xl tracking-widest hover:bg-white transition-all shadow-xl shadow-kalian-gold/10"

@@ -574,23 +574,29 @@ const ControlAcceso = ({ isPuertaMode = false }: { isPuertaMode?: boolean }) => 
       doc.text(`Aforo Máx: ${eventoSeleccionado.aforo_maximo}`, 14, 48);
 
       // Tabla de Asistentes
+      const totalAcomp = reservas.reduce((s: number, r: any) => s + Number(r.acompañantes || 0), 0);
+      const totalPersonas = reservas.reduce((s: number, r: any) => s + Number(r.numPersonas || (1 + Number(r.acompañantes || 0))), 0);
+      doc.text(`Reservas: ${reservas.length} • Titulares: ${reservas.length} • Acompañantes: ${totalAcomp} • Total personas: ${totalPersonas}`, 14, 53);
+
       const tableData = reservas.map((r: any) => [
         r.nombreTitular || 'N/A',
         r.dniTitular || 'N/A',
         r.esSocio ? 'SOCIO' : 'NO SOCIO',
+        String(r.acompañantes ?? Math.max(0, Number(r.numPersonas || 1) - 1)),
+        String(r.numPersonas ?? (1 + Number(r.acompañantes || 0))),
         `${r.montoPagado || 0}€ (${r.estado === 'validado' ? 'PAGADO' : 'PENDIENTE'})`,
         r.ticketID || '',
         '' // Check Manual
       ]);
 
       autoTable(doc, {
-        startY: 55,
-        head: [['Nombre Completo', 'DNI', 'Categoría', 'Estado Pago', 'Ticket ID', 'Check Manual']],
+        startY: 60,
+        head: [['Nombre Completo', 'DNI', 'Categoría', 'Acomp.', 'Total Pax', 'Estado Pago', 'Ticket ID', 'Check Manual']],
         body: tableData,
         theme: 'grid',
         headStyles: { fillColor: [0, 0, 0], textColor: [212, 175, 55] },
         styles: { fontSize: 8 },
-        columnStyles: { 5: { cellWidth: 30 } }
+        columnStyles: { 3: { halign: 'center', cellWidth: 14 }, 4: { halign: 'center', cellWidth: 16 }, 7: { cellWidth: 25 } }
       });
 
       // Filas de Registro Manual

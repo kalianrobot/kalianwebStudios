@@ -29,6 +29,13 @@ const ControlAcceso = ({ isPuertaMode = false }: { isPuertaMode?: boolean }) => 
   const [verificarSocioSlot, setVerificarSocioSlot] = useState<number | null>(null);
   const [verifDni, setVerifDni] = useState('');
   const [verifMostrarScanner, setVerifMostrarScanner] = useState(false);
+  // Walk-in con verificación de socio
+  const [walkInAbierto, setWalkInAbierto] = useState(false);
+  const [walkInDni, setWalkInDni] = useState('');
+  const [walkInSocio, setWalkInSocio] = useState<any>(null);
+  const [walkInPrecio, setWalkInPrecio] = useState(0);
+  const [walkInScanner, setWalkInScanner] = useState(false);
+  const walkInScannerRef = useRef<Html5Qrcode | null>(null);
   const verifScannerRef = useRef<Html5Qrcode | null>(null);
 
   useEffect(() => {
@@ -100,6 +107,31 @@ const ControlAcceso = ({ isPuertaMode = false }: { isPuertaMode?: boolean }) => 
       };
     }
   }, [verifMostrarScanner, verificarSocioSlot]);
+
+  // Scanner para walk-in socio
+  useEffect(() => {
+    if (walkInScanner && walkInAbierto) {
+      const html5QrCode = new Html5Qrcode("walkin-reader");
+      walkInScannerRef.current = html5QrCode;
+      const config = { fps: 10, qrbox: { width: 250, height: 250 }, aspectRatio: 1.0 };
+      const onScan = (decodedText: string) => {
+        setWalkInScanner(false);
+        verificarWalkInSocio(decodedText.trim());
+      };
+      html5QrCode.start({ facingMode: "environment" }, config, onScan, () => {})
+        .catch(() => {
+          html5QrCode.start({ facingMode: "user" }, config, onScan, () => {})
+            .catch(e => { if (import.meta.env.DEV) console.error("Walk-in scanner error", e); });
+        });
+      return () => {
+        if (walkInScannerRef.current) {
+          const s = walkInScannerRef.current;
+          if (s.isScanning) s.stop().then(() => s.clear()).catch(() => {});
+          else s.clear();
+        }
+      };
+    }
+  }, [walkInScanner, walkInAbierto]);
 
   // Cargar eventos de HOY (rango: fecha empieza con YYYY-MM-DD de hoy)
   useEffect(() => {
@@ -439,51 +471,102 @@ const ControlAcceso = ({ isPuertaMode = false }: { isPuertaMode?: boolean }) => 
     }
   };
 
-  const walkInManual = async () => {
+  const abrirWalkIn = () => {
     if (!eventoSeleccionado) return;
-    
-    const aforoActual = eventoSeleccionado.aforo_actual || 0;
-    const aforoReservado = eventoSeleccionado.aforo_reservado || 0;
-    const aforoMax = eventoSeleccionado.aforo_maximo || 50;
-
-    // Lógica Crítica: Respetar reservas pendientes
-    if (aforoActual + aforoReservado + 1 > aforoMax) {
-      alert("⚠️ AFORO COMPLETO (Considerando reservas pendientes). No se puede permitir entrada sin reserva.");
+    const libres = getLibresReales();
+    if (libres <= 0) {
+      alert("⚠️ AFORO COMPLETO. No se puede permitir entrada sin reserva.");
       return;
     }
+    setWalkInSocio(null);
+    setWalkInDni('');
+    setWalkInPrecio(eventoSeleccionado.precio_estandar || 0);
+    setWalkInAbierto(true);
+  };
 
-    if (!window.confirm("¿Confirmar entrada manual (Walk-in)?")) return;
+  const verificarWalkInSocio = async (identifier: string) => {
+    if (!eventoSeleccionado) return;
+    const term = identifier.trim().toUpperCase();
+    if (!term) return;
 
     setCargando(true);
     try {
-      const precio = eventoSeleccionado.precio_estandar || 0;
+      let socioSnap = await getDoc(doc(db, "socios", term));
+      if (!socioSnap.exists()) {
+        const qSocio = query(collection(db, "socios"), where("uid", "==", identifier.trim()));
+        const snapSocio = await getDocs(qSocio);
+        if (!snapSocio.empty) socioSnap = snapSocio.docs[0];
+      }
+      if (!socioSnap.exists()) {
+        alert("❌ No se encontró ese soci@.");
+        setCargando(false);
+        return;
+      }
+      const sData: any = socioSnap.data();
+      const hoy = new Date().toISOString().split('T')[0];
+      const exp = sData.membresias || {};
+      const cat = eventoSeleccionado.categoria;
+      let activo = false;
+      if (cat === 'musica') activo = (exp['musica'] || '') >= hoy || (exp['local'] || '') >= hoy;
+      else if (cat === 'danza') activo = (exp['danza'] || '') >= hoy;
+      else activo = Object.values(exp).some((f: any) => (f || '') >= hoy);
+
+      if (!activo) {
+        alert(`⚠️ Soci@ ${sData.nombre} sin membresía activa para ${cat}. No se aplica descuento.`);
+        setCargando(false);
+        return;
+      }
+
+      setWalkInSocio({ id: socioSnap.id, ...sData });
+      setWalkInPrecio(eventoSeleccionado.precio_descuento || 0);
+    } catch (err) {
+      console.error(err);
+      alert("❌ Error al verificar socio");
+    }
+    setCargando(false);
+  };
+
+  const confirmarWalkIn = async () => {
+    if (!eventoSeleccionado) return;
+    const libres = getLibresReales();
+    if (libres <= 0) {
+      alert("⚠️ AFORO COMPLETO.");
+      return;
+    }
+
+    setCargando(true);
+    try {
+      const precio = walkInPrecio;
+      const esSocio = !!walkInSocio;
 
       await updateDoc(doc(db, "eventos", eventoSeleccionado.id), {
         aforo_actual: increment(1)
       });
 
-      // Registrar entrada manual
       await addDoc(collection(db, "asistencia_eventos"), {
         eventoId: eventoSeleccionado.id,
         tipo: 'walk-in',
         fecha: serverTimestamp(),
         staff: isAdmin ? 'admin' : 'portero',
-        precio: precio
+        precio: precio,
+        ...(esSocio ? { socioId: walkInSocio.id, nombre: walkInSocio.nombre } : {})
       });
 
-      // Registrar en Finanzas
       if (precio > 0) {
         await registrarIngreso({
           monto: precio,
-          concepto: `Entrada Puerta: ${eventoSeleccionado.titulo} (Walk-in)`,
+          concepto: `Entrada Puerta: ${eventoSeleccionado.titulo} (Walk-in${esSocio ? ' Soci@' : ''})`,
           categoria: 'Evento',
           metodo: metodoPago,
-          socio_id: 'anonimo',
+          socio_id: esSocio ? walkInSocio.id : 'anonimo',
           staff_id: user?.uid
         });
       }
 
-      setMsg(`✅ Entrada manual registrada. Cobrado: ${precio}€`);
+      setMsg(`✅ Walk-in registrado${esSocio ? ` (Soci@ ${walkInSocio.nombre})` : ''}. Cobrado: ${precio}€`);
+      setWalkInAbierto(false);
+      setWalkInSocio(null);
+      setWalkInDni('');
     } catch (err) {
       console.error(err);
       setMsg("❌ Error al registrar entrada");
@@ -942,22 +1025,105 @@ const ControlAcceso = ({ isPuertaMode = false }: { isPuertaMode?: boolean }) => 
                 )}
               </section>
 
-              {/* ENTRADA SIN RESERVA (WALK-IN MANUAL) */}
-              <section className="flex flex-col md:flex-row gap-6 items-center justify-between bg-black/40 border border-kalian-gold/20 rounded-[2.5rem] p-10">
-                <div className="text-center md:text-left">
-                  <div className="flex items-center gap-3 mb-2 justify-center md:justify-start">
-                    <UserPlus size={24} className="text-kalian-gold" />
-                    <h3 className="text-3xl kalian-poster-text text-kalian-cream uppercase leading-none">Entrada sin Reserva</h3>
+              {/* ENTRADA SIN RESERVA (WALK-IN) */}
+              <section className="bg-black/40 border border-kalian-gold/20 rounded-[2.5rem] p-10">
+                <div className="flex flex-col md:flex-row gap-6 items-center justify-between">
+                  <div className="text-center md:text-left">
+                    <div className="flex items-center gap-3 mb-2 justify-center md:justify-start">
+                      <UserPlus size={24} className="text-kalian-gold" />
+                      <h3 className="text-3xl kalian-poster-text text-kalian-cream uppercase leading-none">Entrada sin Reserva</h3>
+                    </div>
+                    <p className="text-[10px] font-bold uppercase tracking-widest text-kalian-cream/40">Solo si el aforo real + reservas lo permite</p>
                   </div>
-                  <p className="text-[10px] font-bold uppercase tracking-widest text-kalian-cream/40">Solo si el aforo real + reservas lo permite</p>
+                  {!walkInAbierto && (
+                    <button
+                      onClick={abrirWalkIn}
+                      disabled={cargando || getLibresReales() <= 0}
+                      className={`px-10 py-5 rounded-2xl kalian-poster-text text-2xl transition-all shadow-xl border ${getLibresReales() > 0 ? 'bg-kalian-gold/10 hover:bg-kalian-gold text-kalian-gold hover:text-black border-kalian-gold/30' : 'bg-white/5 text-white/20 border-white/5 cursor-not-allowed'}`}
+                    >
+                      {getLibresReales() > 0 ? '+ AÑADIR WALK-IN' : 'AFORO COMPLETO'}
+                    </button>
+                  )}
                 </div>
-                <button 
-                  onClick={walkInManual}
-                  disabled={cargando || getLibresReales() <= 0}
-                  className={`px-10 py-5 rounded-2xl kalian-poster-text text-2xl transition-all shadow-xl border ${getLibresReales() > 0 ? 'bg-kalian-gold/10 hover:bg-kalian-gold text-kalian-gold hover:text-black border-kalian-gold/30' : 'bg-white/5 text-white/20 border-white/5 cursor-not-allowed'}`}
-                >
-                  {getLibresReales() > 0 ? '+ AÑADIR WALK-IN' : 'AFORO COMPLETO'}
-                </button>
+
+                {walkInAbierto && (
+                  <div className="mt-8 space-y-6 border-t border-white/10 pt-8">
+                    {/* Precio actual */}
+                    <div className="flex items-center justify-between bg-white/5 rounded-2xl p-6">
+                      <div>
+                        <p className="text-[9px] font-black text-kalian-gold/60 uppercase tracking-[0.3em]">Precio a cobrar</p>
+                        <p className="text-4xl kalian-poster-text text-kalian-gold">{walkInPrecio}€</p>
+                      </div>
+                      {walkInSocio ? (
+                        <div className="text-right">
+                          <p className="text-xs font-black text-emerald-400 uppercase tracking-widest">SOCIO ✓</p>
+                          <p className="text-sm font-bold text-kalian-cream">{walkInSocio.nombre}</p>
+                          <p className="text-[9px] text-kalian-cream/40">DNI: {walkInSocio.id}</p>
+                        </div>
+                      ) : (
+                        <p className="text-xs font-bold text-kalian-cream/40 uppercase tracking-widest">Precio estándar</p>
+                      )}
+                    </div>
+
+                    {/* Verificar socio */}
+                    {!walkInSocio && (
+                      <div className="bg-indigo-500/10 border border-indigo-500/20 rounded-2xl p-6 space-y-4">
+                        <p className="text-[10px] font-black text-indigo-400 uppercase tracking-[0.3em]">¿Es soci@? Verificar para aplicar descuento</p>
+                        <div className="flex gap-3">
+                          <input
+                            type="text"
+                            placeholder="DNI del soci@"
+                            value={walkInDni}
+                            onChange={e => setWalkInDni(e.target.value)}
+                            className="flex-1 p-4 bg-white/5 rounded-xl border border-white/10 text-kalian-cream uppercase tracking-widest text-center focus:border-indigo-400 outline-none"
+                          />
+                          <button
+                            onClick={() => verificarWalkInSocio(walkInDni)}
+                            disabled={cargando || !walkInDni.trim()}
+                            className="px-6 py-4 bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl text-[10px] font-black uppercase tracking-widest transition-all disabled:opacity-30"
+                          >
+                            Verificar
+                          </button>
+                        </div>
+                        <div className="flex items-center gap-4">
+                          <div className="flex-1 h-px bg-white/10" />
+                          <span className="text-[9px] font-bold text-white/30 uppercase">o escanear carnet</span>
+                          <div className="flex-1 h-px bg-white/10" />
+                        </div>
+                        {walkInScanner ? (
+                          <div>
+                            <div id="walkin-reader" className="rounded-xl overflow-hidden" />
+                            <button onClick={() => setWalkInScanner(false)} className="mt-3 w-full text-center text-[10px] font-black text-red-400 uppercase tracking-widest">Cerrar cámara</button>
+                          </div>
+                        ) : (
+                          <button
+                            onClick={() => setWalkInScanner(true)}
+                            className="w-full py-4 bg-white/5 hover:bg-white/10 border border-white/10 rounded-xl text-kalian-cream text-[10px] font-black uppercase tracking-widest transition-all flex items-center justify-center gap-2"
+                          >
+                            <Camera size={16} /> Escanear QR Carnet
+                          </button>
+                        )}
+                      </div>
+                    )}
+
+                    {/* Botones confirmar / cancelar */}
+                    <div className="flex gap-4">
+                      <button
+                        onClick={() => { setWalkInAbierto(false); setWalkInSocio(null); setWalkInDni(''); setWalkInScanner(false); }}
+                        className="flex-1 py-5 text-[10px] font-black uppercase tracking-widest text-white/40 hover:text-white border border-white/10 rounded-2xl transition-all"
+                      >
+                        Cancelar
+                      </button>
+                      <button
+                        onClick={confirmarWalkIn}
+                        disabled={cargando}
+                        className="flex-[3] bg-kalian-gold text-black py-5 rounded-2xl kalian-poster-text text-2xl hover:bg-white transition-all shadow-xl"
+                      >
+                        CONFIRMAR ENTRADA • {walkInPrecio}€
+                      </button>
+                    </div>
+                  </div>
+                )}
               </section>
             </div>
           </div>

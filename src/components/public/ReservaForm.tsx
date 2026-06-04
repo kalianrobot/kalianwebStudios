@@ -289,12 +289,13 @@ const ReservaForm = ({ item, alCerrar }: ReservaFormProps) => {
         email: form.email, // Guardamos el email para el admin
         tipo: 'titular',
         estado: esSocioReal ? 'validado_socio' : 'pendiente',
-        precio: precioTitular
+        precio: precioTitular,
+        ingresado: false
       });
 
       if (!esCurso) {
         for (let i = 0; i < Number(form.acompañantes); i++) {
-          slots.push({ tipo: 'acompañante', estado: 'pendiente', precio: precioBase });
+          slots.push({ tipo: 'acompañante', estado: 'pendiente', precio: precioBase, ingresado: false });
         }
       }
 

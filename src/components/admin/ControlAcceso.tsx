@@ -18,7 +18,6 @@ const ControlAcceso = ({ isPuertaMode = false }: { isPuertaMode?: boolean }) => 
   const [eventoSeleccionado, setEventoSeleccionado] = useState<any>(null);
   const [busqueda, setBusqueda] = useState('');
   const [reservaEncontrada, setReservaEncontrada] = useState<any>(null);
-  const [personasEntran, setPersonasEntran] = useState(1);
   const [metodoPago, setMetodoPago] = useState<MetodoPago>('Efectivo');
   const [msg, setMsg] = useState('');
   const [cargando, setCargando] = useState(false);
@@ -26,6 +25,11 @@ const ControlAcceso = ({ isPuertaMode = false }: { isPuertaMode?: boolean }) => 
   const [mostrarResumen, setMostrarResumen] = useState(false);
   const [resumenHoy, setResumenHoy] = useState({ total: 0, count: 0 });
   const scannerRef = useRef<Html5Qrcode | null>(null);
+  // Verificación de socio por slot
+  const [verificarSocioSlot, setVerificarSocioSlot] = useState<number | null>(null);
+  const [verifDni, setVerifDni] = useState('');
+  const [verifMostrarScanner, setVerifMostrarScanner] = useState(false);
+  const verifScannerRef = useRef<Html5Qrcode | null>(null);
 
   useEffect(() => {
     if (!isPuertaMode && role !== 'admin' && role !== 'portero') {
@@ -72,12 +76,36 @@ const ControlAcceso = ({ isPuertaMode = false }: { isPuertaMode?: boolean }) => 
     }
   }, [mostrarScanner]);
 
-  // Cargar eventos activos (hoy)
+  // Escáner del modal de verificación de socio (lee QR del carnet)
+  useEffect(() => {
+    if (verifMostrarScanner && verificarSocioSlot !== null) {
+      const html5QrCode = new Html5Qrcode("verif-reader");
+      verifScannerRef.current = html5QrCode;
+      const config = { fps: 10, qrbox: { width: 200, height: 200 }, aspectRatio: 1.0 };
+      const onScan = (decodedText: string) => {
+        setVerifMostrarScanner(false);
+        verificarSlotComoSocio(verificarSocioSlot, decodedText);
+      };
+      html5QrCode.start({ facingMode: "environment" }, config, onScan, () => {})
+        .catch(() => {
+          html5QrCode.start({ facingMode: "user" }, config, onScan, () => {})
+            .catch(e => { if (import.meta.env.DEV) console.error("Verif scanner error", e); });
+        });
+      return () => {
+        if (verifScannerRef.current) {
+          const s = verifScannerRef.current;
+          if (s.isScanning) s.stop().then(() => s.clear()).catch(() => {});
+          else s.clear();
+        }
+      };
+    }
+  }, [verifMostrarScanner, verificarSocioSlot]);
+
+  // Cargar eventos de HOY (filtro estricto al día)
   useEffect(() => {
     const hoy = new Date().toISOString().split('T')[0];
-    const q = query(collection(db, "eventos"), where("fecha", ">=", hoy));
-    
-    // Solo suscribirse si hay un usuario autenticado para evitar Permission Denied iniciales
+    const q = query(collection(db, "eventos"), where("fecha", "==", hoy));
+
     if (!user) return;
 
     const unsubscribe = onSnapshot(q, (snap) => {
@@ -91,11 +119,31 @@ const ControlAcceso = ({ isPuertaMode = false }: { isPuertaMode?: boolean }) => 
     });
 
     return () => unsubscribe();
-  }, [eventoSeleccionado]);
+  }, [eventoSeleccionado, user]);
+
+  // Construye slots virtuales para reservas legacy sin el campo `slots`
+  const slotsDesdeReserva = (r: any) => {
+    if (Array.isArray(r.slots) && r.slots.length > 0) return r.slots;
+    const total = 1 + (r.acompañantes || 0);
+    const precioBase = r.precioPorPersona || r.totalPagado / Math.max(1, total) || 0;
+    const titular = {
+      tipo: 'titular',
+      nombre: r.nombreTitular,
+      dni: r.dniTitular,
+      email: r.emailTitular,
+      estado: r.esSocio ? 'validado_socio' : 'pendiente',
+      precio: precioBase,
+      ingresado: false
+    };
+    const acomps = Array.from({ length: total - 1 }, () => ({
+      tipo: 'acompañante', estado: 'pendiente', precio: precioBase, ingresado: false
+    }));
+    return [titular, ...acomps];
+  };
 
   const buscarReserva = async (override?: string) => {
     const raw = (override ?? busqueda).trim();
-    if (!raw || !eventoSeleccionado) return;
+    if (!raw) return;
     setCargando(true);
     setMsg('');
     setReservaEncontrada(null);
@@ -103,37 +151,65 @@ const ControlAcceso = ({ isPuertaMode = false }: { isPuertaMode?: boolean }) => 
 
     try {
       const term = raw.toUpperCase();
+      // Extraer ticketID si viene en formato KALIAN-RES-XXXXXX
+      const ticketMatch = term.match(/^KALIAN-RES-([A-Z0-9]+)$/);
+      const ticketID = ticketMatch ? ticketMatch[1] : (term.length === 6 ? term : null);
 
-      // 1. Buscar por ticketID o DNI en reservas
-      const q = query(
-        collection(db, "reservas"),
-        where("eventoId", "==", eventoSeleccionado.id)
-      );
-      const snap = await getDocs(q);
-      const todas = snap.docs.map(d => ({ id: d.id, ...d.data() })) as any[];
-
-      const encontrada = todas.find(r =>
-        r.ticketID === term ||
-        r.dniTitular === term ||
-        r.uidTitular === raw ||
-        (r.ticketID && `KALIAN-RES-${r.ticketID}` === term)
-      );
-
-      if (encontrada) {
-        const total = 1 + (encontrada.acompañantes || 0);
-        const ingresados = encontrada.asistentes_ingresados || 0;
-        
-        if (ingresados >= total) {
-          setMsg("❌ CUPO COMPLETO: Ya han entrado todos los asistentes de esta reserva");
-        } else {
-          setReservaEncontrada(encontrada);
-          setPersonasEntran(1);
+      // 1. Si parece un ticketID, buscar globalmente (sin atarse al evento seleccionado)
+      if (ticketID) {
+        const qTicket = query(collection(db, "reservas"), where("ticketID", "==", ticketID));
+        const snapTicket = await getDocs(qTicket);
+        if (!snapTicket.empty) {
+          const encontrada = { id: snapTicket.docs[0].id, ...snapTicket.docs[0].data() } as any;
+          const eventoDeReserva = eventos.find(e => e.id === encontrada.eventoId);
+          if (!eventoDeReserva) {
+            setMsg(`❌ Esta reserva es para "${encontrada.eventoTitulo}" el ${encontrada.fechaActividad}, no para hoy.`);
+            setCargando(false);
+            return;
+          }
+          // Asegurar que el evento de la reserva es el seleccionado
+          if (eventoSeleccionado?.id !== eventoDeReserva.id) {
+            setEventoSeleccionado(eventoDeReserva);
+          }
+          const slots = slotsDesdeReserva(encontrada);
+          if (slots.every((s: any) => s.ingresado)) {
+            setMsg("❌ CUPO COMPLETO: Ya han entrado todos los asistentes de esta reserva");
+          } else {
+            setReservaEncontrada({ ...encontrada, slots });
+          }
+          setCargando(false);
+          return;
         }
+      }
+
+      // 2. Si no era ticketID o no se encontró, buscar dentro del evento seleccionado
+      if (eventoSeleccionado) {
+        const q = query(collection(db, "reservas"), where("eventoId", "==", eventoSeleccionado.id));
+        const snap = await getDocs(q);
+        const todas = snap.docs.map(d => ({ id: d.id, ...d.data() })) as any[];
+        const encontrada = todas.find(r =>
+          r.ticketID === term ||
+          r.dniTitular === term ||
+          r.uidTitular === raw
+        );
+        if (encontrada) {
+          const slots = slotsDesdeReserva(encontrada);
+          if (slots.every((s: any) => s.ingresado)) {
+            setMsg("❌ CUPO COMPLETO: Ya han entrado todos los asistentes de esta reserva");
+          } else {
+            setReservaEncontrada({ ...encontrada, slots });
+          }
+          setCargando(false);
+          return;
+        }
+      }
+
+      // 3. Buscar como socio (QR de carnet). Requiere evento seleccionado.
+      if (!eventoSeleccionado) {
+        setMsg("⚠️ Selecciona un evento para registrar la entrada de soci@.");
         setCargando(false);
         return;
       }
-
-      // 2. Si no hay reserva, buscar si es un socio (Carnet QR)
       let socioSnap = await getDoc(doc(db, "socios", term));
       if (!socioSnap.exists()) {
         const qSocio = query(collection(db, "socios"), where("uid", "==", raw));
@@ -143,10 +219,8 @@ const ControlAcceso = ({ isPuertaMode = false }: { isPuertaMode?: boolean }) => 
 
       if (socioSnap.exists()) {
         const sData = socioSnap.data();
-        // Verificar si ya entró hoy
         const asistenciaRef = doc(db, "asistencia_eventos", `${eventoSeleccionado.id}_${socioSnap.id}`);
         const asistenciaSnap = await getDoc(asistenciaRef);
-        
         if (asistenciaSnap.exists()) {
           setMsg("❌ ERROR: Carnet ya utilizado para este evento");
         } else {
@@ -229,44 +303,139 @@ const ControlAcceso = ({ isPuertaMode = false }: { isPuertaMode?: boolean }) => 
     setCargando(false);
   };
 
-  const confirmarCheckIn = async () => {
+  // Verifica un slot como socio: valida contra colección `socios` y aplica descuento.
+  // identifier puede ser DNI (doc id de socios) o UID (campo `uid`).
+  const verificarSlotComoSocio = async (slotIdx: number, identifier: string) => {
     if (!reservaEncontrada || !eventoSeleccionado) return;
-    
-    const total = 1 + (reservaEncontrada.acompañantes || 0);
-    const ingresados = reservaEncontrada.asistentes_ingresados || 0;
-    const restantes = total - ingresados;
-
-    if (personasEntran > restantes) {
-      alert(`⚠️ Solo quedan ${restantes} plazas disponibles en esta reserva.`);
-      return;
-    }
+    const term = identifier.trim().toUpperCase();
+    if (!term) return;
 
     setCargando(true);
     try {
-      const nuevosIngresados = ingresados + personasEntran;
-      
+      let socioSnap = await getDoc(doc(db, "socios", term));
+      if (!socioSnap.exists()) {
+        const qSocio = query(collection(db, "socios"), where("uid", "==", identifier.trim()));
+        const snapSocio = await getDocs(qSocio);
+        if (!snapSocio.empty) socioSnap = snapSocio.docs[0];
+      }
+      if (!socioSnap.exists()) {
+        alert("❌ No se encontró ese soci@.");
+        setCargando(false);
+        return;
+      }
+      const sData: any = socioSnap.data();
+      const hoy = new Date().toISOString().split('T')[0];
+      const exp = sData.membresias || {};
+      const cat = eventoSeleccionado.categoria;
+      let activo = false;
+      if (cat === 'musica') activo = (exp['musica'] || '') >= hoy || (exp['local'] || '') >= hoy;
+      else if (cat === 'danza') activo = (exp['danza'] || '') >= hoy;
+      else activo = Object.values(exp).some((f: any) => (f || '') >= hoy);
+
+      if (!activo) {
+        alert(`⚠️ Soci@ ${sData.nombre} sin membresía activa para ${cat}. No se aplica descuento.`);
+        setCargando(false);
+        return;
+      }
+
+      const precioDescuento = eventoSeleccionado.precio_descuento || 0;
+      const nuevosSlots = [...reservaEncontrada.slots];
+      nuevosSlots[slotIdx] = {
+        ...nuevosSlots[slotIdx],
+        estado: 'validado_socio',
+        precio: precioDescuento,
+        socio_id: socioSnap.id,
+        socio_nombre: sData.nombre
+      };
+      setReservaEncontrada({ ...reservaEncontrada, slots: nuevosSlots });
+      setVerificarSocioSlot(null);
+      setVerifDni('');
+      setVerifMostrarScanner(false);
+      setMsg(`✅ Soci@ verificado: ${sData.nombre}. Precio actualizado a ${precioDescuento}€.`);
+    } catch (err) {
+      console.error(err);
+      alert("Error verificando soci@.");
+    }
+    setCargando(false);
+  };
+
+  // Confirma la entrada de un slot concreto: persiste, cobra, actualiza aforo.
+  const entrarSlot = async (slotIdx: number) => {
+    if (!reservaEncontrada || !eventoSeleccionado) return;
+    const slot = reservaEncontrada.slots[slotIdx];
+    if (!slot || slot.ingresado) return;
+
+    setCargando(true);
+    try {
+      const nuevosSlots = [...reservaEncontrada.slots];
+      nuevosSlots[slotIdx] = { ...slot, ingresado: true };
+      const nuevosIngresados = nuevosSlots.filter((s: any) => s.ingresado).length;
+      const total = nuevosSlots.length;
+
       // 1. Actualizar reserva
       await updateDoc(doc(db, "reservas", reservaEncontrada.id), {
+        slots: nuevosSlots,
         asistentes_ingresados: nuevosIngresados,
         estado: nuevosIngresados >= total ? 'validado' : 'pendiente',
         ultimaEntrada: serverTimestamp()
       });
 
-      // 2. Actualizar aforo del evento
-      // Restamos de lo reservado (compromiso) y sumamos a lo real
+      // 2. Aforo del evento
       await updateDoc(doc(db, "eventos", eventoSeleccionado.id), {
-        aforo_reservado: increment(-personasEntran),
-        aforo_actual: increment(personasEntran)
+        aforo_reservado: increment(-1),
+        aforo_actual: increment(1)
       });
 
-      setMsg(`✅ Entrada confirmada: ${personasEntran} personas.`);
-      setReservaEncontrada(null);
-      setBusqueda('');
+      // 3. Caja del mes
+      const mesAnio = new Date().toISOString().substring(0, 7);
+      await setDoc(doc(db, "caja_eventos", mesAnio), {
+        total: increment(slot.precio || 0),
+        ultimaActualizacion: serverTimestamp()
+      }, { merge: true });
+
+      // 4. Asistencia
+      await addDoc(collection(db, "asistencia_eventos"), {
+        eventoId: eventoSeleccionado.id,
+        reservaId: reservaEncontrada.id,
+        ticketID: reservaEncontrada.ticketID,
+        slotTipo: slot.tipo,
+        slotNombre: slot.nombre || null,
+        slotDni: slot.dni || null,
+        socioId: slot.socio_id || null,
+        fecha: serverTimestamp(),
+        precio: slot.precio || 0,
+        tipo: slot.estado === 'validado_socio' ? 'reserva_socio' : 'reserva'
+      });
+
+      // 5. Finanzas
+      if ((slot.precio || 0) > 0) {
+        await registrarIngreso({
+          monto: slot.precio,
+          concepto: `Entrada Evento: ${eventoSeleccionado.titulo} (${slot.tipo}${slot.estado === 'validado_socio' ? ' Soci@' : ''})`,
+          categoria: 'Evento',
+          metodo: metodoPago,
+          socio_id: slot.socio_id || 'anonimo',
+          staff_id: user?.uid
+        });
+      }
+
+      setReservaEncontrada({ ...reservaEncontrada, slots: nuevosSlots, asistentes_ingresados: nuevosIngresados });
+      setMsg(`✅ Entrada registrada (${slot.precio || 0}€). ${nuevosIngresados}/${total}`);
     } catch (err) {
       console.error(err);
-      setMsg("❌ Error al procesar entrada");
+      setMsg("❌ Error al registrar entrada");
     }
     setCargando(false);
+  };
+
+  const entrarTodosPendientes = async () => {
+    if (!reservaEncontrada) return;
+    const pendientes = reservaEncontrada.slots
+      .map((s: any, i: number) => ({ s, i }))
+      .filter(({ s }: any) => !s.ingresado);
+    for (const { i } of pendientes) {
+      await entrarSlot(i);
+    }
   };
 
   const walkInManual = async () => {
@@ -601,61 +770,96 @@ const ControlAcceso = ({ isPuertaMode = false }: { isPuertaMode?: boolean }) => 
                 {/* TARJETA DE VALIDACIÓN RESERVA */}
                 {reservaEncontrada && (
                   <div className="bg-white border-4 border-kalian-gold rounded-[2.5rem] p-8 md:p-10 animate-in fade-in zoom-in duration-300 shadow-2xl">
-                    <div className="flex justify-between items-start mb-8">
+                    <div className="flex justify-between items-start mb-6">
                       <div>
                         <p className="text-[10px] font-black text-black/40 uppercase tracking-widest mb-1">Titular de la Reserva</p>
-                        <h4 className="text-5xl kalian-poster-text uppercase leading-none">{reservaEncontrada.nombreTitular}</h4>
+                        <h4 className="text-4xl md:text-5xl kalian-poster-text uppercase leading-none">{reservaEncontrada.nombreTitular}</h4>
                         <p className="text-xs font-bold text-black/60 mt-3 uppercase tracking-widest">{reservaEncontrada.dniTitular}</p>
+                        <p className="text-[10px] font-black text-kalian-gold mt-2 uppercase tracking-widest">{reservaEncontrada.eventoTitulo} • {reservaEncontrada.fechaActividad}</p>
                       </div>
                       <div className="text-right">
-                        <p className="text-[10px] font-black text-black/40 uppercase tracking-widest mb-1">Total Reserva</p>
-                        <p className="text-6xl kalian-poster-text text-kalian-gold">{1 + (reservaEncontrada.acompañantes || 0)}</p>
+                        <p className="text-[10px] font-black text-black/40 uppercase tracking-widest mb-1">Total</p>
+                        <p className="text-6xl kalian-poster-text text-kalian-gold">{reservaEncontrada.slots.length}</p>
                       </div>
                     </div>
 
-                    <div className="mb-10">
+                    <div className="mb-6">
                       <div className="flex justify-between text-[10px] font-black uppercase tracking-widest mb-3">
-                        <span>Progreso de Entrada</span>
-                        <span>{reservaEncontrada.asistentes_ingresados || 0} de {1 + (reservaEncontrada.acompañantes || 0)}</span>
+                        <span>Progreso</span>
+                        <span>{reservaEncontrada.slots.filter((s: any) => s.ingresado).length} de {reservaEncontrada.slots.length}</span>
                       </div>
-                      <div className="w-full h-6 bg-black/5 rounded-full overflow-hidden border-2 border-black/5">
-                        <div 
-                          className="h-full bg-kalian-gold transition-all duration-700 ease-out"
-                          style={{ width: `${((reservaEncontrada.asistentes_ingresados || 0) / (1 + (reservaEncontrada.acompañantes || 0))) * 100}%` }}
-                        ></div>
+                      <div className="w-full h-4 bg-black/5 rounded-full overflow-hidden border-2 border-black/5">
+                        <div className="h-full bg-kalian-gold transition-all duration-700 ease-out"
+                             style={{ width: `${(reservaEncontrada.slots.filter((s: any) => s.ingresado).length / reservaEncontrada.slots.length) * 100}%` }}></div>
                       </div>
                     </div>
 
-                    <div className="bg-black/5 p-8 rounded-[2rem] mb-8">
-                      <label className="block text-center text-[10px] font-black uppercase tracking-widest text-black/40 mb-6">¿Cuántas personas entran ahora?</label>
-                      <div className="flex items-center justify-center gap-10">
-                        <button 
-                          onClick={() => setPersonasEntran(Math.max(1, personasEntran - 1))}
-                          className="w-20 h-20 bg-white border border-black/10 rounded-3xl kalian-poster-text text-5xl hover:bg-black hover:text-kalian-gold transition-all shadow-lg">-</button>
-                        <span className="text-8xl kalian-poster-text">{personasEntran}</span>
-                        <button 
-                          onClick={() => {
-                            const maxPosible = (1 + (reservaEncontrada.acompañantes || 0)) - (reservaEncontrada.asistentes_ingresados || 0);
-                            setPersonasEntran(Math.min(maxPosible, personasEntran + 1));
-                          }}
-                          className="w-20 h-20 bg-white border border-black/10 rounded-3xl kalian-poster-text text-5xl hover:bg-black hover:text-kalian-gold transition-all shadow-lg">+</button>
-                      </div>
+                    <div className="space-y-3 mb-6">
+                      {reservaEncontrada.slots.map((slot: any, idx: number) => {
+                        const esSocio = slot.estado === 'validado_socio';
+                        const yaEntro = !!slot.ingresado;
+                        const label = slot.tipo === 'titular' ? 'Titular' : `Acompañante ${idx}`;
+                        return (
+                          <div key={idx} className={`rounded-2xl border-2 p-4 ${yaEntro ? 'bg-emerald-50 border-emerald-200' : 'bg-black/5 border-black/10'}`}>
+                            <div className="flex flex-wrap items-center justify-between gap-3">
+                              <div className="flex-1 min-w-[140px]">
+                                <p className="text-[9px] font-black uppercase tracking-widest text-black/40">{label}</p>
+                                <p className="text-base font-black uppercase">{slot.nombre || (slot.tipo === 'titular' ? reservaEncontrada.nombreTitular : '—')}</p>
+                                <div className="flex items-center gap-2 mt-1 flex-wrap">
+                                  {esSocio ? (
+                                    <span className="bg-emerald-500 text-white text-[8px] font-black uppercase tracking-widest px-2 py-1 rounded-full">SOCIO ✓ {slot.socio_nombre ? `(${slot.socio_nombre})` : ''}</span>
+                                  ) : (
+                                    <span className="bg-black/10 text-black/60 text-[8px] font-black uppercase tracking-widest px-2 py-1 rounded-full">Precio normal</span>
+                                  )}
+                                  <span className="text-lg kalian-poster-text">{(slot.precio || 0)}€</span>
+                                </div>
+                              </div>
+                              <div className="flex gap-2 flex-wrap">
+                                {yaEntro ? (
+                                  <span className="bg-emerald-600 text-white px-4 py-3 rounded-xl kalian-poster-text text-base">✓ ENTRÓ</span>
+                                ) : (
+                                  <>
+                                    {!esSocio && (
+                                      <button
+                                        onClick={() => { setVerificarSocioSlot(idx); setVerifDni(''); setVerifMostrarScanner(false); }}
+                                        disabled={cargando}
+                                        className="bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-3 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all"
+                                      >
+                                        Verificar Socio
+                                      </button>
+                                    )}
+                                    <button
+                                      onClick={() => entrarSlot(idx)}
+                                      disabled={cargando}
+                                      className="bg-black hover:bg-emerald-600 text-kalian-gold hover:text-white px-5 py-3 rounded-xl kalian-poster-text text-lg transition-all"
+                                    >
+                                      ENTRAR
+                                    </button>
+                                  </>
+                                )}
+                              </div>
+                            </div>
+                          </div>
+                        );
+                      })}
                     </div>
 
                     <div className="flex gap-4">
-                      <button 
+                      <button
                         onClick={() => setReservaEncontrada(null)}
                         className="flex-1 text-[10px] font-black uppercase tracking-widest text-black/40 hover:text-black transition-colors"
                       >
                         Cancelar
                       </button>
-                      <button 
-                        onClick={confirmarCheckIn}
-                        disabled={cargando}
-                        className="flex-[3] bg-black text-kalian-gold py-6 rounded-2xl kalian-poster-text text-3xl hover:bg-emerald-600 hover:text-white transition-all shadow-2xl"
-                      >
-                        CONFIRMAR ENTRADA
-                      </button>
+                      {reservaEncontrada.slots.some((s: any) => !s.ingresado) && (
+                        <button
+                          onClick={entrarTodosPendientes}
+                          disabled={cargando}
+                          className="flex-[3] bg-black text-kalian-gold py-6 rounded-2xl kalian-poster-text text-2xl hover:bg-emerald-600 hover:text-white transition-all shadow-2xl"
+                        >
+                          ENTRAR TODOS LOS PENDIENTES
+                        </button>
+                      )}
                     </div>
                   </div>
                 )}
@@ -755,12 +959,67 @@ const ControlAcceso = ({ isPuertaMode = false }: { isPuertaMode?: boolean }) => 
               </div>
             </div>
 
-            <button 
+            <button
               onClick={() => setMostrarResumen(false)}
               className="w-full bg-kalian-gold text-black py-5 rounded-2xl kalian-poster-text text-xl hover:bg-white transition-all"
             >
               ENTENDIDO
             </button>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL VERIFICAR SOCIO (acompañante) */}
+      {verificarSocioSlot !== null && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/90 backdrop-blur-sm">
+          <div className="bg-kalian-dark border border-indigo-500/30 rounded-[3rem] p-8 max-w-md w-full shadow-2xl">
+            <div className="text-center mb-6">
+              <h2 className="text-3xl kalian-poster-text text-indigo-400 uppercase">Verificar Soci@</h2>
+              <p className="text-[10px] font-black uppercase tracking-[0.3em] text-indigo-400/40 mt-2">Aplica descuento a esta entrada</p>
+            </div>
+
+            {verifMostrarScanner ? (
+              <div className="space-y-4">
+                <p className="text-[10px] font-black uppercase tracking-widest text-kalian-cream/60 text-center">Apunta al QR del carnet</p>
+                <div id="verif-reader" className="overflow-hidden rounded-2xl bg-black/50 aspect-square max-w-xs mx-auto"></div>
+                <button onClick={() => setVerifMostrarScanner(false)} className="w-full text-[10px] font-black uppercase tracking-widest text-kalian-cream/40 hover:text-kalian-cream py-3">
+                  Cancelar escáner
+                </button>
+              </div>
+            ) : (
+              <div className="space-y-4">
+                <button
+                  onClick={() => setVerifMostrarScanner(true)}
+                  className="w-full bg-indigo-600 hover:bg-indigo-700 text-white p-5 rounded-2xl kalian-poster-text text-xl uppercase flex items-center justify-center gap-3"
+                >
+                  <Camera size={20} /> Escanear QR Carnet
+                </button>
+                <div className="text-center text-[10px] font-black uppercase tracking-widest text-kalian-cream/40">o</div>
+                <div className="space-y-2">
+                  <p className="text-[9px] font-black uppercase tracking-widest text-kalian-cream/60">DNI del Soci@</p>
+                  <input
+                    type="text"
+                    value={verifDni}
+                    onChange={(e) => setVerifDni(e.target.value)}
+                    placeholder="12345678A"
+                    className="w-full p-4 bg-white/5 rounded-xl border border-white/10 text-kalian-cream text-center uppercase tracking-widest focus:border-indigo-500 outline-none"
+                  />
+                  <button
+                    onClick={() => verificarSlotComoSocio(verificarSocioSlot, verifDni)}
+                    disabled={cargando || !verifDni.trim()}
+                    className="w-full bg-indigo-600 hover:bg-indigo-700 disabled:opacity-40 text-white p-4 rounded-xl kalian-poster-text uppercase tracking-widest"
+                  >
+                    Comprobar DNI
+                  </button>
+                </div>
+                <button
+                  onClick={() => { setVerificarSocioSlot(null); setVerifDni(''); }}
+                  className="w-full text-[10px] font-black uppercase tracking-widest text-kalian-cream/40 hover:text-kalian-cream py-3"
+                >
+                  Cancelar
+                </button>
+              </div>
+            )}
           </div>
         </div>
       )}

@@ -26,10 +26,10 @@ const ControlAcceso = ({ isPuertaMode = false }: { isPuertaMode?: boolean }) => 
   const [resumenHoy, setResumenHoy] = useState({ total: 0, count: 0 });
   const scannerRef = useRef<Html5Qrcode | null>(null);
 
-  // Seguridad: Solo admin o portero, o modo puerta validado
+  // Seguridad: modo puerta validado o admin
   useEffect(() => {
     const puertaToken = sessionStorage.getItem('kalian_puerta_token');
-    if (!isPuertaMode && !puertaToken && role !== 'admin' && role !== 'portero') {
+    if (!isPuertaMode && !puertaToken && role !== 'admin') {
       navigate('/');
     }
   }, [role, navigate, isPuertaMode]);

@@ -249,10 +249,15 @@ const AdminSocios = () => {
           fechaActualizacion: new Date().toISOString()
         });
 
-        const finanzaId = `CUOTA_${anioActual}_${mesActual}_${socioId}`;
-        batch.update(doc(db, "finanzas", finanzaId), {
-          deletedAt: serverTimestamp()
-        });
+        // Los pagos cubiertos por local no tienen un doc CUOTA_* en finanzas (es un bulk por local).
+        // Solo intentamos borrar la transacción de finanzas para pagos directos de socio.
+        const esLocal = snap.exists() && snap.data().localId;
+        if (!esLocal) {
+          const finanzaId = `CUOTA_${anioActual}_${mesActual}_${socioId}`;
+          batch.update(doc(db, "finanzas", finanzaId), {
+            deletedAt: serverTimestamp()
+          });
+        }
 
         await batch.commit();
         await syncSocioStatus(socio.id);

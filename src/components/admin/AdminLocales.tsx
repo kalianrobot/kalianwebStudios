@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { db } from '../../firebase';
-import { collection, getDocs, updateDoc, doc, DocumentData, setDoc, getDoc, query, where, writeBatch, onSnapshot } from 'firebase/firestore';
+import { collection, getDocs, updateDoc, doc, DocumentData, setDoc, getDoc, query, where, writeBatch, onSnapshot, deleteField } from 'firebase/firestore';
 import { Link } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
 import { registrarIngreso, MetodoPago } from '../../lib/finanzas';
@@ -239,7 +239,24 @@ const AdminLocales = () => {
         }
       }
 
-      // 3. Sincronizar Inquilinos como Socios
+      // 3. Limpiar localId para inquilinos eliminados
+      const viejosDNIs = new Set(
+        (localOriginal?.inquilinos || []).map((i: any) => i.dni?.toUpperCase()).filter(Boolean)
+      );
+      const nuevosDNIs = new Set(
+        (editando.inquilinos || []).map((i: any) => i.dni?.toUpperCase()).filter(Boolean)
+      );
+      const dnisBorrados = [...viejosDNIs].filter(dni => !nuevosDNIs.has(dni as string));
+
+      for (const dni of dnisBorrados) {
+        const socioRef = doc(db, "socios", dni as string);
+        const sSnap = await getDoc(socioRef);
+        if (sSnap.exists() && sSnap.data().localId === editando.id) {
+          await updateDoc(socioRef, { localId: deleteField() });
+        }
+      }
+
+      // 4. Sincronizar Inquilinos como Socios
       if (editando.alquilado && editando.inquilinos) {
         for (const inq of editando.inquilinos) {
           if (!inq.dni) continue;

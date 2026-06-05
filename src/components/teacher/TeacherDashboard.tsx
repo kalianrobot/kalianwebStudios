@@ -6,6 +6,7 @@ import { useAuth } from '../../context/AuthContext';
 import { useLanguage } from '../../context/LanguageContext';
 import { Link } from 'react-router-dom';
 import { registrarIngreso, MetodoPago } from '../../lib/finanzas';
+import { fetchConfig } from '../../lib/configService';
 import { syncSocioStatus } from '../../lib/socioService';
 import KalianCalendar from '../shared/KalianCalendar';
 
@@ -32,6 +33,7 @@ const TeacherDashboard = () => {
   const [anioParaPago, setAnioParaPago] = useState<number>(new Date().getFullYear());
   const [notificaciones, setNotificaciones] = useState<DocumentData[]>([]);
   const [showNotifs, setShowNotifs] = useState(false);
+  const [cuotaGlobal, setCuotaGlobal] = useState(15);
   const { user, socioData, logoutTeacher } = useAuth();
   const { t } = useLanguage();
 
@@ -50,9 +52,11 @@ const TeacherDashboard = () => {
   const usagePercent = Math.min(100, (storageUsage / storageLimit) * 100);
   const usageMB = (storageUsage / (1024 * 1024)).toFixed(2);
 
-  useEffect(() => { 
+  useEffect(() => {
     if (!user) return;
-    
+
+    fetchConfig().then(conf => setCuotaGlobal(conf.cuotaMensualSocio));
+
     // Listen to cursos
     const qC = query(collection(db, "cursos"), where("profesorId", "==", user.uid));
     const unsubC = onSnapshot(qC, (snap) => {
@@ -233,12 +237,13 @@ const TeacherDashboard = () => {
         anio: anioParaPago,
         pagado: true,
         bloqueado: true,
+        monto: cuotaGlobal,
         actualizadoPor: user?.uid,
         fechaActualizacion: new Date().toISOString()
       }, { merge: true });
 
       await registrarIngreso({
-        monto: 15,
+        monto: cuotaGlobal,
         concepto: `Cuota Soci@ ${mesesES[mesParaPago-1]} ${anioParaPago}`,
         categoria: 'Socio',
         metodo: metodoPago,

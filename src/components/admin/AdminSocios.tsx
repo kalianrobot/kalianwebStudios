@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { db } from '../../firebase';
-import { collection, getDocs, getDocsFromServer, limit, doc, setDoc, getDoc, query, orderBy, DocumentData, deleteDoc, where, onSnapshot, writeBatch, serverTimestamp } from 'firebase/firestore';
+import { collection, getDocs, getDocsFromServer, limit, doc, setDoc, getDoc, query, orderBy, DocumentData, deleteDoc, where, onSnapshot, writeBatch, serverTimestamp, deleteField } from 'firebase/firestore';
 import { Link } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
 import { createSocioAuth } from '../../lib/adminAuth';
@@ -65,7 +65,11 @@ const AdminSocios = () => {
   const handleDeleteDuplicado = async (id: string) => {
     if (!window.confirm(`¿Borrar definitivamente el socio "${id}"?\n\nSe hace soft-delete (deletedAt). Esto NO ajusta entradas existentes en pagos_mensuales ni en finanzas: si este socio ya generó un pago de local este mes, reversa el pago del local antes de borrarlo.`)) return;
     try {
-      await updateDoc(doc(db, "socios", id), { deletedAt: serverTimestamp() });
+      await updateDoc(doc(db, "socios", id), {
+        deletedAt: serverTimestamp(),
+        localId: deleteField(),
+        'membresias.local': deleteField()
+      });
       setMsg("✅ Duplicado movido a la papelera");
       setTimeout(() => setMsg(''), 3000);
     } catch (err) {

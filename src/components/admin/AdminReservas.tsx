@@ -194,6 +194,7 @@ const AdminReservas = () => {
       (r.nombreTitular || '').toLowerCase().includes(f) ||
       (r.dniTitular || '').toLowerCase().includes(f) ||
       (r.emailTitular || '').toLowerCase().includes(f) ||
+      (r.uidTitular || '').toLowerCase().includes(f) ||
       (r.eventoTitulo || '').toLowerCase().includes(f) ||
       (r.ticketID || '').toLowerCase().includes(f)
     );
@@ -223,7 +224,7 @@ const AdminReservas = () => {
             type="text"
             value={filtro}
             onChange={e => setFiltro(e.target.value)}
-            placeholder="Buscar por nombre, DNI, email, evento o ticket…"
+            placeholder="Buscar por nombre, DNI, email, UID, evento o ticket…"
             className="flex-1 px-5 py-3 rounded-xl border border-slate-200 bg-white text-sm focus:outline-none focus:ring-2 focus:ring-slate-900"
           />
           <label className="flex items-center gap-2 px-4 py-3 bg-white rounded-xl border border-slate-200 text-[11px] font-black uppercase tracking-widest text-slate-700 cursor-pointer select-none">
@@ -275,6 +276,9 @@ const AdminReservas = () => {
                       <td className="p-4">
                         <div className="font-bold text-slate-900">{r.nombreTitular || '—'}</div>
                         <div className="text-[11px] text-slate-500">{r.dniTitular || '—'}</div>
+                        {r.uidTitular && r.uidTitular !== 'invitado' && (
+                          <div className="text-[9px] text-slate-400 font-mono truncate max-w-[140px]" title={r.uidTitular}>uid: {r.uidTitular}</div>
+                        )}
                         <div className="mt-1 flex gap-1 flex-wrap">
                           {esInvitado && (
                             <span className="px-2 py-0.5 bg-amber-100 text-amber-800 rounded text-[9px] font-black uppercase">Invitado</span>

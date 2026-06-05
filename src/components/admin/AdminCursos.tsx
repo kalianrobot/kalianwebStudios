@@ -5,6 +5,7 @@ import { Link, useSearchParams } from 'react-router-dom';
 import { Trash2 } from 'lucide-react';
 import { syncMultipleSocios } from '../../lib/socioService';
 import { normalizeToSlug } from '../../lib/slug';
+import { registrarIngreso, MetodoPago } from '../../lib/finanzas';
 
 import { createSocioAuth } from '../../lib/adminAuth';
 import { sendWelcomeEmail, sendMembershipUpdateEmail } from '../../lib/brevoService';
@@ -68,6 +69,116 @@ const AdminCursos = () => {
   const [solicitudes, setSolicitudes] = useState<DocumentData[]>([]);
   const [manualAlumno, setManualAlumno] = useState({ dni: '', nombre: '', email: '' });
   const [tabActiva, setTabActiva] = useState<'activos' | 'proximos' | 'historico'>('activos');
+  const [pagosPorCurso, setPagosPorCurso] = useState<Record<string, { count: number; total: number }>>({});
+  const [metodoPagoCierre, setMetodoPagoCierre] = useState<MetodoPago>('Transferencia');
+  const [cerrandoId, setCerrandoId] = useState<string | null>(null);
+
+  const mesActual = new Date().getMonth() + 1;
+  const anioActual = new Date().getFullYear();
+  const mesAnioKey = `${anioActual}_${mesActual}`;
+  const mesesES = ["Enero","Febrero","Marzo","Abril","Mayo","Junio","Julio","Agosto","Septiembre","Octubre","Noviembre","Diciembre"];
+
+  const fetchPagosMensualesCurso = async () => {
+    try {
+      const q = query(
+        collection(db, "pagos_mensuales"),
+        where("mes", "==", mesActual),
+        where("anio", "==", anioActual),
+        where("pagado", "==", true)
+      );
+      const snap = await getDocs(q);
+      const map: Record<string, { count: number; total: number }> = {};
+      snap.docs.forEach(d => {
+        const data = d.data();
+        const cid = data.cursoId;
+        if (!cid) return;
+        if (!map[cid]) map[cid] = { count: 0, total: 0 };
+        map[cid].count += 1;
+        map[cid].total += data.monto || 0;
+      });
+      setPagosPorCurso(map);
+    } catch (err) {
+      console.error("AdminCursos: error cargando pagos por curso", err);
+    }
+  };
+
+  const cerrarAportacionCurso = async (curso: DocumentData) => {
+    const yaCerrado = curso.ultimoCierreAportacion === mesAnioKey;
+    if (yaCerrado) {
+      if (!window.confirm(`Este curso ya está cerrado para ${mesesES[mesActual-1]}. ¿Revertir el cierre? Se desbloquearán los pagos del mes y se anulará la entrada en contabilidad.`)) return;
+    } else {
+      const info = pagosPorCurso[curso.id] || { count: 0, total: 0 };
+      if (info.count === 0) {
+        alert(`Ningún alumno ha pagado la aportación en "${curso.titulo}" este mes. Pide al profesor que marque los pagos antes de cerrar.`);
+        return;
+      }
+      if (!window.confirm(`¿Confirmar cierre de aportación de "${curso.titulo}" para ${mesesES[mesActual-1]}?\n\n${info.count} alumno(s) — total ${info.total}€\n\nEsto registrará el ingreso en contabilidad y bloqueará los pagos del mes.`)) return;
+    }
+
+    setCerrandoId(curso.id);
+    try {
+      const q = query(
+        collection(db, "pagos_mensuales"),
+        where("cursoId", "==", curso.id),
+        where("mes", "==", mesActual),
+        where("anio", "==", anioActual),
+        where("pagado", "==", true)
+      );
+      const snap = await getDocs(q);
+
+      if (!yaCerrado) {
+        const montoTotal = snap.docs.reduce((acc, d) => acc + (d.data().monto || 0), 0);
+        if (montoTotal === 0) {
+          alert("No hay importe que cerrar.");
+          return;
+        }
+
+        await registrarIngreso({
+          monto: montoTotal,
+          concepto: `Cierre Aportación ${curso.titulo} - ${mesesES[mesActual-1]} ${anioActual} (${snap.size} socios)`,
+          categoria: 'Cierre Aportación Curso',
+          metodo: metodoPagoCierre,
+          cursoId: curso.id,
+          mes: mesActual,
+          anio: anioActual
+        });
+
+        const batch = writeBatch(db);
+        snap.docs.forEach(d => batch.update(d.ref, { bloqueado: true }));
+        batch.update(doc(db, "cursos", curso.id), { ultimoCierreAportacion: mesAnioKey });
+        await batch.commit();
+
+        setMsg(`✅ Aportación de "${curso.titulo}" cerrada (${montoTotal}€)`);
+      } else {
+        // Reversión: localizar y soft-delete entrada de finanzas + desbloquear pagos
+        const qF = query(
+          collection(db, "finanzas"),
+          where("categoria", "==", "Cierre Aportación Curso"),
+          where("cursoId", "==", curso.id),
+          where("mes", "==", mesActual),
+          where("anio", "==", anioActual)
+        );
+        const snapF = await getDocs(qF);
+        const batch = writeBatch(db);
+        snapF.docs.forEach(d => {
+          if (!d.data().deletedAt) batch.update(d.ref, { deletedAt: serverTimestamp() });
+        });
+        snap.docs.forEach(d => batch.update(d.ref, { bloqueado: false }));
+        batch.update(doc(db, "cursos", curso.id), { ultimoCierreAportacion: '' });
+        await batch.commit();
+
+        setMsg(`⚠️ Cierre revertido para "${curso.titulo}"`);
+      }
+      setTimeout(() => setMsg(''), 4000);
+      fetchCursos();
+      fetchPagosMensualesCurso();
+    } catch (err: any) {
+      console.error(err);
+      alert("Error al cerrar/revertir: " + (err.message || "Error desconocido"));
+    } finally {
+      setCerrandoId(null);
+    }
+  };
 
   const fetchCursos = async () => {
     setLoading(true);
@@ -124,7 +235,7 @@ const AdminCursos = () => {
 
   const cursosAMostrar = tabActiva === 'activos' ? cursosActivos : tabActiva === 'proximos' ? cursosProximos : cursosHistorico;
 
-  useEffect(() => { fetchCursos(); }, []);
+  useEffect(() => { fetchCursos(); fetchPagosMensualesCurso(); }, []);
 
   const checkSalaDisponibilidad = async () => {
     if (!form.diasSemana.length || !form.horaInicio || !form.horaFin || !form.fechaInicio || !form.fechaFin) return;
@@ -1482,9 +1593,49 @@ const AdminCursos = () => {
                         </div>
                       </div>
                     ) : (
+                      <>
+                      {/* CIERRE DE APORTACIÓN MENSUAL */}
+                      <div className="mt-6 mb-4 p-5 rounded-3xl border bg-slate-50 border-slate-200">
+                        {(() => {
+                          const info = pagosPorCurso[c.id] || { count: 0, total: 0 };
+                          const total = c.alumnos?.length || 0;
+                          const cerrado = c.ultimoCierreAportacion === mesAnioKey;
+                          return (
+                            <div className="flex flex-wrap items-center justify-between gap-3">
+                              <div className="space-y-1">
+                                <p className="text-[9px] font-black uppercase tracking-[0.3em] text-slate-400">Aportación {mesesES[mesActual-1]}</p>
+                                <p className="text-xs font-black text-slate-700 uppercase tracking-widest">
+                                  {info.count}/{total} pagados {info.total > 0 && <span className="text-indigo-600 ml-2">{info.total}€</span>}
+                                </p>
+                              </div>
+                              <div className="flex items-center gap-2">
+                                {!cerrado && (
+                                  <select
+                                    value={metodoPagoCierre}
+                                    onChange={e => setMetodoPagoCierre(e.target.value as MetodoPago)}
+                                    className="text-[9px] font-black uppercase bg-white border border-slate-200 rounded-xl px-3 py-2 tracking-widest text-slate-600"
+                                    title="Método del cobro de la transferencia"
+                                  >
+                                    <option value="Efectivo">Efectivo</option>
+                                    <option value="Tarjeta">Tarjeta</option>
+                                    <option value="Transferencia">Transferencia</option>
+                                  </select>
+                                )}
+                                <button
+                                  onClick={() => cerrarAportacionCurso(c)}
+                                  disabled={cerrandoId === c.id || (!cerrado && info.count === 0)}
+                                  className={`p-3 px-5 rounded-xl font-black uppercase text-[9px] tracking-widest transition-all disabled:opacity-50 disabled:cursor-not-allowed ${cerrado ? 'bg-emerald-500 text-white hover:bg-emerald-600' : 'bg-amber-500 text-white hover:bg-amber-600 animate-pulse'}`}
+                                >
+                                  {cerrandoId === c.id ? '⏳ Procesando...' : cerrado ? '✅ Cerrar revertir' : '❌ Cerrar Aportación Mes'}
+                                </button>
+                              </div>
+                            </div>
+                          );
+                        })()}
+                      </div>
                       <div className="mt-6 flex flex-wrap justify-between items-center gap-4">
                         <div className="flex flex-wrap gap-2">
-                          <button 
+                          <button
                             onClick={() => {
                               setEditando(c.id);
                               setForm({
@@ -1539,14 +1690,15 @@ const AdminCursos = () => {
                             className="bg-emerald-100 text-emerald-600 px-6 py-3 rounded-xl font-black uppercase text-[10px] tracking-widest hover:bg-emerald-200 transition-all"
                           >📋 Duplicar</button>
                         </div>
-                        <button 
-                          onClick={() => eliminarCurso(c.id)} 
+                        <button
+                          onClick={() => eliminarCurso(c.id)}
                           className="flex items-center gap-1.5 px-4 py-2 bg-red-50 text-red-500 rounded-xl font-bold text-[10px] uppercase hover:bg-red-500 hover:text-white transition-all border border-red-100"
                         >
                           <Trash2 size={12} />
                           Eliminar
                         </button>
                       </div>
+                      </>
                     )}
                   </div>
                 ))

@@ -1,11 +1,12 @@
 import React, { useState, useEffect } from 'react';
 import { db, storage } from '../../firebase';
-import { collection, getDocs, updateDoc, doc, query, orderBy, DocumentData, where, setDoc, getDoc, getDocsFromServer, arrayUnion, arrayRemove, increment, writeBatch, collectionGroup, deleteDoc, serverTimestamp, onSnapshot } from 'firebase/firestore';
+import { collection, getDocs, updateDoc, doc, query, orderBy, DocumentData, where, setDoc, getDoc, getDocsFromServer, arrayUnion, arrayRemove, increment, writeBatch, collectionGroup, deleteDoc, onSnapshot } from 'firebase/firestore';
 import { ref, uploadBytes, getDownloadURL, deleteObject } from 'firebase/storage';
 import { useAuth } from '../../context/AuthContext';
 import { useLanguage } from '../../context/LanguageContext';
 import { Link } from 'react-router-dom';
 import { registrarIngreso, MetodoPago } from '../../lib/finanzas';
+import { fetchConfig } from '../../lib/configService';
 import { syncSocioStatus } from '../../lib/socioService';
 import KalianCalendar from '../shared/KalianCalendar';
 
@@ -28,10 +29,14 @@ const TeacherDashboard = () => {
   const [msg, setMsg] = useState('');
   const [showConfirmModal, setShowConfirmModal] = useState(false);
   const [confirmingPago, setConfirmingPago] = useState<{ socioId: string, nombre: string } | null>(null);
+  const [showUnpayModal, setShowUnpayModal] = useState(false);
+  const [confirmingUnpago, setConfirmingUnpago] = useState<{ socioId: string, nombre: string, mes: number, anio: number } | null>(null);
   const [mesParaPago, setMesParaPago] = useState<number>(new Date().getMonth() + 1);
   const [anioParaPago, setAnioParaPago] = useState<number>(new Date().getFullYear());
   const [notificaciones, setNotificaciones] = useState<DocumentData[]>([]);
   const [showNotifs, setShowNotifs] = useState(false);
+  const [cuotaGlobal, setCuotaGlobal] = useState(15);
+  const [cursosMap, setCursosMap] = useState<Record<string, string>>({});
   const { user, socioData, logoutTeacher } = useAuth();
   const { t } = useLanguage();
 
@@ -50,9 +55,18 @@ const TeacherDashboard = () => {
   const usagePercent = Math.min(100, (storageUsage / storageLimit) * 100);
   const usageMB = (storageUsage / (1024 * 1024)).toFixed(2);
 
-  useEffect(() => { 
+  useEffect(() => {
     if (!user) return;
-    
+
+    fetchConfig().then(conf => setCuotaGlobal(conf.cuotaMensualSocio));
+
+    // Cargar mapa de titulos de todos los cursos (para mostrar atribución cross-curso)
+    getDocs(collection(db, "cursos")).then(snap => {
+      const map: Record<string, string> = {};
+      snap.docs.forEach(d => { map[d.id] = d.data().titulo || d.id; });
+      setCursosMap(map);
+    }).catch(err => console.error("TeacherDashboard: Error cargando cursosMap:", err));
+
     // Listen to cursos
     const qC = query(collection(db, "cursos"), where("profesorId", "==", user.uid));
     const unsubC = onSnapshot(qC, (snap) => {
@@ -154,33 +168,27 @@ const TeacherDashboard = () => {
         const pagoId = `${anioActual}_${mesActual}_${socioId}`;
         const pagoRef = doc(db, "pagos_mensuales", pagoId);
         const snap = await getDoc(pagoRef);
-        
+
         if (snap.exists()) {
-          if (snap.data().bloqueado && socioData?.role !== 'admin') {
+          const data = snap.data();
+          if (data.bloqueado && socioData?.role !== 'admin') {
+            alert(t('teacher.paymentLocked'));
+            return;
+          }
+          // El profesor solo puede revertir pagos que él mismo registró en este curso
+          if (socioData?.role !== 'admin' && (data.profesorId !== user?.uid || data.cursoId !== cursoSeleccionado?.id)) {
             alert(t('teacher.paymentLocked'));
             return;
           }
 
-          const batch = writeBatch(db);
-          
-          // 1. Actualizar estado de pago
-          batch.update(pagoRef, {
-            pagado: false,
-            bloqueado: false, // Desbloqueamos si se revierte
-            actualizadoPor: user?.uid,
-            fechaActualizacion: new Date().toISOString()
+          // Mostrar confirmación antes de desmarcar
+          setConfirmingUnpago({
+            socioId,
+            nombre: nombreSocio || socioId,
+            mes: data.mes ?? mesActual,
+            anio: data.anio ?? anioActual
           });
-
-          // 2. Soft delete transacción de finanzas (ID determinista)
-          const finanzaId = `CUOTA_${anioActual}_${mesActual}_${socioId}`;
-          batch.update(doc(db, "finanzas", finanzaId), {
-            deletedAt: serverTimestamp()
-          });
-
-          await batch.commit();
-          await syncSocioStatus(socioId);
-          setMsg(t('teacher.paymentReversed'));
-          setTimeout(() => setMsg(''), 3000);
+          setShowUnpayModal(true);
         }
       } else if (tipo === 'inscripcion' && cursoId) {
         const pagoId = `${socioId}_${cursoId}`;
@@ -232,26 +240,47 @@ const TeacherDashboard = () => {
         mes: mesParaPago,
         anio: anioParaPago,
         pagado: true,
-        bloqueado: true,
+        bloqueado: false,
+        monto: cuotaGlobal,
+        cursoId: cursoSeleccionado?.id || null,
+        profesorId: user?.uid || null,
+        metodo: metodoPago,
         actualizadoPor: user?.uid,
         fechaActualizacion: new Date().toISOString()
       }, { merge: true });
 
-      await registrarIngreso({
-        monto: 15,
-        concepto: `Cuota Soci@ ${mesesES[mesParaPago-1]} ${anioParaPago}`,
-        categoria: 'Socio',
-        metodo: metodoPago,
-        socio_id: socioId,
-        mes: mesParaPago,
-        anio: anioParaPago
-      });
+      // Nota: el ingreso en finanzas se registra cuando el admin "Cierra Aportación Mes"
+      // en AdminCursos (categoria 'Cierre Aportación Curso'). Aquí solo se marca el
+      // estado operativo del cobro.
 
       await syncSocioStatus(socioId);
 
       setShowConfirmModal(false);
       setConfirmingPago(null);
       setMsg(t('teacher.paymentRegistered'));
+      setTimeout(() => setMsg(''), 3000);
+    } catch (err) {
+      console.error(err);
+      alert(t('teacher.paymentError'));
+    }
+  };
+
+  const ejecutarDespagoConfirmado = async () => {
+    if (!confirmingUnpago) return;
+    const { socioId, mes, anio } = confirmingUnpago;
+    try {
+      const pagoId = `${anio}_${mes}_${socioId}`;
+      const pagoRef = doc(db, "pagos_mensuales", pagoId);
+      await updateDoc(pagoRef, {
+        pagado: false,
+        bloqueado: false,
+        actualizadoPor: user?.uid,
+        fechaActualizacion: new Date().toISOString()
+      });
+      await syncSocioStatus(socioId);
+      setShowUnpayModal(false);
+      setConfirmingUnpago(null);
+      setMsg(t('teacher.paymentReversed'));
       setTimeout(() => setMsg(''), 3000);
     } catch (err) {
       console.error(err);
@@ -562,16 +591,37 @@ const TeacherDashboard = () => {
             {/* LISTA DE CURSOS */}
             <div className="lg:col-span-1 space-y-4">
               <h2 className="text-xl kalian-poster-text text-kalian-gold/40 uppercase tracking-widest mb-6 ml-4 italic">{t('teacher.myCourses')}</h2>
-              {cursos.map(c => (
-                <div 
-                  key={c.id} 
+              {cursos.map(c => {
+                const totalAlumnos = c.alumnos?.length || 0;
+                const pagadosEnEsteCurso = (c.alumnos || []).filter((dni: string) => {
+                  const p = pagosMensuales[dni];
+                  return p?.pagado && p?.cursoId === c.id;
+                });
+                const sumaCobrada = pagadosEnEsteCurso.reduce((acc: number, dni: string) => acc + (pagosMensuales[dni]?.monto || 0), 0);
+                const cuentaPagados = (c.alumnos || []).filter((dni: string) => pagosMensuales[dni]?.pagado).length;
+                const cerrado = c.ultimoCierreAportacion === mesAnioKey;
+                const listoTransferir = !cerrado && totalAlumnos > 0 && cuentaPagados === totalAlumnos;
+                return (
+                <div
+                  key={c.id}
                   onClick={() => setCursoSeleccionado(c)}
                   className={`p-8 rounded-[2.5rem] border transition-all cursor-pointer group ${cursoSeleccionado?.id === c.id ? 'bg-kalian-gold/20 border-kalian-gold shadow-2xl' : 'bg-black/40 border-kalian-gold/10 hover:border-kalian-gold/30'}`}
                 >
                   <h3 className="text-2xl kalian-poster-text text-kalian-cream group-hover:text-kalian-gold transition-colors uppercase italic leading-none">{c.titulo}</h3>
                   <p className="text-[9px] text-kalian-gold/40 font-black uppercase tracking-[0.3em] mt-2">
-                    {c.horario} | {c.alumnos?.length || 0} Alumnos
+                    {c.horario} | {totalAlumnos} Alumnos
                   </p>
+                  <div className="mt-3 flex items-center gap-3 text-[9px] font-black uppercase tracking-widest">
+                    <span className={`px-2 py-1 rounded-lg border ${cerrado ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/30' : listoTransferir ? 'bg-amber-500/10 text-amber-400 border-amber-500/30 animate-pulse' : 'bg-kalian-gold/5 text-kalian-gold/60 border-kalian-gold/20'}`}>
+                      {cerrado ? '🔒 Cerrado' : `${cuentaPagados}/${totalAlumnos} pagados`}
+                    </span>
+                    {sumaCobrada > 0 && (
+                      <span className="text-kalian-gold/60">{sumaCobrada}€</span>
+                    )}
+                  </div>
+                  {listoTransferir && (
+                    <p className="text-[8px] font-black text-amber-400 uppercase tracking-widest mt-2">✅ Listo para transferir</p>
+                  )}
                   <div className="mt-4 flex flex-wrap gap-2 justify-between items-center">
                     <span className={`text-[10px] font-black uppercase tracking-widest ${c.aforo_disponible !== false ? 'text-emerald-500' : 'text-red-500'}`}>
                       {c.aforo_disponible !== false ? t('teacher.seatsAvail') : t('teacher.noSeats')}
@@ -595,7 +645,8 @@ const TeacherDashboard = () => {
                     </div>
                   </div>
                 </div>
-              ))}
+                );
+              })}
               {cursos.length === 0 && (
                 <div className="bg-black/20 p-10 rounded-[2.5rem] text-center border border-dashed border-kalian-gold/10">
                   <p className="text-kalian-gold/20 font-black uppercase tracking-widest italic text-xs">{t('teacher.noCourses')}</p>
@@ -683,19 +734,29 @@ const TeacherDashboard = () => {
                         const pagoM = pagosMensuales[alumno.dni] || {};
                         const pagoI = pagosInscripciones[alumno.dni] || {};
                         const cubiertoPorLocal = !!pagoM.localId;
-                        const bloqueado = !!pagoM.bloqueado || cubiertoPorLocal;
+                        const pagadoEnOtroCurso = !!pagoM.pagado && !!pagoM.cursoId && pagoM.cursoId !== cursoSeleccionado.id;
+                        const pagadoEnEsteCurso = !!pagoM.pagado && pagoM.cursoId === cursoSeleccionado.id;
+                        const cobradoPorAdmin = !!pagoM.pagado && !pagoM.cursoId && !pagoM.localId;
+                        const propio = pagadoEnEsteCurso && pagoM.profesorId === user?.uid;
+                        const bloqueado = !!pagoM.bloqueado || cubiertoPorLocal || pagadoEnOtroCurso || cobradoPorAdmin || (pagadoEnEsteCurso && !propio);
+
+                        let etiqueta: string | null = null;
+                        if (cubiertoPorLocal) etiqueta = t('teacher.coveredByLocal');
+                        else if (pagadoEnOtroCurso) etiqueta = `Pagado en ${cursosMap[pagoM.cursoId] || pagoM.cursoId}`;
+                        else if (cobradoPorAdmin) etiqueta = 'Cobrado por admin';
+                        else if (pagoM.bloqueado && pagadoEnEsteCurso) etiqueta = '🔒 Cerrado por admin';
 
                         return (
                           <div key={idx} className="grid grid-cols-12 gap-4 px-6 py-5 bg-kalian-gold/5 rounded-2xl items-center hover:bg-kalian-gold/10 transition-all group">
                             <div className="col-span-6">
                               <p className="font-black text-kalian-cream uppercase italic group-hover:text-kalian-gold transition-colors">{alumno.nombre}</p>
                               <p className="text-[8px] text-kalian-gold/60 font-bold tracking-widest mt-1">{alumno.dni}</p>
-                              {cubiertoPorLocal && (
-                                <p className="text-[7px] font-black text-emerald-500 uppercase tracking-widest mt-1">{t('teacher.coveredByLocal')}</p>
+                              {etiqueta && (
+                                <p className="text-[7px] font-black text-emerald-500 uppercase tracking-widest mt-1">{etiqueta}</p>
                               )}
                             </div>
                             <div className="col-span-3 flex flex-col items-center gap-1">
-                              <button 
+                              <button
                                 onClick={() => togglePago(alumno.dni, 'mensual', !!pagoM.pagado, undefined, alumno.nombre)}
                                 disabled={bloqueado}
                                 className={`w-10 h-10 rounded-xl border flex items-center justify-center transition-all ${pagoM.pagado ? 'bg-emerald-500 border-emerald-400 text-white shadow-lg shadow-emerald-500/20' : 'bg-black/40 border-kalian-gold/20 text-transparent hover:border-kalian-gold/40'} ${bloqueado ? 'opacity-100 cursor-default' : ''}`}
@@ -791,6 +852,47 @@ const TeacherDashboard = () => {
                   className="w-full py-5 text-kalian-gold/40 font-black uppercase text-[10px] tracking-widest hover:text-white transition-colors"
                 >
                   {t('teacher.cancel')}
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* MODAL CONFIRMACIÓN DESMARCAR PAGO */}
+        {showUnpayModal && confirmingUnpago && (
+          <div className="fixed inset-0 bg-black/90 backdrop-blur-md z-[100] flex items-center justify-center p-4">
+            <div className="bg-kalian-dark w-full max-w-sm rounded-[3rem] shadow-2xl border border-red-500/30 p-8 text-center space-y-6 animate-in zoom-in-95 duration-300">
+              <div className="w-16 h-16 bg-red-500/10 rounded-full flex items-center justify-center text-3xl mx-auto border border-red-500/20">
+                ↩️
+              </div>
+              <div className="space-y-3">
+                <h3 className="text-xl kalian-poster-text text-red-400 uppercase italic">¿Desmarcar pago?</h3>
+                <p className="text-sm text-kalian-cream/80 leading-relaxed">
+                  ¿Seguro que quieres desmarcar el pago de
+                </p>
+                <p className="text-lg font-black text-kalian-gold uppercase italic">{confirmingUnpago.nombre}</p>
+                <p className="text-sm text-kalian-cream/70">
+                  correspondiente a{' '}
+                  <span className="font-black text-kalian-cream">
+                    {mesesES[confirmingUnpago.mes - 1]} {confirmingUnpago.anio !== anioActual ? confirmingUnpago.anio : ''}
+                  </span>?
+                </p>
+                <p className="text-[9px] font-black text-red-400/60 uppercase tracking-widest">
+                  El pago quedará como pendiente y podrás volver a registrarlo.
+                </p>
+              </div>
+              <div className="flex flex-col gap-3">
+                <button
+                  onClick={ejecutarDespagoConfirmado}
+                  className="w-full bg-red-500 text-white py-4 rounded-2xl kalian-poster-text text-base tracking-widest hover:bg-red-600 transition-all shadow-xl shadow-red-500/20"
+                >
+                  Sí, desmarcar pago
+                </button>
+                <button
+                  onClick={() => { setShowUnpayModal(false); setConfirmingUnpago(null); }}
+                  className="w-full py-4 text-kalian-gold/40 font-black uppercase text-[10px] tracking-widest hover:text-white transition-colors"
+                >
+                  Cancelar
                 </button>
               </div>
             </div>

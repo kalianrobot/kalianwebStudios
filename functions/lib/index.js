@@ -401,10 +401,9 @@ exports.onNewsletterSubscriberDeleted = (0, firestore_1.onDocumentDeleted)({
     }
 });
 // ─── reconciliarNewsletterBrevo ─────────────────────────────────────────────
-// Cada lunes a las 04:00 UTC reconcilia ambas direcciones por si algún webhook
-// se perdió. Para cada contacto blacklisted en Brevo que aún aparezca activo
-// en Firestore, lo marca como baja. Loguea inconsistencias inversas (en
-// Firestore activo pero no en Brevo) sin tocar nada.
+// Cada lunes a las 04:00 UTC reconcilia ambas direcciones:
+// - Contactos en Brevo no presentes en Firestore → se importan
+// - Contactos blacklisted en Brevo pero activos en Firestore → se marcan baja
 exports.reconciliarNewsletterBrevo = (0, scheduler_1.onSchedule)({
     schedule: 'every monday 04:00',
     region: EU_REGION,
@@ -416,8 +415,8 @@ exports.reconciliarNewsletterBrevo = (0, scheduler_1.onSchedule)({
     const apiKey = BREVO_API_KEY.value();
     let offset = 0;
     const limit = 500;
-    const blacklisted = new Set();
-    const enBrevo = new Set();
+    // email → { nombre, blacklisted }
+    const contactosBrevo = new Map();
     while (true) {
         const url = `https://api.brevo.com/v3/contacts/lists/${listId}/contacts?limit=${limit}&offset=${offset}`;
         const r = await (0, node_fetch_1.default)(url, { headers: { 'api-key': apiKey, accept: 'application/json' } });
@@ -433,42 +432,57 @@ exports.reconciliarNewsletterBrevo = (0, scheduler_1.onSchedule)({
             const e = (c.email || '').toLowerCase().trim();
             if (!e)
                 continue;
-            enBrevo.add(e);
-            if (c.emailBlacklisted)
-                blacklisted.add(e);
+            const nombre = c.attributes?.NOMBRE || c.attributes?.FIRSTNAME || '';
+            contactosBrevo.set(e, { nombre, blacklisted: !!c.emailBlacklisted });
         }
         if (contacts.length < limit)
             break;
         offset += limit;
     }
-    // Cruzar con Firestore
+    // Construir índice de emails ya en Firestore
     const snap = await db.collection('newsletter_subscribers').get();
-    let marcadosBaja = 0;
-    let huerfanos = 0;
+    const emailsFirestore = new Map();
     for (const docu of snap.docs) {
-        const d = docu.data();
-        const email = (d.email || '').toLowerCase().trim();
-        const estado = d.estado || 'activo';
-        if (!email)
-            continue;
-        if (estado === 'activo' && blacklisted.has(email)) {
-            await docu.ref.update({
-                estado: 'baja',
-                motivo: 'reconciliacion',
-                fecha_baja: admin.firestore.FieldValue.serverTimestamp(),
-            });
-            marcadosBaja++;
+        const e = (docu.data().email || '').toLowerCase().trim();
+        if (e)
+            emailsFirestore.set(e, docu.ref);
+    }
+    let marcadosBaja = 0;
+    let importados = 0;
+    for (const [email, { nombre, blacklisted }] of contactosBrevo) {
+        if (emailsFirestore.has(email)) {
+            // Ya existe en Firestore — solo actualizar si está blacklisted y activo
+            const ref = emailsFirestore.get(email);
+            const d = snap.docs.find(dd => (dd.data().email || '').toLowerCase() === email)?.data();
+            if (blacklisted && (d?.estado || 'activo') === 'activo') {
+                await ref.update({
+                    estado: 'baja',
+                    motivo: 'reconciliacion',
+                    fecha_baja: admin.firestore.FieldValue.serverTimestamp(),
+                });
+                marcadosBaja++;
+            }
         }
-        else if (estado === 'activo' && !enBrevo.has(email)) {
-            huerfanos++;
+        else {
+            // No existe en Firestore → importar
+            await db.collection('newsletter_subscribers').add({
+                email,
+                nombre: nombre || email.split('@')[0],
+                interes: 'musica',
+                estado: blacklisted ? 'baja' : 'activo',
+                ...(blacklisted ? { motivo: 'bounce_o_baja', fecha_baja: admin.firestore.FieldValue.serverTimestamp() } : {}),
+                fecha: admin.firestore.FieldValue.serverTimestamp(),
+                origen: 'brevo_import',
+                acepto_terminos: true,
+            });
+            importados++;
         }
     }
     firebase_functions_1.logger.info('reconciliarNewsletterBrevo: completado', {
-        brevoContactos: enBrevo.size,
-        brevoBlacklisted: blacklisted.size,
-        firestoreTotal: snap.size,
+        brevoContactos: contactosBrevo.size,
+        firestoreAntes: snap.size,
+        importados,
         marcadosBaja,
-        huerfanosEnFirestore: huerfanos,
     });
 });
 //# sourceMappingURL=index.js.map

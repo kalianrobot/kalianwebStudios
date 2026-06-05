@@ -135,7 +135,12 @@ const AdminContabilidad = () => {
         });
       }
       const detalles: DetalleSocio[] = snap.docs
-        .filter(d => !dnisBorrados.has(d.data().socioId))
+        .filter(d => {
+          const sid = d.data().socioId;
+          if (dnisBorrados.has(sid)) return false;        // socio con deletedAt
+          if (sociosMap[sid] === undefined) return false; // socio hard-deleted u huérfano
+          return true;
+        })
         .map(d => {
           const data = d.data();
           return {

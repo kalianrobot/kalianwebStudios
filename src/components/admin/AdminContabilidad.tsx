@@ -21,11 +21,12 @@ interface Transaccion {
   socio_id: string;
   eventoId?: string;
   cursoId?: string;
+  local_id?: string;
   mes?: number;
   anio?: number;
 }
 
-interface CierreDetalle {
+interface DetalleSocio {
   dni: string;
   nombre: string;
   monto: number;
@@ -96,17 +97,23 @@ const AdminContabilidad = () => {
   const [showConfig, setShowConfig] = useState(false);
   const [nuevaCuota, setNuevaCuota] = useState(15);
   const [expandidos, setExpandidos] = useState<Set<string>>(new Set());
-  const [cierreModal, setCierreModal] = useState<{ t: Transaccion; detalles: CierreDetalle[] } | null>(null);
-  const [loadingCierre, setLoadingCierre] = useState(false);
+  const [detalleModal, setDetalleModal] = useState<{ t: Transaccion; detalles: DetalleSocio[] } | null>(null);
+  const [loadingDetalle, setLoadingDetalle] = useState(false);
 
-  const abrirDetalleCierre = async (t: Transaccion) => {
-    if (!t.cursoId || !t.mes || !t.anio) return;
-    setLoadingCierre(true);
-    setCierreModal({ t, detalles: [] });
+  const abrirDetalle = async (t: Transaccion) => {
+    if (!t.mes || !t.anio) return;
+    const esCierreCurso = t.categoria === 'Cierre Aportación Curso';
+    const esAportacionLocal = t.categoria === 'Aportación Socio Local';
+    const filterField = esCierreCurso ? 'cursoId' : esAportacionLocal ? 'localId' : null;
+    const filterValue = esCierreCurso ? t.cursoId : esAportacionLocal ? t.local_id : null;
+    if (!filterField || !filterValue) return;
+
+    setLoadingDetalle(true);
+    setDetalleModal({ t, detalles: [] });
     try {
       const q = query(
         collection(db, "pagos_mensuales"),
-        where("cursoId", "==", t.cursoId),
+        where(filterField, "==", filterValue),
         where("mes", "==", t.mes),
         where("anio", "==", t.anio),
         where("pagado", "==", true)
@@ -122,7 +129,7 @@ const AdminContabilidad = () => {
         const sSnap = await getDocs(sQ);
         sSnap.docs.forEach(d => { sociosMap[d.data().dni] = d.data().nombre || ''; });
       }
-      const detalles: CierreDetalle[] = snap.docs.map(d => {
+      const detalles: DetalleSocio[] = snap.docs.map(d => {
         const data = d.data();
         return {
           dni: data.socioId,
@@ -131,11 +138,11 @@ const AdminContabilidad = () => {
           profesorId: data.profesorId
         };
       }).sort((a, b) => a.nombre.localeCompare(b.nombre));
-      setCierreModal({ t, detalles });
+      setDetalleModal({ t, detalles });
     } catch (err) {
-      console.error("Error cargando detalle cierre:", err);
+      console.error("Error cargando detalle:", err);
     } finally {
-      setLoadingCierre(false);
+      setLoadingDetalle(false);
     }
   };
 
@@ -619,18 +626,22 @@ const AdminContabilidad = () => {
                   if (fila.tipo === 'individual') {
                     const t = fila.t;
                     const esCierreCurso = t.categoria === 'Cierre Aportación Curso';
+                    const esAportacionLocal = t.categoria === 'Aportación Socio Local' && t.monto >= 0 && !!t.local_id;
+                    const clickable = esCierreCurso || esAportacionLocal;
                     return (
                       <tr
                         key={t.id}
-                        onClick={esCierreCurso ? () => abrirDetalleCierre(t) : undefined}
-                        className={`border-b border-white/5 hover:bg-white/5 transition-colors group ${esCierreCurso ? 'cursor-pointer hover:bg-kalian-gold/5' : ''}`}
+                        onClick={clickable ? () => abrirDetalle(t) : undefined}
+                        className={`border-b border-white/5 hover:bg-white/5 transition-colors group ${clickable ? 'cursor-pointer hover:bg-kalian-gold/5' : ''}`}
                       >
-                        <td className="p-6">{esCierreCurso && <ChevronRight size={14} className="text-kalian-gold/40" />}</td>
+                        <td className="p-6">{clickable && <ChevronRight size={14} className="text-kalian-gold/40" />}</td>
                         <td className="p-6 text-[10px] font-mono text-kalian-cream/40">{t.fecha.toDate().toLocaleString()}</td>
                         <td className="p-6">
                           <p className="text-sm font-bold text-kalian-cream group-hover:text-kalian-gold transition-colors">{t.concepto}</p>
-                          {esCierreCurso && (
-                            <p className="text-[9px] font-black uppercase tracking-widest text-kalian-gold/40 mt-1">Click para ver alumnos →</p>
+                          {clickable && (
+                            <p className="text-[9px] font-black uppercase tracking-widest text-kalian-gold/40 mt-1">
+                              {esCierreCurso ? 'Click para ver alumnos →' : 'Click para ver soci@s →'}
+                            </p>
                           )}
                         </td>
                         <td className="p-6">
@@ -716,30 +727,38 @@ const AdminContabilidad = () => {
           </div>
         </div>
 
-        {/* MODAL DETALLE CIERRE APORTACIÓN CURSO */}
-        {cierreModal && (
-          <div className="fixed inset-0 bg-black/90 backdrop-blur-sm z-50 flex items-center justify-center p-4" onClick={() => setCierreModal(null)}>
+        {/* MODAL DETALLE (Cierre Curso / Aportación Local) */}
+        {detalleModal && (() => {
+          const esLocal = detalleModal.t.categoria === 'Aportación Socio Local';
+          const titulo = esLocal ? 'Detalle Aportación Local' : 'Detalle del Cierre';
+          const etiquetaPersona = esLocal ? 'Soci@' : 'Alumno';
+          const etiquetaTotal = esLocal ? 'soci@s' : 'alumnos';
+          const vacioMsg = esLocal
+            ? 'No hay pagos activos (¿aportación revertida?)'
+            : 'No hay pagos asociados (¿cierre revertido?)';
+          return (
+          <div className="fixed inset-0 bg-black/90 backdrop-blur-sm z-50 flex items-center justify-center p-4" onClick={() => setDetalleModal(null)}>
             <div className="bg-kalian-dark border border-kalian-gold/30 w-full max-w-2xl rounded-[3rem] shadow-2xl p-10 relative max-h-[80vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
-              <button onClick={() => setCierreModal(null)} className="absolute top-8 right-8 text-kalian-gold/40 hover:text-kalian-gold text-2xl">×</button>
-              <h3 className="text-2xl kalian-poster-text text-kalian-gold mb-2 italic uppercase">Detalle del Cierre</h3>
-              <p className="text-sm text-kalian-cream/70 mb-6">{cierreModal.t.concepto}</p>
+              <button onClick={() => setDetalleModal(null)} className="absolute top-8 right-8 text-kalian-gold/40 hover:text-kalian-gold text-2xl">×</button>
+              <h3 className="text-2xl kalian-poster-text text-kalian-gold mb-2 italic uppercase">{titulo}</h3>
+              <p className="text-sm text-kalian-cream/70 mb-6">{detalleModal.t.concepto}</p>
 
-              {loadingCierre ? (
+              {loadingDetalle ? (
                 <p className="text-center py-10 text-kalian-gold/40 font-black uppercase tracking-widest animate-pulse">Cargando…</p>
-              ) : cierreModal.detalles.length === 0 ? (
-                <p className="text-center py-10 text-kalian-gold/40 font-black uppercase tracking-widest italic">No hay pagos asociados (¿cierre revertido?)</p>
+              ) : detalleModal.detalles.length === 0 ? (
+                <p className="text-center py-10 text-kalian-gold/40 font-black uppercase tracking-widest italic">{vacioMsg}</p>
               ) : (
                 <>
                   <table className="w-full text-left text-sm">
                     <thead>
                       <tr className="text-[9px] font-black text-kalian-gold/40 uppercase tracking-widest border-b border-kalian-gold/10">
-                        <th className="py-3">Alumno</th>
+                        <th className="py-3">{etiquetaPersona}</th>
                         <th className="py-3">DNI</th>
                         <th className="py-3 text-right">Monto</th>
                       </tr>
                     </thead>
                     <tbody>
-                      {cierreModal.detalles.map(d => (
+                      {detalleModal.detalles.map(d => (
                         <tr key={d.dni} className="border-b border-white/5">
                           <td className="py-3 text-kalian-cream font-bold">{d.nombre}</td>
                           <td className="py-3 text-[10px] font-mono text-kalian-gold/40">{d.dni}</td>
@@ -749,9 +768,9 @@ const AdminContabilidad = () => {
                     </tbody>
                     <tfoot>
                       <tr className="border-t border-kalian-gold/20">
-                        <td colSpan={2} className="py-4 text-[10px] font-black uppercase tracking-widest text-kalian-gold/60">Total ({cierreModal.detalles.length} alumnos)</td>
+                        <td colSpan={2} className="py-4 text-[10px] font-black uppercase tracking-widest text-kalian-gold/60">Total ({detalleModal.detalles.length} {etiquetaTotal})</td>
                         <td className="py-4 text-right text-xl kalian-poster-text text-kalian-gold">
-                          {cierreModal.detalles.reduce((a, d) => a + d.monto, 0).toFixed(2)}€
+                          {detalleModal.detalles.reduce((a, d) => a + d.monto, 0).toFixed(2)}€
                         </td>
                       </tr>
                     </tfoot>
@@ -760,7 +779,8 @@ const AdminContabilidad = () => {
               )}
             </div>
           </div>
-        )}
+          );
+        })()}
 
         {/* MODAL CONFIGURACIÓN */}
         {showConfig && (

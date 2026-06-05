@@ -237,8 +237,8 @@ service cloud.firestore {
 
     // --- FINANZAS / CAJA ---
     match /finanzas/{id}              { allow read: if isAdmin(); allow write: if isAdmin() || isPortero(); }
-    match /pagos_mensuales/{id}       { allow read: if isAdmin() || isSignedIn(); allow write: if isAdmin(); }
-    match /pagos_inscripciones/{id}   { allow read, write: if isAdmin(); }
+    match /pagos_mensuales/{id}       { allow read: if isAdmin() || isSignedIn(); allow write: if isAdmin() || isTeacher() || isPortero(); }
+    match /pagos_inscripciones/{id}   { allow read, write: if isAdmin() || isTeacher(); }
     match /caja_eventos/{id}          { allow read, write: if isAdmin() || isPortero(); }
     match /asistencia_eventos/{id}    { allow read, create: if isAdmin() || isPortero(); }
 

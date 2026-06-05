@@ -139,6 +139,14 @@ const AdminLocales = () => {
           fechaActualizacion: new Date().toISOString(),
           localId: local.id
         }, { merge: true });
+
+        // Al marcar pagado, restaurar membresias.local por si syncSocioStatus
+        // antiguo (o una edición previa) la dejó vacía.
+        if (nuevoEstado && local.fechaExpiracion) {
+          batch.update(sDoc.ref, {
+            'membresias.local': local.fechaExpiracion
+          });
+        }
       }
 
       // 4. Registrar en Finanzas (Aportación o Devolución)
@@ -237,6 +245,12 @@ const AdminLocales = () => {
             fechaActualizacion: new Date().toISOString(),
             localId: editando.id
           }, { merge: true });
+
+          if (ahoraPagado && editando.fechaExpiracion) {
+            batch.update(sDoc.ref, {
+              'membresias.local': editando.fechaExpiracion
+            });
+          }
         }
         await batch.commit();
 

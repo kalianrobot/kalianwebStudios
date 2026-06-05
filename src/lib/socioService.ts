@@ -50,10 +50,10 @@ export const syncSocioStatus = async (socioId: string) => {
     const shouldBeActive = hasActiveCourse || hasActiveLocal;
     
     if (!shouldBeActive && socio.estado !== 'inactivo') {
-      await updateDoc(socioRef, {
-        estado: 'inactivo',
-        membresias: {} // Limpiamos categorías para que no salgan en el carnet
-      });
+      // Solo cambiamos el estado: las membresias contienen la vigencia firmada
+      // (ej: membresias.local = '2099-12-31') y no deben borrarse porque el
+      // socio no pague un mes — eso lo gestiona pagos_mensuales por separado.
+      await updateDoc(socioRef, { estado: 'inactivo' });
       return 'inactivo';
     } else if (shouldBeActive && socio.estado !== 'activo') {
       await updateDoc(socioRef, {

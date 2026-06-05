@@ -375,6 +375,7 @@ const ReservaForm = ({ item, alCerrar }: ReservaFormProps) => {
             ticketID: tID,
             qrUrl,
             manageToken,
+            fechaActividad: item.fecha || item.fechaFin || '',
           });
           setEmailEnviado(true);
         } catch (emailErr: any) {

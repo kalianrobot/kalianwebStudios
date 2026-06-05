@@ -137,9 +137,21 @@ exports.sendMembershipUpdateEmail = (0, https_1.onCall)({ secrets: [BREVO_API_KE
 // ─── sendReservationConfirmation ────────────────────────────────────────────
 // Callable SIN auth: el invitado acaba de reservar y no tiene cuenta Firebase.
 exports.sendReservationConfirmation = (0, https_1.onCall)({ secrets: [BREVO_API_KEY], region: EU_REGION }, async (request) => {
-    const { email, nombre, eventoTitulo, ticketID, qrUrl, manageToken } = request.data;
+    const { email, nombre, eventoTitulo, ticketID, qrUrl, manageToken, fechaActividad } = request.data;
     if (!email || !ticketID || !manageToken) {
         throw new https_1.HttpsError('invalid-argument', 'Faltan datos obligatorios.');
+    }
+    // Formatear fecha y hora del evento (formato datetime-local: "2026-06-04T22:00")
+    let fechaFormateada = '';
+    if (fechaActividad && typeof fechaActividad === 'string') {
+        const [dia, hora] = fechaActividad.split('T');
+        if (dia) {
+            const [y, m, d] = dia.split('-');
+            const meses = ['enero', 'febrero', 'marzo', 'abril', 'mayo', 'junio',
+                'julio', 'agosto', 'septiembre', 'octubre', 'noviembre', 'diciembre'];
+            const mesNombre = meses[Number(m) - 1] || m;
+            fechaFormateada = `${Number(d)} de ${mesNombre} de ${y}` + (hora ? ` · ${hora.substring(0, 5)}h` : '');
+        }
     }
     return callBrevo(BREVO_API_KEY.value(), {
         sender: SENDER,
@@ -165,6 +177,7 @@ exports.sendReservationConfirmation = (0, https_1.onCall)({ secrets: [BREVO_API_
           <div class="b">
             <p>Hola <span class="acc">${nombre}</span>,</p>
             <p>Tu entrada para <span class="acc">${eventoTitulo}</span> está confirmada.</p>
+            ${fechaFormateada ? `<p style="font-size:14px;color:#D4AF37;text-transform:uppercase;letter-spacing:3px;font-weight:700;margin-top:-10px">${fechaFormateada}</p>` : ''}
             <p class="tid">${ticketID}</p>
             <div class="qr"><img src="${qrUrl}" width="200" height="200" style="display:block"></div>
             <p style="font-size:12px;color:#666">Presenta este código en la entrada. El pago de acompañantes (si los hay) se realiza en efectivo.</p>

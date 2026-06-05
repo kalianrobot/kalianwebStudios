@@ -59,7 +59,7 @@ const NewsletterForm = () => {
 
       // 3. Petición a Brevo API
       const BREVO_API_KEY = import.meta.env.VITE_BREVO_API_KEY;
-      const BREVO_LIST_ID = import.meta.env.VITE_BREVO_NEWSLETTER_LIST_ID;
+      const BREVO_LIST_ID = import.meta.env.VITE_BREVO_NEWSLETTER_LIST_ID || '3';
 
       if (BREVO_API_KEY) {
         const brevoRes = await fetch('https://api.brevo.com/v3/contacts', {

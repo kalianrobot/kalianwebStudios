@@ -117,16 +117,17 @@ const AdminLocales = () => {
         ultimoPagoMesAnio: nuevoEstado ? mesAnioKey : ''
       });
 
-      // 2. Obtener socios vinculados
+      // 2. Obtener socios vinculados (excluyendo borrados)
       const q = query(collection(db, "socios"), where("localId", "==", local.id));
-      const snap = await getDocs(q);
-      
+      const snapRaw = await getDocs(q);
+      const sociosVivos = snapRaw.docs.filter(d => !d.data().deletedAt);
+
       // 3. Actualizar estado de pago de los socios
-      for (const sDoc of snap.docs) {
+      for (const sDoc of sociosVivos) {
         const socioId = sDoc.id;
         const pagoId = `${anioActual}_${mesActual}_${socioId}`;
         const pagoRef = doc(db, "pagos_mensuales", pagoId);
-        
+
         batch.set(pagoRef, {
           socioId,
           mes: mesActual,
@@ -141,11 +142,11 @@ const AdminLocales = () => {
       }
 
       // 4. Registrar en Finanzas (Aportación o Devolución)
-      const montoTransaccion = snap.size * cuotaGlobal;
+      const montoTransaccion = sociosVivos.length * cuotaGlobal;
       await registrarIngreso({
         monto: nuevoEstado ? montoTransaccion : -montoTransaccion,
-        concepto: nuevoEstado 
-          ? `Aportación Local ${local.nombre} (${snap.size} socios) - ${meses[mesActual-1]}`
+        concepto: nuevoEstado
+          ? `Aportación Local ${local.nombre} (${sociosVivos.length} socios) - ${meses[mesActual-1]}`
           : `REVERSIÓN: Aportación Local ${local.nombre} - ${meses[mesActual-1]}`,
         categoria: 'Aportación Socio Local',
         metodo: metodoPago,
@@ -153,10 +154,10 @@ const AdminLocales = () => {
         mes: mesActual,
         anio: anioActual
       });
-      
+
       await batch.commit();
-      
-      const socioIds = snap.docs.map(d => d.id);
+
+      const socioIds = sociosVivos.map(d => d.id);
       if (socioIds.length > 0) {
         await syncMultipleSocios(socioIds);
       }
@@ -215,15 +216,16 @@ const AdminLocales = () => {
       // 2. Sincronizar Pagos si el estado de pago CAMBIÓ
       if (estabaPagado !== ahoraPagado) {
         const q = query(collection(db, "socios"), where("localId", "==", editando.id));
-        const snap = await getDocs(q);
+        const snapRaw = await getDocs(q);
+        const sociosVivos = snapRaw.docs.filter(d => !d.data().deletedAt);
         const batch = writeBatch(db);
-        
+
         // Actualizar socios
-        for (const sDoc of snap.docs) {
+        for (const sDoc of sociosVivos) {
           const socioId = sDoc.id;
           const pagoId = `${anioActual}_${mesActual}_${socioId}`;
           const pagoRef = doc(db, "pagos_mensuales", pagoId);
-          
+
           batch.set(pagoRef, {
             socioId,
             mes: mesActual,
@@ -239,12 +241,12 @@ const AdminLocales = () => {
         await batch.commit();
 
         // Registrar en Finanzas (Aportación o Reversión)
-        const montoTransaccion = snap.size * cuotaGlobal;
+        const montoTransaccion = sociosVivos.length * cuotaGlobal;
         if (montoTransaccion > 0) {
           await registrarIngreso({
             monto: ahoraPagado ? montoTransaccion : -montoTransaccion,
-            concepto: ahoraPagado 
-              ? `Aportación Local ${editando.nombre} (${snap.size} socios) - ${meses[mesActual-1]}`
+            concepto: ahoraPagado
+              ? `Aportación Local ${editando.nombre} (${sociosVivos.length} socios) - ${meses[mesActual-1]}`
               : `REVERSIÓN: Aportación Local ${editando.nombre} - ${meses[mesActual-1]}`,
             categoria: 'Aportación Socio Local',
             metodo: metodoPago,

@@ -336,7 +336,8 @@ const ControlAcceso = ({ isPuertaMode = false }: { isPuertaMode?: boolean }) => 
           categoria: 'Evento',
           metodo: metodoPago,
           socio_id: socioEncontrado.id,
-          staff_id: user?.uid
+          staff_id: user?.uid,
+          eventoId: eventoSeleccionado.id
         });
       }
 
@@ -467,7 +468,8 @@ const ControlAcceso = ({ isPuertaMode = false }: { isPuertaMode?: boolean }) => 
           categoria: 'Evento',
           metodo: metodoPago,
           socio_id: slot.socio_id || 'anonimo',
-          staff_id: user?.uid
+          staff_id: user?.uid,
+          eventoId: eventoSeleccionado.id
         });
       }
 
@@ -578,7 +580,8 @@ const ControlAcceso = ({ isPuertaMode = false }: { isPuertaMode?: boolean }) => 
           categoria: 'Evento',
           metodo: metodoPago,
           socio_id: esSocio ? walkInSocio.id : 'anonimo',
-          staff_id: user?.uid
+          staff_id: user?.uid,
+          eventoId: eventoSeleccionado.id
         });
       }
 

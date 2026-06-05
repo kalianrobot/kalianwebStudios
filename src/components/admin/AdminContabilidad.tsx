@@ -6,8 +6,8 @@ import { useAuth } from '../../context/AuthContext';
 import { 
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell, PieChart, Pie 
 } from 'recharts';
-import { 
-  Download, Filter, Calendar, TrendingUp, GraduationCap, Users, ArrowLeft, Search, Ticket, Settings, PieChart as PieIcon, BarChart3
+import {
+  Download, Filter, Calendar, TrendingUp, GraduationCap, Users, ArrowLeft, Search, Ticket, Settings, PieChart as PieIcon, BarChart3, ChevronRight, ChevronDown
 } from 'lucide-react';
 import { fetchConfig, updateConfig, subscribeToConfig } from '../../lib/configService';
 
@@ -19,7 +19,57 @@ interface Transaccion {
   categoria: 'Socio' | 'Curso' | 'Evento' | 'Aportación Socio Local';
   metodo: 'Efectivo' | 'Tarjeta' | 'Transferencia';
   socio_id: string;
+  eventoId?: string;
 }
+
+type Fila =
+  | { tipo: 'individual'; t: Transaccion }
+  | { tipo: 'grupo'; id: string; titulo: string; total: number; ultima: Timestamp; hijos: Transaccion[]; metodo: string };
+
+// Extrae el título del evento del concepto: "Entrada Evento: KALIAN JAZZ (Titular)" → "KALIAN JAZZ"
+const extraerTituloEvento = (concepto: string): string | null => {
+  const m = concepto.match(/^Entrada (?:Evento|Puerta): (.+?) \(/);
+  return m ? m[1] : null;
+};
+
+// Extrae el sufijo en paréntesis: "Entrada Evento: X (Titular Soci@)" → "Titular Soci@"
+const extraerSufijo = (concepto: string): string => {
+  const m = concepto.match(/\(([^)]+)\)\s*$/);
+  return m ? m[1] : concepto;
+};
+
+const agruparMovimientos = (rows: Transaccion[]): Fila[] => {
+  const grupos = new Map<string, Transaccion[]>();
+  const individuales: Transaccion[] = [];
+
+  for (const t of rows) {
+    if (t.categoria !== 'Evento') {
+      individuales.push(t);
+      continue;
+    }
+    const key = t.eventoId || extraerTituloEvento(t.concepto) || t.id;
+    if (!grupos.has(key)) grupos.set(key, []);
+    grupos.get(key)!.push(t);
+  }
+
+  const filas: Fila[] = [];
+  for (const [id, hijos] of grupos) {
+    const titulo = extraerTituloEvento(hijos[0].concepto) || hijos[0].concepto;
+    const total = hijos.reduce((a, t) => a + t.monto, 0);
+    const ultima = hijos.reduce((max, t) => (t.fecha.toMillis() > max.toMillis() ? t.fecha : max), hijos[0].fecha);
+    const metodos = new Set(hijos.map(h => h.metodo));
+    const metodo = metodos.size === 1 ? [...metodos][0] : 'Varios';
+    filas.push({ tipo: 'grupo', id, titulo, total, ultima, hijos, metodo });
+  }
+  for (const t of individuales) filas.push({ tipo: 'individual', t });
+
+  filas.sort((a, b) => {
+    const fa = a.tipo === 'grupo' ? a.ultima.toMillis() : a.t.fecha.toMillis();
+    const fb = b.tipo === 'grupo' ? b.ultima.toMillis() : b.t.fecha.toMillis();
+    return fb - fa;
+  });
+  return filas;
+};
 
 const AdminContabilidad = () => {
   const { user } = useAuth();
@@ -35,6 +85,15 @@ const AdminContabilidad = () => {
   const [cuotaGlobal, setCuotaGlobal] = useState(15);
   const [showConfig, setShowConfig] = useState(false);
   const [nuevaCuota, setNuevaCuota] = useState(15);
+  const [expandidos, setExpandidos] = useState<Set<string>>(new Set());
+
+  const toggleExpand = (id: string) => {
+    setExpandidos(prev => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id); else next.add(id);
+      return next;
+    });
+  };
   
   const getMesesNombres = () => {
     const formatter = new Intl.DateTimeFormat('es', { month: 'long' });
@@ -195,9 +254,10 @@ const AdminContabilidad = () => {
     document.body.removeChild(link);
   };
 
-  const transaccionesFiltradas = transacciones.filter(t => 
+  const transaccionesFiltradas = transacciones.filter(t =>
     filtroCategoria === 'todas' || t.categoria === filtroCategoria
   );
+  const filasAgrupadas = agruparMovimientos(transaccionesFiltradas);
 
   return (
     <div className="min-h-screen bg-kalian-dark p-6 md:p-12 text-kalian-cream font-sans">
@@ -479,49 +539,108 @@ const AdminContabilidad = () => {
         <div className="bg-black/40 border border-kalian-gold/10 rounded-[3rem] overflow-hidden">
           <div className="p-8 border-b border-kalian-gold/10 flex justify-between items-center">
             <h3 className="text-xl kalian-poster-text text-kalian-gold/40 uppercase tracking-widest italic">Últimos Movimientos</h3>
-            <span className="text-[10px] font-black text-kalian-gold/40 uppercase tracking-widest">{transaccionesFiltradas.length} Transacciones</span>
+            <span className="text-[10px] font-black text-kalian-gold/40 uppercase tracking-widest">
+              {filasAgrupadas.length} {filasAgrupadas.length === 1 ? 'Línea' : 'Líneas'} · {transaccionesFiltradas.length} Transacciones
+            </span>
           </div>
           <div className="overflow-x-auto">
             <table className="w-full text-left border-collapse">
               <thead>
                 <tr className="text-[10px] font-black text-kalian-gold/40 uppercase tracking-widest border-b border-kalian-gold/10">
+                  <th className="p-6 w-8"></th>
                   <th className="p-6">Fecha</th>
                   <th className="p-6">Concepto</th>
                   <th className="p-6">Categoría</th>
+                  <th className="p-6 text-center">#</th>
                   <th className="p-6">Método</th>
                   <th className="p-6">Socio ID</th>
                   <th className="p-6 text-right">Monto</th>
                 </tr>
               </thead>
               <tbody>
-                {transaccionesFiltradas.map((t) => (
-                  <tr key={t.id} className="border-b border-white/5 hover:bg-white/5 transition-colors group">
-                    <td className="p-6 text-[10px] font-mono text-kalian-cream/40">{t.fecha.toDate().toLocaleString()}</td>
-                    <td className="p-6">
-                      <p className="text-sm font-bold text-kalian-cream group-hover:text-kalian-gold transition-colors">{t.concepto}</p>
-                    </td>
-                    <td className="p-6">
-                      <span className={`text-[8px] font-black uppercase px-3 py-1 rounded-full border ${
-                        t.categoria === 'Socio' ? 'bg-amber-500/10 text-amber-500 border-amber-500/20' :
-                        t.categoria === 'Aportación Socio Local' ? 'bg-emerald-500/10 text-emerald-500 border-emerald-500/20' :
-                        t.categoria === 'Curso' ? 'bg-indigo-500/10 text-indigo-500 border-indigo-500/20' :
-                        'bg-rose-500/10 text-rose-500 border-rose-500/20'
-                      }`}>
-                        {t.categoria === 'Aportación Socio Local' ? 'Local' : t.categoria}
-                      </span>
-                    </td>
-                    <td className="p-6 text-[10px] font-black text-kalian-cream/60 uppercase tracking-widest">{t.metodo}</td>
-                    <td className="p-6 text-[10px] font-mono text-kalian-gold/40">{t.socio_id}</td>
-                    <td className="p-6 text-right">
-                      <span className={`text-lg kalian-poster-text ${t.monto >= 0 ? 'text-kalian-gold' : 'text-rose-500'}`}>
-                        {t.monto >= 0 ? '+' : ''}{t.monto.toFixed(2)}€
-                      </span>
-                    </td>
-                  </tr>
-                ))}
-                {transaccionesFiltradas.length === 0 && (
+                {filasAgrupadas.map((fila) => {
+                  if (fila.tipo === 'individual') {
+                    const t = fila.t;
+                    return (
+                      <tr key={t.id} className="border-b border-white/5 hover:bg-white/5 transition-colors group">
+                        <td className="p-6"></td>
+                        <td className="p-6 text-[10px] font-mono text-kalian-cream/40">{t.fecha.toDate().toLocaleString()}</td>
+                        <td className="p-6">
+                          <p className="text-sm font-bold text-kalian-cream group-hover:text-kalian-gold transition-colors">{t.concepto}</p>
+                        </td>
+                        <td className="p-6">
+                          <span className={`text-[8px] font-black uppercase px-3 py-1 rounded-full border ${
+                            t.categoria === 'Socio' ? 'bg-amber-500/10 text-amber-500 border-amber-500/20' :
+                            t.categoria === 'Aportación Socio Local' ? 'bg-emerald-500/10 text-emerald-500 border-emerald-500/20' :
+                            t.categoria === 'Curso' ? 'bg-indigo-500/10 text-indigo-500 border-indigo-500/20' :
+                            'bg-rose-500/10 text-rose-500 border-rose-500/20'
+                          }`}>
+                            {t.categoria === 'Aportación Socio Local' ? 'Local' : t.categoria}
+                          </span>
+                        </td>
+                        <td className="p-6 text-center text-kalian-cream/20">—</td>
+                        <td className="p-6 text-[10px] font-black text-kalian-cream/60 uppercase tracking-widest">{t.metodo}</td>
+                        <td className="p-6 text-[10px] font-mono text-kalian-gold/40">{t.socio_id}</td>
+                        <td className="p-6 text-right">
+                          <span className={`text-lg kalian-poster-text ${t.monto >= 0 ? 'text-kalian-gold' : 'text-rose-500'}`}>
+                            {t.monto >= 0 ? '+' : ''}{t.monto.toFixed(2)}€
+                          </span>
+                        </td>
+                      </tr>
+                    );
+                  }
+                  // fila.tipo === 'grupo'
+                  const abierto = expandidos.has(fila.id);
+                  return (
+                    <React.Fragment key={fila.id}>
+                      <tr
+                        onClick={() => toggleExpand(fila.id)}
+                        className="border-b border-white/5 hover:bg-kalian-gold/5 transition-colors group cursor-pointer"
+                      >
+                        <td className="p-6 text-kalian-gold/60">
+                          {abierto ? <ChevronDown size={16} /> : <ChevronRight size={16} />}
+                        </td>
+                        <td className="p-6 text-[10px] font-mono text-kalian-cream/40">{fila.ultima.toDate().toLocaleString()}</td>
+                        <td className="p-6">
+                          <p className="text-sm font-bold text-kalian-cream group-hover:text-kalian-gold transition-colors">{fila.titulo}</p>
+                          <p className="text-[9px] font-black uppercase tracking-widest text-kalian-gold/40 mt-1">Evento · grupo de entradas</p>
+                        </td>
+                        <td className="p-6">
+                          <span className="text-[8px] font-black uppercase px-3 py-1 rounded-full border bg-rose-500/10 text-rose-500 border-rose-500/20">
+                            Evento
+                          </span>
+                        </td>
+                        <td className="p-6 text-center">
+                          <span className="text-sm font-black text-kalian-gold">{fila.hijos.length}</span>
+                        </td>
+                        <td className="p-6 text-[10px] font-black text-kalian-cream/60 uppercase tracking-widest">{fila.metodo}</td>
+                        <td className="p-6 text-[10px] font-mono text-kalian-gold/20">—</td>
+                        <td className="p-6 text-right">
+                          <span className="text-lg kalian-poster-text text-kalian-gold">
+                            +{fila.total.toFixed(2)}€
+                          </span>
+                        </td>
+                      </tr>
+                      {abierto && fila.hijos.map(h => (
+                        <tr key={h.id} className="border-b border-white/5 bg-black/30 text-kalian-cream/70">
+                          <td className="p-3"></td>
+                          <td className="p-3 pl-10 text-[10px] font-mono text-kalian-cream/40">{h.fecha.toDate().toLocaleString()}</td>
+                          <td className="p-3 text-[12px] font-bold">{extraerSufijo(h.concepto)}</td>
+                          <td className="p-3"></td>
+                          <td className="p-3"></td>
+                          <td className="p-3 text-[10px] font-black uppercase tracking-widest text-kalian-cream/50">{h.metodo}</td>
+                          <td className="p-3 text-[10px] font-mono text-kalian-gold/40">{h.socio_id}</td>
+                          <td className="p-3 text-right">
+                            <span className="text-sm kalian-poster-text text-kalian-cream">{h.monto.toFixed(2)}€</span>
+                          </td>
+                        </tr>
+                      ))}
+                    </React.Fragment>
+                  );
+                })}
+                {filasAgrupadas.length === 0 && (
                   <tr>
-                    <td colSpan={6} className="p-20 text-center">
+                    <td colSpan={8} className="p-20 text-center">
                       <p className="text-kalian-gold/20 kalian-poster-text text-3xl uppercase">No hay movimientos registrados</p>
                     </td>
                   </tr>

@@ -14,6 +14,7 @@ export interface IngresoData {
   staff_id?: string;
   mes?: number;
   anio?: number;
+  eventoId?: string;
 }
 
 export const registrarIngreso = async (data: IngresoData) => {

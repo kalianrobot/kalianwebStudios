@@ -84,7 +84,7 @@ exports.sendWelcomeEmail = (0, https_1.onCall)({ secrets: [BREVO_API_KEY], regio
             <div style="margin:40px 0"><a href="${activationLink}" class="btn">ACTIVAR MI CUENTA</a></div>
             <p style="font-size:12px;color:#666">Recibirás un segundo email de seguridad para completar el proceso.</p>
           </div>
-          <div class="f"><p>CENTRO CULTURAL KALIAN</p><p>Responsable: Kalian. Finalidad: Gestión de soci@s. Derechos: Acceso y supresión.</p></div>
+          <div class="f"><p>KALIAN HIRI KULTUR GUNEA</p><p>Responsable: Kalian. Finalidad: Gestión de soci@s. Derechos: Acceso y supresión.</p></div>
         </div></body></html>`,
     });
 });
@@ -130,7 +130,7 @@ exports.sendMembershipUpdateEmail = (0, https_1.onCall)({ secrets: [BREVO_API_KE
               ${membresiasHtml}
             </div>
           </div>
-          <div class="f"><p>CENTRO CULTURAL KALIAN</p><p>Este carnet es personal e intransferible.</p></div>
+          <div class="f"><p>KALIAN HIRI KULTUR GUNEA</p><p>Este carnet es personal e intransferible.</p></div>
         </div></body></html>`,
     });
 });
@@ -186,7 +186,7 @@ exports.sendReservationConfirmation = (0, https_1.onCall)({ secrets: [BREVO_API_
               <p class="note">Desde ahí puedes cambiar el número de acompañantes o cancelar.</p>
             </div>
           </div>
-          <div class="f"><p>CENTRO CULTURAL KALIAN</p></div>
+          <div class="f"><p>KALIAN HIRI KULTUR GUNEA</p></div>
         </div></body></html>`,
     });
 });

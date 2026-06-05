@@ -82,34 +82,34 @@ const AdminSocios = () => {
         await batch.commit();
       }
 
-      // Limpiar pagos_mensuales que aún figuran como pagados para socios borrados
+      // Limpiar pagos_mensuales huérfanos:
+      //  - socio borrado (deletedAt), o
+      //  - socio inexistente (hard-deleted directamente en Firestore).
       let pagosLimpiados = 0;
-      if (borrados.length > 0) {
-        const idsBorrados = new Set(borrados.map(d => d.id));
-        const pagosSnap = await getDocs(collection(db, "pagos_mensuales"));
-        const pagosSucios = pagosSnap.docs.filter(p => {
-          const data = p.data();
-          return idsBorrados.has(data.socioId) && data.pagado === true;
-        });
-        if (pagosSucios.length > 0) {
-          const batchPagos = writeBatch(db);
-          pagosSucios.forEach(p => batchPagos.update(p.ref, {
-            pagado: false,
-            bloqueado: false,
-            localId: deleteField(),
-            actualizadoPor: 'admin_purga_residuos',
-            fechaActualizacion: new Date().toISOString()
-          }));
-          await batchPagos.commit();
-          pagosLimpiados = pagosSucios.length;
-        }
+      const idsVivos = new Set(snap.docs.filter(d => !d.data().deletedAt).map(d => d.id));
+      const pagosSnap = await getDocs(collection(db, "pagos_mensuales"));
+      const pagosSucios = pagosSnap.docs.filter(p => {
+        const data = p.data();
+        return data.pagado === true && !idsVivos.has(data.socioId);
+      });
+      if (pagosSucios.length > 0) {
+        const batchPagos = writeBatch(db);
+        pagosSucios.forEach(p => batchPagos.update(p.ref, {
+          pagado: false,
+          bloqueado: false,
+          localId: deleteField(),
+          actualizadoPor: 'admin_purga_residuos',
+          fechaActualizacion: new Date().toISOString()
+        }));
+        await batchPagos.commit();
+        pagosLimpiados = pagosSucios.length;
       }
 
       if (sucios.length === 0 && pagosLimpiados === 0) {
         alert("✨ No hay residuos que limpiar.");
         return;
       }
-      setMsg(`✅ Limpiados ${sucios.length} socio(s) y ${pagosLimpiados} pago(s) residual(es)`);
+      setMsg(`✅ Limpiados ${sucios.length} socio(s) y ${pagosLimpiados} pago(s) huérfano(s)`);
       setTimeout(() => setMsg(''), 4000);
     } catch (err) {
       console.error(err);

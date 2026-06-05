@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { db } from '../../firebase';
-import { collection, query, orderBy, onSnapshot, Timestamp, where, getDocs, writeBatch, doc } from 'firebase/firestore';
+import { collection, query, orderBy, onSnapshot, Timestamp, where, getDocs, writeBatch, doc, updateDoc, serverTimestamp } from 'firebase/firestore';
 import { Link } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
 import { 
@@ -121,28 +121,46 @@ const AdminContabilidad = () => {
       const snap = await getDocs(q);
       const dnis = snap.docs.map(d => d.data().socioId).filter(Boolean);
       const sociosMap: Record<string, string> = {};
+      const dnisBorrados = new Set<string>();
       // Firestore 'in' soporta hasta 30 — para más, partimos.
       for (let i = 0; i < dnis.length; i += 30) {
         const chunk = dnis.slice(i, i + 30);
         if (chunk.length === 0) continue;
         const sQ = query(collection(db, "socios"), where("dni", "in", chunk));
         const sSnap = await getDocs(sQ);
-        sSnap.docs.forEach(d => { sociosMap[d.data().dni] = d.data().nombre || ''; });
+        sSnap.docs.forEach(d => {
+          const data = d.data();
+          sociosMap[data.dni] = data.nombre || '';
+          if (data.deletedAt) dnisBorrados.add(data.dni);
+        });
       }
-      const detalles: DetalleSocio[] = snap.docs.map(d => {
-        const data = d.data();
-        return {
-          dni: data.socioId,
-          nombre: sociosMap[data.socioId] || '—',
-          monto: data.monto || 0,
-          profesorId: data.profesorId
-        };
-      }).sort((a, b) => a.nombre.localeCompare(b.nombre));
+      const detalles: DetalleSocio[] = snap.docs
+        .filter(d => !dnisBorrados.has(d.data().socioId))
+        .map(d => {
+          const data = d.data();
+          return {
+            dni: data.socioId,
+            nombre: sociosMap[data.socioId] || '—',
+            monto: data.monto || 0,
+            profesorId: data.profesorId
+          };
+        }).sort((a, b) => a.nombre.localeCompare(b.nombre));
       setDetalleModal({ t, detalles });
     } catch (err) {
       console.error("Error cargando detalle:", err);
     } finally {
       setLoadingDetalle(false);
+    }
+  };
+
+  const softDeleteMovimiento = async (t: Transaccion) => {
+    const monto = `${t.monto >= 0 ? '+' : ''}${t.monto.toFixed(2)}€`;
+    if (!window.confirm(`¿Borrar este movimiento como ajuste manual?\n\n${t.concepto}\n${t.fecha.toDate().toLocaleString()} · ${monto}\n\nSe hace soft-delete: la fila desaparece de la tabla y deja de sumar. La traza queda en Firestore con deletedAt.`)) return;
+    try {
+      await updateDoc(doc(db, "finanzas", t.id), { deletedAt: serverTimestamp() });
+    } catch (err: any) {
+      console.error(err);
+      alert("Error al borrar movimiento: " + (err.message || "desconocido"));
     }
   };
 
@@ -659,9 +677,18 @@ const AdminContabilidad = () => {
                         <td className="p-6 text-[10px] font-black text-kalian-cream/60 uppercase tracking-widest">{t.metodo}</td>
                         <td className="p-6 text-[10px] font-mono text-kalian-gold/40">{t.socio_id}</td>
                         <td className="p-6 text-right">
-                          <span className={`text-lg kalian-poster-text ${t.monto >= 0 ? 'text-kalian-gold' : 'text-rose-500'}`}>
-                            {t.monto >= 0 ? '+' : ''}{t.monto.toFixed(2)}€
-                          </span>
+                          <div className="flex items-center justify-end gap-2">
+                            <span className={`text-lg kalian-poster-text ${t.monto >= 0 ? 'text-kalian-gold' : 'text-rose-500'}`}>
+                              {t.monto >= 0 ? '+' : ''}{t.monto.toFixed(2)}€
+                            </span>
+                            <button
+                              onClick={(e) => { e.stopPropagation(); softDeleteMovimiento(t); }}
+                              title="Eliminar este movimiento (ajuste manual)"
+                              className="opacity-0 group-hover:opacity-100 transition-opacity text-red-500/40 hover:text-red-500 text-sm leading-none px-1"
+                            >
+                              🗑️
+                            </button>
+                          </div>
                         </td>
                       </tr>
                     );

@@ -62,6 +62,32 @@ const AdminSocios = () => {
     return grupos;
   };
 
+  const purgarResiduosBorrados = async () => {
+    if (!window.confirm("Busca socios con deletedAt y limpia su localId / membresias.local residuales (heredados de borrados anteriores al fix). ¿Continuar?")) return;
+    try {
+      const snap = await getDocs(collection(db, "socios"));
+      const sucios = snap.docs.filter(d => {
+        const data = d.data();
+        return !!data.deletedAt && (data.localId || data.membresias?.local);
+      });
+      if (sucios.length === 0) {
+        alert("✨ No hay residuos que limpiar.");
+        return;
+      }
+      const batch = writeBatch(db);
+      sucios.forEach(d => batch.update(d.ref, {
+        localId: deleteField(),
+        'membresias.local': deleteField()
+      }));
+      await batch.commit();
+      setMsg(`✅ Limpiados ${sucios.length} doc(s) residuales`);
+      setTimeout(() => setMsg(''), 4000);
+    } catch (err) {
+      console.error(err);
+      alert("Error en la purga");
+    }
+  };
+
   const handleDeleteDuplicado = async (id: string) => {
     if (!window.confirm(`¿Borrar definitivamente el socio "${id}"?\n\nSe hace soft-delete (deletedAt). Esto NO ajusta entradas existentes en pagos_mensuales ni en finanzas: si este socio ya generó un pago de local este mes, reversa el pago del local antes de borrarlo.`)) return;
     try {
@@ -468,6 +494,13 @@ const AdminSocios = () => {
                     className="bg-amber-500/10 text-amber-500 border border-amber-500/20 px-6 py-3 rounded-2xl font-black text-[10px] uppercase tracking-widest hover:bg-amber-500 hover:text-white transition-all"
                   >
                     🔍 Detectar duplicados
+                  </button>
+                  <button
+                    onClick={purgarResiduosBorrados}
+                    className="bg-indigo-500/10 text-indigo-400 border border-indigo-500/20 px-6 py-3 rounded-2xl font-black text-[10px] uppercase tracking-widest hover:bg-indigo-500 hover:text-white transition-all"
+                    title="Limpia localId y membresias.local en docs ya borrados (deletedAt)"
+                  >
+                    🧽 Purgar residuos
                   </button>
                   <button
                     onClick={handleCleanup}

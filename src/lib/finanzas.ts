@@ -1,7 +1,7 @@
 import { db } from '../firebase';
 import { collection, addDoc, serverTimestamp, Timestamp, setDoc, doc } from 'firebase/firestore';
 
-export type CategoriaIngreso = 'Socio' | 'Curso' | 'Evento' | 'Aportación Socio Local';
+export type CategoriaIngreso = 'Socio' | 'Curso' | 'Evento' | 'Aportación Socio Local' | 'Cierre Aportación Curso';
 export type MetodoPago = 'Efectivo' | 'Tarjeta' | 'Transferencia';
 
 export interface IngresoData {
@@ -11,6 +11,7 @@ export interface IngresoData {
   metodo: MetodoPago;
   socio_id?: string;
   local_id?: string;
+  cursoId?: string;
   staff_id?: string;
   mes?: number;
   anio?: number;

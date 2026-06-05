@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { db, storage } from '../../firebase';
-import { collection, getDocs, updateDoc, doc, query, orderBy, DocumentData, where, setDoc, getDoc, getDocsFromServer, arrayUnion, arrayRemove, increment, writeBatch, collectionGroup, deleteDoc, serverTimestamp, onSnapshot } from 'firebase/firestore';
+import { collection, getDocs, updateDoc, doc, query, orderBy, DocumentData, where, setDoc, getDoc, getDocsFromServer, arrayUnion, arrayRemove, increment, writeBatch, collectionGroup, deleteDoc, onSnapshot } from 'firebase/firestore';
 import { ref, uploadBytes, getDownloadURL, deleteObject } from 'firebase/storage';
 import { useAuth } from '../../context/AuthContext';
 import { useLanguage } from '../../context/LanguageContext';
@@ -34,6 +34,7 @@ const TeacherDashboard = () => {
   const [notificaciones, setNotificaciones] = useState<DocumentData[]>([]);
   const [showNotifs, setShowNotifs] = useState(false);
   const [cuotaGlobal, setCuotaGlobal] = useState(15);
+  const [cursosMap, setCursosMap] = useState<Record<string, string>>({});
   const { user, socioData, logoutTeacher } = useAuth();
   const { t } = useLanguage();
 
@@ -56,6 +57,13 @@ const TeacherDashboard = () => {
     if (!user) return;
 
     fetchConfig().then(conf => setCuotaGlobal(conf.cuotaMensualSocio));
+
+    // Cargar mapa de titulos de todos los cursos (para mostrar atribución cross-curso)
+    getDocs(collection(db, "cursos")).then(snap => {
+      const map: Record<string, string> = {};
+      snap.docs.forEach(d => { map[d.id] = d.data().titulo || d.id; });
+      setCursosMap(map);
+    }).catch(err => console.error("TeacherDashboard: Error cargando cursosMap:", err));
 
     // Listen to cursos
     const qC = query(collection(db, "cursos"), where("profesorId", "==", user.uid));
@@ -158,30 +166,26 @@ const TeacherDashboard = () => {
         const pagoId = `${anioActual}_${mesActual}_${socioId}`;
         const pagoRef = doc(db, "pagos_mensuales", pagoId);
         const snap = await getDoc(pagoRef);
-        
+
         if (snap.exists()) {
-          if (snap.data().bloqueado && socioData?.role !== 'admin') {
+          const data = snap.data();
+          if (data.bloqueado && socioData?.role !== 'admin') {
+            alert(t('teacher.paymentLocked'));
+            return;
+          }
+          // El profesor solo puede revertir pagos que él mismo registró en este curso
+          if (socioData?.role !== 'admin' && (data.profesorId !== user?.uid || data.cursoId !== cursoSeleccionado?.id)) {
             alert(t('teacher.paymentLocked'));
             return;
           }
 
-          const batch = writeBatch(db);
-          
-          // 1. Actualizar estado de pago
-          batch.update(pagoRef, {
+          await updateDoc(pagoRef, {
             pagado: false,
-            bloqueado: false, // Desbloqueamos si se revierte
+            bloqueado: false,
             actualizadoPor: user?.uid,
             fechaActualizacion: new Date().toISOString()
           });
 
-          // 2. Soft delete transacción de finanzas (ID determinista)
-          const finanzaId = `CUOTA_${anioActual}_${mesActual}_${socioId}`;
-          batch.update(doc(db, "finanzas", finanzaId), {
-            deletedAt: serverTimestamp()
-          });
-
-          await batch.commit();
           await syncSocioStatus(socioId);
           setMsg(t('teacher.paymentReversed'));
           setTimeout(() => setMsg(''), 3000);
@@ -236,21 +240,18 @@ const TeacherDashboard = () => {
         mes: mesParaPago,
         anio: anioParaPago,
         pagado: true,
-        bloqueado: true,
+        bloqueado: false,
         monto: cuotaGlobal,
+        cursoId: cursoSeleccionado?.id || null,
+        profesorId: user?.uid || null,
+        metodo: metodoPago,
         actualizadoPor: user?.uid,
         fechaActualizacion: new Date().toISOString()
       }, { merge: true });
 
-      await registrarIngreso({
-        monto: cuotaGlobal,
-        concepto: `Cuota Soci@ ${mesesES[mesParaPago-1]} ${anioParaPago}`,
-        categoria: 'Socio',
-        metodo: metodoPago,
-        socio_id: socioId,
-        mes: mesParaPago,
-        anio: anioParaPago
-      });
+      // Nota: el ingreso en finanzas se registra cuando el admin "Cierra Aportación Mes"
+      // en AdminCursos (categoria 'Cierre Aportación Curso'). Aquí solo se marca el
+      // estado operativo del cobro.
 
       await syncSocioStatus(socioId);
 
@@ -567,16 +568,37 @@ const TeacherDashboard = () => {
             {/* LISTA DE CURSOS */}
             <div className="lg:col-span-1 space-y-4">
               <h2 className="text-xl kalian-poster-text text-kalian-gold/40 uppercase tracking-widest mb-6 ml-4 italic">{t('teacher.myCourses')}</h2>
-              {cursos.map(c => (
-                <div 
-                  key={c.id} 
+              {cursos.map(c => {
+                const totalAlumnos = c.alumnos?.length || 0;
+                const pagadosEnEsteCurso = (c.alumnos || []).filter((dni: string) => {
+                  const p = pagosMensuales[dni];
+                  return p?.pagado && p?.cursoId === c.id;
+                });
+                const sumaCobrada = pagadosEnEsteCurso.reduce((acc: number, dni: string) => acc + (pagosMensuales[dni]?.monto || 0), 0);
+                const cuentaPagados = (c.alumnos || []).filter((dni: string) => pagosMensuales[dni]?.pagado).length;
+                const cerrado = c.ultimoCierreAportacion === mesAnioKey;
+                const listoTransferir = !cerrado && totalAlumnos > 0 && cuentaPagados === totalAlumnos;
+                return (
+                <div
+                  key={c.id}
                   onClick={() => setCursoSeleccionado(c)}
                   className={`p-8 rounded-[2.5rem] border transition-all cursor-pointer group ${cursoSeleccionado?.id === c.id ? 'bg-kalian-gold/20 border-kalian-gold shadow-2xl' : 'bg-black/40 border-kalian-gold/10 hover:border-kalian-gold/30'}`}
                 >
                   <h3 className="text-2xl kalian-poster-text text-kalian-cream group-hover:text-kalian-gold transition-colors uppercase italic leading-none">{c.titulo}</h3>
                   <p className="text-[9px] text-kalian-gold/40 font-black uppercase tracking-[0.3em] mt-2">
-                    {c.horario} | {c.alumnos?.length || 0} Alumnos
+                    {c.horario} | {totalAlumnos} Alumnos
                   </p>
+                  <div className="mt-3 flex items-center gap-3 text-[9px] font-black uppercase tracking-widest">
+                    <span className={`px-2 py-1 rounded-lg border ${cerrado ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/30' : listoTransferir ? 'bg-amber-500/10 text-amber-400 border-amber-500/30 animate-pulse' : 'bg-kalian-gold/5 text-kalian-gold/60 border-kalian-gold/20'}`}>
+                      {cerrado ? '🔒 Cerrado' : `${cuentaPagados}/${totalAlumnos} pagados`}
+                    </span>
+                    {sumaCobrada > 0 && (
+                      <span className="text-kalian-gold/60">{sumaCobrada}€</span>
+                    )}
+                  </div>
+                  {listoTransferir && (
+                    <p className="text-[8px] font-black text-amber-400 uppercase tracking-widest mt-2">✅ Listo para transferir</p>
+                  )}
                   <div className="mt-4 flex flex-wrap gap-2 justify-between items-center">
                     <span className={`text-[10px] font-black uppercase tracking-widest ${c.aforo_disponible !== false ? 'text-emerald-500' : 'text-red-500'}`}>
                       {c.aforo_disponible !== false ? t('teacher.seatsAvail') : t('teacher.noSeats')}
@@ -600,7 +622,8 @@ const TeacherDashboard = () => {
                     </div>
                   </div>
                 </div>
-              ))}
+                );
+              })}
               {cursos.length === 0 && (
                 <div className="bg-black/20 p-10 rounded-[2.5rem] text-center border border-dashed border-kalian-gold/10">
                   <p className="text-kalian-gold/20 font-black uppercase tracking-widest italic text-xs">{t('teacher.noCourses')}</p>
@@ -688,19 +711,29 @@ const TeacherDashboard = () => {
                         const pagoM = pagosMensuales[alumno.dni] || {};
                         const pagoI = pagosInscripciones[alumno.dni] || {};
                         const cubiertoPorLocal = !!pagoM.localId;
-                        const bloqueado = !!pagoM.bloqueado || cubiertoPorLocal;
+                        const pagadoEnOtroCurso = !!pagoM.pagado && !!pagoM.cursoId && pagoM.cursoId !== cursoSeleccionado.id;
+                        const pagadoEnEsteCurso = !!pagoM.pagado && pagoM.cursoId === cursoSeleccionado.id;
+                        const cobradoPorAdmin = !!pagoM.pagado && !pagoM.cursoId && !pagoM.localId;
+                        const propio = pagadoEnEsteCurso && pagoM.profesorId === user?.uid;
+                        const bloqueado = !!pagoM.bloqueado || cubiertoPorLocal || pagadoEnOtroCurso || cobradoPorAdmin || (pagadoEnEsteCurso && !propio);
+
+                        let etiqueta: string | null = null;
+                        if (cubiertoPorLocal) etiqueta = t('teacher.coveredByLocal');
+                        else if (pagadoEnOtroCurso) etiqueta = `Pagado en ${cursosMap[pagoM.cursoId] || pagoM.cursoId}`;
+                        else if (cobradoPorAdmin) etiqueta = 'Cobrado por admin';
+                        else if (pagoM.bloqueado && pagadoEnEsteCurso) etiqueta = '🔒 Cerrado por admin';
 
                         return (
                           <div key={idx} className="grid grid-cols-12 gap-4 px-6 py-5 bg-kalian-gold/5 rounded-2xl items-center hover:bg-kalian-gold/10 transition-all group">
                             <div className="col-span-6">
                               <p className="font-black text-kalian-cream uppercase italic group-hover:text-kalian-gold transition-colors">{alumno.nombre}</p>
                               <p className="text-[8px] text-kalian-gold/60 font-bold tracking-widest mt-1">{alumno.dni}</p>
-                              {cubiertoPorLocal && (
-                                <p className="text-[7px] font-black text-emerald-500 uppercase tracking-widest mt-1">{t('teacher.coveredByLocal')}</p>
+                              {etiqueta && (
+                                <p className="text-[7px] font-black text-emerald-500 uppercase tracking-widest mt-1">{etiqueta}</p>
                               )}
                             </div>
                             <div className="col-span-3 flex flex-col items-center gap-1">
-                              <button 
+                              <button
                                 onClick={() => togglePago(alumno.dni, 'mensual', !!pagoM.pagado, undefined, alumno.nombre)}
                                 disabled={bloqueado}
                                 className={`w-10 h-10 rounded-xl border flex items-center justify-center transition-all ${pagoM.pagado ? 'bg-emerald-500 border-emerald-400 text-white shadow-lg shadow-emerald-500/20' : 'bg-black/40 border-kalian-gold/20 text-transparent hover:border-kalian-gold/40'} ${bloqueado ? 'opacity-100 cursor-default' : ''}`}

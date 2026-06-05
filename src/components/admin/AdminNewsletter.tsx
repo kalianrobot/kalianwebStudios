@@ -9,6 +9,7 @@ const AdminNewsletter = () => {
   const [loading, setLoading] = useState(true);
   const [msg, setMsg] = useState('');
   const [filtro, setFiltro] = useState<'todos' | 'musica' | 'danza'>('todos');
+  const [mostrarBajas, setMostrarBajas] = useState(false);
 
   const fetchSubs = async () => {
     setLoading(true);
@@ -45,15 +46,24 @@ const AdminNewsletter = () => {
     return d ? d.toLocaleDateString('es-ES', { day: '2-digit', month: '2-digit', year: 'numeric' }) : '—';
   };
 
-  const filtrados = subs.filter(s => filtro === 'todos' || (s.interes || '').toLowerCase() === filtro);
+  const filtrados = subs.filter(s => {
+    const esBaja = (s.estado || 'activo') === 'baja';
+    if (!mostrarBajas && esBaja) return false;
+    if (filtro !== 'todos' && (s.interes || '').toLowerCase() !== filtro) return false;
+    return true;
+  });
+
+  const totalBajas = subs.filter(s => (s.estado || 'activo') === 'baja').length;
 
   const exportCSV = () => {
     const escape = (v: any) => {
       const str = String(v ?? '');
       return /[",\n]/.test(str) ? `"${str.replace(/"/g, '""')}"` : str;
     };
+    // Solo exportamos activos para no enviar newsletter a quien se dio de baja
+    const exportables = filtrados.filter(s => (s.estado || 'activo') === 'activo');
     const header = ['Nombre', 'Email', 'Interes', 'Fecha'];
-    const rows = filtrados.map(s => [
+    const rows = exportables.map(s => [
       escape(s.nombre),
       escape(s.email),
       escape(s.interes),
@@ -90,8 +100,8 @@ const AdminNewsletter = () => {
 
         {msg && <div className="bg-kalian-gold text-black p-5 rounded-3xl mb-12 kalian-poster-text text-xl text-center shadow-2xl">{msg}</div>}
 
-        {/* Filtro por interés */}
-        <div className="flex gap-2 mb-8">
+        {/* Filtro por interés + bajas */}
+        <div className="flex gap-2 mb-8 flex-wrap items-center">
           {(['todos', 'musica', 'danza'] as const).map(f => (
             <button
               key={f}
@@ -103,6 +113,10 @@ const AdminNewsletter = () => {
               {f === 'todos' ? 'Todos' : f === 'musica' ? 'Música' : 'Danza'}
             </button>
           ))}
+          <label className="ml-auto flex items-center gap-3 px-5 py-3 rounded-full border border-red-500/20 bg-red-500/5 cursor-pointer select-none text-[10px] font-black uppercase tracking-widest text-red-400 hover:bg-red-500/10 transition-all">
+            <input type="checkbox" checked={mostrarBajas} onChange={e => setMostrarBajas(e.target.checked)} className="accent-red-500" />
+            Mostrar bajas {totalBajas > 0 && `(${totalBajas})`}
+          </label>
         </div>
 
         <div className="bg-black/40 border border-kalian-gold/10 rounded-[3rem] overflow-hidden shadow-2xl">
@@ -123,10 +137,19 @@ const AdminNewsletter = () => {
                 <Mail size={48} className="text-kalian-gold/20" />
                 Sin suscriptores
               </div>
-            ) : filtrados.map(s => (
-              <div key={s.id} className="p-8 grid grid-cols-12 gap-4 items-center group hover:bg-white/5 transition-all">
+            ) : filtrados.map(s => {
+              const esBaja = (s.estado || 'activo') === 'baja';
+              return (
+              <div key={s.id} className={`p-8 grid grid-cols-12 gap-4 items-center group transition-all ${esBaja ? 'bg-red-500/5 opacity-70' : 'hover:bg-white/5'}`}>
                 <div className="col-span-4">
-                  <p className="text-lg kalian-poster-text text-kalian-cream group-hover:text-kalian-gold transition-colors">{s.nombre || 'Sin nombre'}</p>
+                  <div className="flex items-center gap-3 flex-wrap">
+                    <p className="text-lg kalian-poster-text text-kalian-cream group-hover:text-kalian-gold transition-colors">{s.nombre || 'Sin nombre'}</p>
+                    {esBaja && (
+                      <span className="px-2 py-0.5 bg-red-500/20 text-red-400 border border-red-500/30 rounded text-[9px] font-black uppercase tracking-widest" title={s.motivo || 'baja'}>
+                        BAJA{s.motivo ? ` · ${s.motivo}` : ''}
+                      </span>
+                    )}
+                  </div>
                 </div>
                 <div className="col-span-4">
                   <p className="text-[11px] font-bold text-kalian-cream/60 break-all">{s.email}</p>
@@ -149,14 +172,15 @@ const AdminNewsletter = () => {
                   </button>
                 </div>
               </div>
-            ))}
+              );
+            })}
           </div>
         </div>
 
         <div className="mt-12 bg-kalian-gold/5 border border-kalian-gold/10 p-8 rounded-[2.5rem]">
           <h3 className="text-xl kalian-poster-text text-kalian-gold mb-4 uppercase">¿Cómo enviar la newsletter?</h3>
           <p className="text-sm text-kalian-cream/60 leading-relaxed">
-            Esta lista se sincroniza con Brevo al darse de alta cada contacto. Para redactar y enviar campañas, accede a tu panel de <span className="text-kalian-gold">Brevo</span>. Aquí puedes consultar, exportar (CSV) y eliminar suscriptores.
+            Sincronizada con <span className="text-kalian-gold">Brevo</span> en ambas direcciones: las altas y bajas vía Brevo (unsubscribe, spam, hard bounce) se reflejan aquí automáticamente. Si borras un suscriptor desde esta página, también se elimina de Brevo. Las redacciones de campañas se hacen en el panel de Brevo.
           </p>
         </div>
       </div>

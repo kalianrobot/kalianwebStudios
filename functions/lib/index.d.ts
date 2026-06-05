@@ -22,3 +22,8 @@ export declare const gestionarReservaInvitado: import("firebase-functions/v2/htt
     cancelada: boolean;
     reserva?: undefined;
 }>, unknown>;
+export declare const brevoWebhook: import("firebase-functions/v2/https").HttpsFunction;
+export declare const onNewsletterSubscriberDeleted: import("firebase-functions").CloudFunction<import("firebase-functions/v2/firestore").FirestoreEvent<import("firebase-functions/v2/firestore").QueryDocumentSnapshot, {
+    id: string;
+}>>;
+export declare const reconciliarNewsletterBrevo: import("firebase-functions/v2/scheduler").ScheduleFunction;

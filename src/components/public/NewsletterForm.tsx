@@ -53,11 +53,13 @@ const NewsletterForm = () => {
         interes: form.interes,
         fecha: serverTimestamp(),
         ip,
-        acepto_terminos: true
+        acepto_terminos: true,
+        estado: 'activo'
       });
 
       // 3. Petición a Brevo API
       const BREVO_API_KEY = import.meta.env.VITE_BREVO_API_KEY;
+      const BREVO_LIST_ID = import.meta.env.VITE_BREVO_NEWSLETTER_LIST_ID;
 
       if (BREVO_API_KEY) {
         const brevoRes = await fetch('https://api.brevo.com/v3/contacts', {
@@ -73,6 +75,7 @@ const NewsletterForm = () => {
               NOMBRE: nombre,
               INTERES: form.interes.toUpperCase()
             },
+            ...(BREVO_LIST_ID ? { listIds: [Number(BREVO_LIST_ID)] } : {}),
             updateEnabled: true
           })
         });

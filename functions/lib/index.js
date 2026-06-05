@@ -1,13 +1,18 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.gestionarReservaInvitado = exports.sendReservationConfirmation = exports.sendMembershipUpdateEmail = exports.sendWelcomeEmail = exports.validatePuertaAccess = void 0;
+exports.reconciliarNewsletterBrevo = exports.onNewsletterSubscriberDeleted = exports.brevoWebhook = exports.gestionarReservaInvitado = exports.sendReservationConfirmation = exports.sendMembershipUpdateEmail = exports.sendWelcomeEmail = exports.validatePuertaAccess = void 0;
 const https_1 = require("firebase-functions/v2/https");
+const firestore_1 = require("firebase-functions/v2/firestore");
+const scheduler_1 = require("firebase-functions/v2/scheduler");
 const params_1 = require("firebase-functions/params");
+const firebase_functions_1 = require("firebase-functions");
 const admin = require("firebase-admin");
 const node_fetch_1 = require("node-fetch");
 admin.initializeApp();
 const EU_REGION = 'europe-west1';
 const BREVO_API_KEY = (0, params_1.defineSecret)('BREVO_API_KEY');
+const BREVO_WEBHOOK_SECRET = (0, params_1.defineSecret)('BREVO_WEBHOOK_SECRET');
+const BREVO_NEWSLETTER_LIST_ID = (0, params_1.defineSecret)('BREVO_NEWSLETTER_LIST_ID');
 const SENDER = { name: 'Kalian Hiri Kultur Gunea', email: 'info@kalian.es' };
 async function callBrevo(apiKey, payload) {
     const res = await (0, node_fetch_1.default)('https://api.brevo.com/v3/smtp/email', {
@@ -310,5 +315,160 @@ exports.gestionarReservaInvitado = (0, https_1.onCall)({ region: EU_REGION }, as
         });
     });
     return { ok: true, reserva: await resumenActividad() };
+});
+// ─── brevoWebhook ───────────────────────────────────────────────────────────
+// Recibe eventos de Brevo (unsubscribed, hardBounce, spam) y actualiza
+// el doc correspondiente en `newsletter_subscribers` marcándolo como baja.
+// Validación: la URL debe llevar ?secret=<BREVO_WEBHOOK_SECRET> para evitar
+// llamadas falsas (Brevo no firma HMAC, así que usamos query secret).
+exports.brevoWebhook = (0, https_1.onRequest)({ region: EU_REGION, secrets: [BREVO_WEBHOOK_SECRET] }, async (req, res) => {
+    const secretProvided = (req.query.secret || req.headers['x-brevo-secret']);
+    if (!secretProvided || secretProvided !== BREVO_WEBHOOK_SECRET.value()) {
+        firebase_functions_1.logger.warn('brevoWebhook: secret inválido', { ip: req.ip });
+        res.status(401).send('unauthorized');
+        return;
+    }
+    if (req.method !== 'POST') {
+        res.status(405).send('method not allowed');
+        return;
+    }
+    const body = req.body;
+    const event = (body?.event || '').toLowerCase();
+    const email = (body?.email || '').toLowerCase().trim();
+    if (!email) {
+        res.status(200).send('ok'); // ignoramos eventos sin email sin protestar
+        return;
+    }
+    const eventosBaja = ['unsubscribed', 'spam', 'hardbounce', 'hard_bounce', 'blocked'];
+    if (!eventosBaja.includes(event)) {
+        res.status(200).send('ok');
+        return;
+    }
+    try {
+        const db = admin.firestore();
+        const snap = await db.collection('newsletter_subscribers')
+            .where('email', '==', email)
+            .limit(1)
+            .get();
+        if (snap.empty) {
+            firebase_functions_1.logger.info('brevoWebhook: email no encontrado en Firestore', { email, event });
+            res.status(200).send('ok');
+            return;
+        }
+        await snap.docs[0].ref.update({
+            estado: 'baja',
+            motivo: event,
+            fecha_baja: admin.firestore.FieldValue.serverTimestamp(),
+        });
+        firebase_functions_1.logger.info('brevoWebhook: suscriptor marcado como baja', { email, event });
+    }
+    catch (err) {
+        firebase_functions_1.logger.error('brevoWebhook: error actualizando Firestore', { error: err.message, email, event });
+    }
+    res.status(200).send('ok');
+});
+// ─── onNewsletterSubscriberDeleted ──────────────────────────────────────────
+// Cuando un admin borra a un suscriptor desde Firestore, también lo borramos
+// del contacto en Brevo para que no siga recibiendo emails. Si Brevo
+// responde 404 (contacto inexistente), lo ignoramos silenciosamente.
+exports.onNewsletterSubscriberDeleted = (0, firestore_1.onDocumentDeleted)({
+    document: 'newsletter_subscribers/{id}',
+    region: EU_REGION,
+    secrets: [BREVO_API_KEY],
+}, async (event) => {
+    const data = event.data?.data();
+    const email = (data?.email || '').toLowerCase().trim();
+    if (!email)
+        return;
+    try {
+        const url = `https://api.brevo.com/v3/contacts/${encodeURIComponent(email)}`;
+        const r = await (0, node_fetch_1.default)(url, {
+            method: 'DELETE',
+            headers: {
+                'api-key': BREVO_API_KEY.value(),
+                accept: 'application/json',
+            },
+        });
+        if (!r.ok && r.status !== 404) {
+            const errBody = await r.text();
+            firebase_functions_1.logger.error('onNewsletterSubscriberDeleted: Brevo DELETE falló', {
+                email, status: r.status, body: errBody,
+            });
+        }
+    }
+    catch (err) {
+        firebase_functions_1.logger.error('onNewsletterSubscriberDeleted: excepción', { error: err.message, email });
+    }
+});
+// ─── reconciliarNewsletterBrevo ─────────────────────────────────────────────
+// Cada lunes a las 04:00 UTC reconcilia ambas direcciones por si algún webhook
+// se perdió. Para cada contacto blacklisted en Brevo que aún aparezca activo
+// en Firestore, lo marca como baja. Loguea inconsistencias inversas (en
+// Firestore activo pero no en Brevo) sin tocar nada.
+exports.reconciliarNewsletterBrevo = (0, scheduler_1.onSchedule)({
+    schedule: 'every monday 04:00',
+    region: EU_REGION,
+    secrets: [BREVO_API_KEY, BREVO_NEWSLETTER_LIST_ID],
+    timeoutSeconds: 540,
+}, async () => {
+    const db = admin.firestore();
+    const listId = BREVO_NEWSLETTER_LIST_ID.value();
+    const apiKey = BREVO_API_KEY.value();
+    let offset = 0;
+    const limit = 500;
+    const blacklisted = new Set();
+    const enBrevo = new Set();
+    while (true) {
+        const url = `https://api.brevo.com/v3/contacts/lists/${listId}/contacts?limit=${limit}&offset=${offset}`;
+        const r = await (0, node_fetch_1.default)(url, { headers: { 'api-key': apiKey, accept: 'application/json' } });
+        if (!r.ok) {
+            firebase_functions_1.logger.error('reconciliarNewsletterBrevo: fallo listando contactos', { status: r.status });
+            return;
+        }
+        const data = await r.json();
+        const contacts = data.contacts || [];
+        if (contacts.length === 0)
+            break;
+        for (const c of contacts) {
+            const e = (c.email || '').toLowerCase().trim();
+            if (!e)
+                continue;
+            enBrevo.add(e);
+            if (c.emailBlacklisted)
+                blacklisted.add(e);
+        }
+        if (contacts.length < limit)
+            break;
+        offset += limit;
+    }
+    // Cruzar con Firestore
+    const snap = await db.collection('newsletter_subscribers').get();
+    let marcadosBaja = 0;
+    let huerfanos = 0;
+    for (const docu of snap.docs) {
+        const d = docu.data();
+        const email = (d.email || '').toLowerCase().trim();
+        const estado = d.estado || 'activo';
+        if (!email)
+            continue;
+        if (estado === 'activo' && blacklisted.has(email)) {
+            await docu.ref.update({
+                estado: 'baja',
+                motivo: 'reconciliacion',
+                fecha_baja: admin.firestore.FieldValue.serverTimestamp(),
+            });
+            marcadosBaja++;
+        }
+        else if (estado === 'activo' && !enBrevo.has(email)) {
+            huerfanos++;
+        }
+    }
+    firebase_functions_1.logger.info('reconciliarNewsletterBrevo: completado', {
+        brevoContactos: enBrevo.size,
+        brevoBlacklisted: blacklisted.size,
+        firestoreTotal: snap.size,
+        marcadosBaja,
+        huerfanosEnFirestore: huerfanos,
+    });
 });
 //# sourceMappingURL=index.js.map

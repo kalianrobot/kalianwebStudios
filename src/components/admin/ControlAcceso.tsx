@@ -133,16 +133,35 @@ const ControlAcceso = ({ isPuertaMode = false }: { isPuertaMode?: boolean }) => 
     }
   }, [walkInScanner, walkInAbierto]);
 
-  // Cargar eventos de HOY (rango: fecha empieza con YYYY-MM-DD de hoy)
+  // Cargar eventos activos: hoy o en curso (incluye los que empezaron ayer y aún no han acabado)
   useEffect(() => {
-    const hoy = new Date().toISOString().split('T')[0];
-    const manana = new Date(Date.now() + 86400000).toISOString().split('T')[0];
-    const q = query(collection(db, "eventos"), where("fecha", ">=", hoy), where("fecha", "<", manana));
+    const pad = (n: number) => String(n).padStart(2, '0');
+    const ahora = new Date();
+    const yyyymmdd = (d: Date) => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+    const hoyStr = yyyymmdd(ahora);
+    const ayerStr = yyyymmdd(new Date(ahora.getTime() - 86400000));
+    const mananaStr = yyyymmdd(new Date(ahora.getTime() + 86400000));
+    const nowLocal = `${hoyStr}T${pad(ahora.getHours())}:${pad(ahora.getMinutes())}`;
+
+    // Ventana amplia: ayer ↔ mañana, filtramos en memoria por fecha_fin / startsWith hoy
+    const q = query(
+      collection(db, "eventos"),
+      where("fecha", ">=", ayerStr),
+      where("fecha", "<", mananaStr)
+    );
 
     if (!user) return;
 
     const unsubscribe = onSnapshot(q, (snap) => {
-      const evs = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+      const all = snap.docs.map(d => ({ id: d.id, ...(d.data() as any) }));
+      // Incluir si el evento sigue en curso (fecha_fin >= ahora) o empieza hoy
+      const evs = all.filter((e: any) => {
+        const fecha: string = e.fecha || '';
+        const fechaFin: string = e.fecha_fin || '';
+        if (fechaFin && fechaFin >= nowLocal) return true;
+        if (fecha.startsWith(hoyStr)) return true;
+        return false;
+      });
       setEventos(evs);
       if (evs.length === 1 && !eventoSeleccionado) {
         setEventoSeleccionado(evs[0]);

@@ -3,7 +3,7 @@ import { db, auth } from '../../firebase';
 import { collection, setDoc, doc, getDocs, getDocsFromServer, deleteDoc, query, orderBy, DocumentData, updateDoc, getDoc, arrayUnion, increment, where, writeBatch, arrayRemove, collectionGroup, serverTimestamp } from 'firebase/firestore';
 import { Link, useSearchParams } from 'react-router-dom';
 import { Trash2 } from 'lucide-react';
-import { syncMultipleSocios } from '../../lib/socioService';
+import { syncMultipleSocios, syncSocioStatus } from '../../lib/socioService';
 import { normalizeToSlug } from '../../lib/slug';
 import { registrarIngreso, MetodoPago } from '../../lib/finanzas';
 
@@ -952,8 +952,14 @@ const AdminCursos = () => {
       return;
     }
 
+    const dniUpper = dni.toUpperCase();
+    const dniRe = /^[0-9XYZ][0-9]{7}[A-Z]$/;
+    if (!dniRe.test(dniUpper)) {
+      alert(`❌ DNI/NIE no válido: "${dniUpper}"\nFormato: 8 dígitos + letra (ej: 12345678A) o NIE (ej: X1234567A)`);
+      return;
+    }
+
     try {
-      const dniUpper = dni.toUpperCase();
       const socioRef = doc(db, "socios", dniUpper);
       const socioSnap = await getDoc(socioRef);
 
@@ -1025,6 +1031,7 @@ const AdminCursos = () => {
       setManualAlumno({ dni: '', nombre: '', email: '' });
       setCursoSeleccionado(null);
       fetchCursos();
+      syncSocioStatus(dniUpper).catch(err => console.error("syncSocioStatus error:", err));
       setMsg("✅ Alumno añadido con éxito");
       setTimeout(() => setMsg(''), 3000);
     } catch (err) {

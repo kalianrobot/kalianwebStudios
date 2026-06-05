@@ -174,7 +174,8 @@ service cloud.firestore {
       allow read: if isSignedIn() && (
         resource.data.uid == request.auth.uid ||
         resource.data.email == request.auth.token.email ||
-        isAdmin() || isPortero()
+        isAdmin() || isPortero() ||
+        isTeacher()
       );
       allow create: if isAdmin() || (isSignedIn() && isValidSocioCreate(incoming()));
       allow update, delete: if isAdmin();

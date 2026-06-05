@@ -123,6 +123,15 @@ const TeacherDashboard = () => {
     };
   }, [user, cursoSeleccionado, mesActual, anioActual]);
 
+  // Sync cursoSeleccionado when onSnapshot updates the cursos array
+  useEffect(() => {
+    if (!cursoSeleccionado) return;
+    const updated = cursos.find(c => c.id === cursoSeleccionado.id);
+    if (updated && updated !== cursoSeleccionado) {
+      setCursoSeleccionado(updated);
+    }
+  }, [cursos]);
+
   useEffect(() => {
     const fetchAlumnos = async () => {
       if (!cursoSeleccionado || !cursoSeleccionado.alumnos || cursoSeleccionado.alumnos.length === 0) {

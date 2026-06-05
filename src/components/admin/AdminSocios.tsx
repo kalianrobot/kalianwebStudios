@@ -513,8 +513,8 @@ const AdminSocios = () => {
                   {['musica', 'danza', 'local'].map(cat => (
                     <div key={cat} className="flex items-center justify-between gap-4 bg-black/20 p-4 rounded-2xl border border-kalian-gold/5">
                       <span className="text-[10px] font-black uppercase text-kalian-cream/60 tracking-widest">{cat === 'musica' ? 'Music Is Cool' : cat === 'danza' ? 'Club de Baile' : 'Locales'}</span>
-                      <input 
-                        type="date" 
+                      <input
+                        type="date"
                         className="bg-transparent text-kalian-gold font-bold outline-none border-b border-kalian-gold/20 focus:border-kalian-gold"
                         value={formEdit.membresias?.[cat] || ''}
                         onChange={e => setFormEdit({
@@ -524,6 +524,15 @@ const AdminSocios = () => {
                       />
                     </div>
                   ))}
+                  {Object.keys(formEdit.membresias || {})
+                    .filter(k => !['musica', 'danza', 'local'].includes(k) && formEdit.membresias[k])
+                    .map(k => (
+                      <div key={k} className="flex justify-between items-center bg-slate-50/5 px-4 py-2 rounded-xl border border-kalian-gold/10">
+                        <span className="text-[9px] font-black uppercase text-kalian-gold/50">{k}</span>
+                        <span className="text-[9px] font-black text-kalian-gold">Hasta {formEdit.membresias[k]}</span>
+                      </div>
+                    ))
+                  }
                 </div>
 
                 <div className="space-y-2">

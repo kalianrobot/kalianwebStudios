@@ -28,7 +28,51 @@ const AdminSocios = () => {
   const [cuotaGlobal, setCuotaGlobal] = useState(15);
   const [tabActiva, setTabActiva] = useState<'activos' | 'inactivos'>('activos');
   const [filtroPago, setFiltroPago] = useState<'todos' | 'pagado' | 'pendiente'>('todos');
+  const [showDuplicados, setShowDuplicados] = useState(false);
   const hoy = new Date().toISOString().split('T')[0];
+
+  // Detecta socios duplicados: mismo nombre (normalizado) o mismo email (normalizado).
+  // Devuelve grupos de >=2 docs.
+  const detectarGruposDuplicados = (): DocumentData[][] => {
+    const porNombre = new Map<string, DocumentData[]>();
+    const porEmail = new Map<string, DocumentData[]>();
+    for (const s of socios) {
+      const n = (s.nombre || '').trim().toLowerCase();
+      const e = (s.email || '').trim().toLowerCase();
+      if (n && n.length > 2) {
+        if (!porNombre.has(n)) porNombre.set(n, []);
+        porNombre.get(n)!.push(s);
+      }
+      if (e) {
+        if (!porEmail.has(e)) porEmail.set(e, []);
+        porEmail.get(e)!.push(s);
+      }
+    }
+    const grupos: DocumentData[][] = [];
+    const vistos = new Set<string>();
+    const add = (grupo: DocumentData[]) => {
+      if (grupo.length < 2) return;
+      const key = grupo.map(s => s.id).sort().join('|');
+      if (vistos.has(key)) return;
+      vistos.add(key);
+      grupos.push(grupo);
+    };
+    for (const g of porNombre.values()) add(g);
+    for (const g of porEmail.values()) add(g);
+    return grupos;
+  };
+
+  const handleDeleteDuplicado = async (id: string) => {
+    if (!window.confirm(`¿Borrar definitivamente el socio "${id}"?\n\nSe hace soft-delete (deletedAt). Esto NO ajusta entradas existentes en pagos_mensuales ni en finanzas: si este socio ya generó un pago de local este mes, reversa el pago del local antes de borrarlo.`)) return;
+    try {
+      await updateDoc(doc(db, "socios", id), { deletedAt: serverTimestamp() });
+      setMsg("✅ Duplicado movido a la papelera");
+      setTimeout(() => setMsg(''), 3000);
+    } catch (err) {
+      console.error(err);
+      alert("Error al borrar duplicado");
+    }
+  };
 
   const mesActual = new Date().getMonth() + 1;
   const anioActual = new Date().getFullYear();
@@ -414,7 +458,13 @@ const AdminSocios = () => {
               )}
 
               {tabActiva === 'inactivos' && (
-                <div className="mb-8 flex justify-end">
+                <div className="mb-8 flex justify-end gap-3 flex-wrap">
+                  <button
+                    onClick={() => setShowDuplicados(true)}
+                    className="bg-amber-500/10 text-amber-500 border border-amber-500/20 px-6 py-3 rounded-2xl font-black text-[10px] uppercase tracking-widest hover:bg-amber-500 hover:text-white transition-all"
+                  >
+                    🔍 Detectar duplicados
+                  </button>
                   <button
                     onClick={handleCleanup}
                     disabled={cleaning}
@@ -622,6 +672,69 @@ const AdminSocios = () => {
             </motion.div>
           )}
         </AnimatePresence>
+
+        {/* MODAL DETECCIÓN DUPLICADOS */}
+        {showDuplicados && (() => {
+          const grupos = detectarGruposDuplicados();
+          return (
+            <div className="fixed inset-0 bg-black/90 backdrop-blur-sm z-50 flex items-center justify-center p-4" onClick={() => setShowDuplicados(false)}>
+              <div className="bg-kalian-dark border border-amber-500/30 w-full max-w-3xl rounded-[3rem] shadow-2xl p-10 relative max-h-[85vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
+                <button onClick={() => setShowDuplicados(false)} className="absolute top-8 right-8 text-kalian-gold/40 hover:text-kalian-gold text-2xl">×</button>
+                <h3 className="text-3xl kalian-poster-text text-amber-500 mb-2 italic uppercase">Duplicados Detectados</h3>
+                <p className="text-sm text-kalian-cream/70 mb-6">Soci@s agrupados por mismo nombre (normalizado) o mismo email.</p>
+
+                {grupos.length === 0 ? (
+                  <p className="text-center py-16 text-kalian-gold/30 font-black uppercase tracking-widest italic">✨ No se detectaron duplicados</p>
+                ) : (
+                  <div className="space-y-6">
+                    {grupos.map((grupo, idx) => (
+                      <div key={idx} className="bg-amber-500/5 border border-amber-500/20 rounded-2xl p-5">
+                        <p className="text-[9px] font-black text-amber-500/60 uppercase tracking-[0.3em] mb-3">Grupo {idx + 1} — {grupo.length} coincidencias</p>
+                        <div className="space-y-3">
+                          {grupo.map((s: any) => {
+                            const exp = s.membresias || {};
+                            const activas = Object.keys(exp).filter(cat => exp[cat] >= hoy);
+                            const estadoCalc = activas.length > 0 ? 'activo' : 'inactivo';
+                            return (
+                              <div key={s.id} className="bg-black/30 rounded-xl p-4 flex flex-col md:flex-row justify-between gap-3 border border-white/5">
+                                <div className="flex-1 min-w-0">
+                                  <p className="text-sm font-black text-kalian-cream uppercase italic">{s.nombre || '—'}</p>
+                                  <div className="flex gap-4 flex-wrap mt-1">
+                                    <span className="text-[10px] font-mono font-black text-kalian-gold/70">{s.id}</span>
+                                    <span className="text-[10px] text-kalian-gold/40 italic">{s.email || 'sin email'}</span>
+                                    <span className={`text-[9px] font-black uppercase tracking-widest ${estadoCalc === 'activo' ? 'text-emerald-500' : 'text-red-500'}`}>{estadoCalc}</span>
+                                    {s.localId && <span className="text-[9px] font-black uppercase tracking-widest text-amber-400">Local: {s.localId}</span>}
+                                    {s.cursos?.length > 0 && <span className="text-[9px] text-kalian-gold/40">{s.cursos.length} curso(s)</span>}
+                                  </div>
+                                  <p className="text-[9px] text-kalian-gold/30 font-mono mt-1">Alta: {s.fechaAlta?.split?.('T')[0] || '—'}</p>
+                                </div>
+                                <div className="flex gap-2 flex-shrink-0">
+                                  <button
+                                    onClick={() => { setShowDuplicados(false); setEditando(s); setFormEdit({ nombre: s.nombre || '', email: s.email || '', membresias: s.membresias || {}, estado: s.estado || 'inactivo' }); }}
+                                    className="px-4 py-2 bg-kalian-gold/10 text-kalian-gold rounded-xl border border-kalian-gold/20 hover:bg-kalian-gold/20 text-[10px] font-black uppercase tracking-widest"
+                                  >Editar</button>
+                                  <button
+                                    onClick={() => handleDeleteDuplicado(s.id)}
+                                    className="px-4 py-2 bg-red-500/10 text-red-500 rounded-xl border border-red-500/20 hover:bg-red-500 hover:text-white text-[10px] font-black uppercase tracking-widest"
+                                  >Borrar</button>
+                                </div>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    ))}
+                    <div className="bg-amber-500/10 border border-amber-500/20 rounded-2xl p-5">
+                      <p className="text-[10px] text-amber-300/80 leading-relaxed">
+                        ⚠ Si el duplicado ya generó un pago de local este mes, <strong>reversa primero el pago del local en AdminLocales</strong> antes de borrarlo aquí; de lo contrario la entrada en finanzas seguirá contando ese socio fantasma. Tras borrar el duplicado, vuelve a marcar el pago del local: la nueva entrada se generará con el conteo correcto.
+                      </p>
+                    </div>
+                  </div>
+                )}
+              </div>
+            </div>
+          );
+        })()}
       </div>
     </div>
   );

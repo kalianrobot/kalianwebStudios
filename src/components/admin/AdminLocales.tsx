@@ -180,6 +180,22 @@ const AdminLocales = () => {
     e.preventDefault();
     if (!editando) return;
 
+    // Validación de DNI/NIE de todos los inquilinos antes de tocar Firestore
+    if (editando.alquilado && editando.inquilinos) {
+      const dniRe = /^[0-9XYZ][0-9]{7}[A-Z]$/;
+      for (let i = 0; i < editando.inquilinos.length; i++) {
+        const inq = editando.inquilinos[i];
+        const raw = (inq.dni || '').trim().toUpperCase();
+        if (!raw) continue; // permite filas en blanco que el usuario aún no rellenó
+        if (!dniRe.test(raw)) {
+          alert(`❌ DNI/NIE no válido en la fila ${i + 1}: "${inq.dni}"\nFormato: 8 dígitos + letra (ej: 12345678A) o NIE (ej: X1234567A).\n\nCorrígelo antes de guardar.`);
+          return;
+        }
+        // Normalizar a la versión limpia (trim + upper) para que doc-id y dni queden coherentes
+        editando.inquilinos[i] = { ...inq, dni: raw };
+      }
+    }
+
     try {
       setLoading(true);
       const localOriginal = locales.find(l => l.id === editando.id);

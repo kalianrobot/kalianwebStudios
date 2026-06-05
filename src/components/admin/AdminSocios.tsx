@@ -26,6 +26,8 @@ const AdminSocios = () => {
   const [editando, setEditando] = useState<any | null>(null);
   const [formEdit, setFormEdit] = useState<any>({});
   const [cuotaGlobal, setCuotaGlobal] = useState(15);
+  const [tabActiva, setTabActiva] = useState<'activos' | 'inactivos'>('activos');
+  const [filtroPago, setFiltroPago] = useState<'todos' | 'pagado' | 'pendiente'>('todos');
   const hoy = new Date().toISOString().split('T')[0];
 
   const mesActual = new Date().getMonth() + 1;
@@ -306,15 +308,8 @@ const AdminSocios = () => {
                 <option value="Transferencia">Transferencia</option>
               </select>
             </div>
-            <button 
-              onClick={handleCleanup}
-              disabled={cleaning}
-              className="bg-red-500/10 text-red-500 border border-red-500/20 px-6 py-3 rounded-2xl font-black text-[10px] uppercase tracking-widest hover:bg-red-500 hover:text-white transition-all"
-            >
-              {cleaning ? 'LIMPIANDO...' : '🧹 LIMPIEZA 4 MESES'}
-            </button>
-            <button 
-              onClick={() => setShowForm(!showForm)} 
+            <button
+              onClick={() => setShowForm(!showForm)}
               className="bg-kalian-gold text-black px-8 py-3 rounded-2xl kalian-poster-text text-lg tracking-widest hover:bg-white transition-all shadow-xl shadow-kalian-gold/10"
             >
               {showForm ? 'CANCELAR' : '+ NUEVO SOCI@S'}
@@ -370,10 +365,77 @@ const AdminSocios = () => {
 
         {loading && !showForm ? (
           <div className="text-center py-32 kalian-poster-text text-4xl text-kalian-gold/20 animate-pulse">CARGANDO SOCI@S...</div>
-        ) : (
-          <div className="grid gap-6">
-            {socios.length === 0 && <div className="text-center py-32 bg-black/20 rounded-[3rem] border border-kalian-gold/10 border-dashed text-kalian-gold/20 kalian-poster-text text-4xl">NO HAY SOCI@S REGISTRADOS</div>}
-            {socios.map(s => {
+        ) : (() => {
+          const esActivo = (s: any) => {
+            const exp = s.membresias || {};
+            return Object.keys(exp).some(cat => exp[cat] >= hoy);
+          };
+          const sociosActivos = socios.filter(esActivo);
+          const sociosInactivos = socios.filter(s => !esActivo(s));
+          const sociosActivosFiltrados = sociosActivos.filter(s => {
+            if (filtroPago === 'todos') return true;
+            const pagado = !!pagosMensuales[s.dni]?.pagado;
+            return filtroPago === 'pagado' ? pagado : !pagado;
+          });
+          const sociosAMostrar = tabActiva === 'activos' ? sociosActivosFiltrados : sociosInactivos;
+          const countPagados = sociosActivos.filter(s => !!pagosMensuales[s.dni]?.pagado).length;
+          const countPendientes = sociosActivos.length - countPagados;
+
+          const pillBase = 'px-6 py-3 rounded-[1.5rem] font-black uppercase text-[10px] tracking-widest transition-all';
+          const pillActive = `${pillBase} bg-kalian-gold text-black shadow-lg shadow-kalian-gold/20`;
+          const pillIdle = `${pillBase} text-kalian-gold/60 hover:text-kalian-gold`;
+          const subFilterBase = 'px-5 py-2 rounded-2xl font-black uppercase text-[9px] tracking-widest border transition-all';
+          const subFilterActive = `${subFilterBase} bg-kalian-gold/20 text-kalian-gold border-kalian-gold/40`;
+          const subFilterIdle = `${subFilterBase} bg-black/40 text-kalian-gold/40 border-kalian-gold/10 hover:border-kalian-gold/30`;
+
+          return (
+            <>
+              <div className="flex gap-2 mb-6 bg-black/40 p-2 rounded-[2rem] w-fit border border-kalian-gold/10">
+                <button onClick={() => setTabActiva('activos')} className={tabActiva === 'activos' ? pillActive : pillIdle}>
+                  Activos ({sociosActivos.length})
+                </button>
+                <button onClick={() => setTabActiva('inactivos')} className={tabActiva === 'inactivos' ? pillActive : pillIdle}>
+                  Inactivos ({sociosInactivos.length})
+                </button>
+              </div>
+
+              {tabActiva === 'activos' && (
+                <div className="flex gap-2 mb-8 flex-wrap">
+                  <button onClick={() => setFiltroPago('todos')} className={filtroPago === 'todos' ? subFilterActive : subFilterIdle}>
+                    Todos ({sociosActivos.length})
+                  </button>
+                  <button onClick={() => setFiltroPago('pagado')} className={filtroPago === 'pagado' ? subFilterActive : subFilterIdle}>
+                    ✅ Pagado {meses[mesActual - 1]} ({countPagados})
+                  </button>
+                  <button onClick={() => setFiltroPago('pendiente')} className={filtroPago === 'pendiente' ? subFilterActive : subFilterIdle}>
+                    ❌ Pendiente ({countPendientes})
+                  </button>
+                </div>
+              )}
+
+              {tabActiva === 'inactivos' && (
+                <div className="mb-8 flex justify-end">
+                  <button
+                    onClick={handleCleanup}
+                    disabled={cleaning}
+                    className="bg-red-500/10 text-red-500 border border-red-500/20 px-6 py-3 rounded-2xl font-black text-[10px] uppercase tracking-widest hover:bg-red-500 hover:text-white transition-all disabled:opacity-50"
+                  >
+                    {cleaning ? 'LIMPIANDO...' : '🧹 LIMPIEZA 4 MESES'}
+                  </button>
+                </div>
+              )}
+
+              <div className="grid gap-6">
+                {sociosAMostrar.length === 0 && (
+                  <div className="text-center py-32 bg-black/20 rounded-[3rem] border border-kalian-gold/10 border-dashed text-kalian-gold/20 kalian-poster-text text-4xl">
+                    {tabActiva === 'activos'
+                      ? (filtroPago === 'pagado' ? 'NADIE HA PAGADO AÚN'
+                        : filtroPago === 'pendiente' ? 'TODOS HAN PAGADO ✨'
+                        : 'NO HAY SOCI@S ACTIVOS')
+                      : 'NO HAY SOCI@S INACTIVOS'}
+                  </div>
+                )}
+                {sociosAMostrar.map(s => {
               const exp = s.membresias || {};
               const activas = Object.keys(exp).filter(cat => exp[cat] >= hoy);
               const estadoCalculado = activas.length > 0 ? 'activo' : 'inactivo';
@@ -475,8 +537,10 @@ const AdminSocios = () => {
                 </div>
               );
             })}
-          </div>
-        )}
+              </div>
+            </>
+          );
+        })()}
 
         {/* MODAL EDICIÓN */}
         <AnimatePresence>

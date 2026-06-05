@@ -29,6 +29,8 @@ const TeacherDashboard = () => {
   const [msg, setMsg] = useState('');
   const [showConfirmModal, setShowConfirmModal] = useState(false);
   const [confirmingPago, setConfirmingPago] = useState<{ socioId: string, nombre: string } | null>(null);
+  const [showUnpayModal, setShowUnpayModal] = useState(false);
+  const [confirmingUnpago, setConfirmingUnpago] = useState<{ socioId: string, nombre: string, mes: number, anio: number } | null>(null);
   const [mesParaPago, setMesParaPago] = useState<number>(new Date().getMonth() + 1);
   const [anioParaPago, setAnioParaPago] = useState<number>(new Date().getFullYear());
   const [notificaciones, setNotificaciones] = useState<DocumentData[]>([]);
@@ -179,16 +181,14 @@ const TeacherDashboard = () => {
             return;
           }
 
-          await updateDoc(pagoRef, {
-            pagado: false,
-            bloqueado: false,
-            actualizadoPor: user?.uid,
-            fechaActualizacion: new Date().toISOString()
+          // Mostrar confirmación antes de desmarcar
+          setConfirmingUnpago({
+            socioId,
+            nombre: nombreSocio || socioId,
+            mes: data.mes ?? mesActual,
+            anio: data.anio ?? anioActual
           });
-
-          await syncSocioStatus(socioId);
-          setMsg(t('teacher.paymentReversed'));
-          setTimeout(() => setMsg(''), 3000);
+          setShowUnpayModal(true);
         }
       } else if (tipo === 'inscripcion' && cursoId) {
         const pagoId = `${socioId}_${cursoId}`;
@@ -258,6 +258,29 @@ const TeacherDashboard = () => {
       setShowConfirmModal(false);
       setConfirmingPago(null);
       setMsg(t('teacher.paymentRegistered'));
+      setTimeout(() => setMsg(''), 3000);
+    } catch (err) {
+      console.error(err);
+      alert(t('teacher.paymentError'));
+    }
+  };
+
+  const ejecutarDespagoConfirmado = async () => {
+    if (!confirmingUnpago) return;
+    const { socioId, mes, anio } = confirmingUnpago;
+    try {
+      const pagoId = `${anio}_${mes}_${socioId}`;
+      const pagoRef = doc(db, "pagos_mensuales", pagoId);
+      await updateDoc(pagoRef, {
+        pagado: false,
+        bloqueado: false,
+        actualizadoPor: user?.uid,
+        fechaActualizacion: new Date().toISOString()
+      });
+      await syncSocioStatus(socioId);
+      setShowUnpayModal(false);
+      setConfirmingUnpago(null);
+      setMsg(t('teacher.paymentReversed'));
       setTimeout(() => setMsg(''), 3000);
     } catch (err) {
       console.error(err);
@@ -829,6 +852,47 @@ const TeacherDashboard = () => {
                   className="w-full py-5 text-kalian-gold/40 font-black uppercase text-[10px] tracking-widest hover:text-white transition-colors"
                 >
                   {t('teacher.cancel')}
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* MODAL CONFIRMACIÓN DESMARCAR PAGO */}
+        {showUnpayModal && confirmingUnpago && (
+          <div className="fixed inset-0 bg-black/90 backdrop-blur-md z-[100] flex items-center justify-center p-4">
+            <div className="bg-kalian-dark w-full max-w-sm rounded-[3rem] shadow-2xl border border-red-500/30 p-8 text-center space-y-6 animate-in zoom-in-95 duration-300">
+              <div className="w-16 h-16 bg-red-500/10 rounded-full flex items-center justify-center text-3xl mx-auto border border-red-500/20">
+                ↩️
+              </div>
+              <div className="space-y-3">
+                <h3 className="text-xl kalian-poster-text text-red-400 uppercase italic">¿Desmarcar pago?</h3>
+                <p className="text-sm text-kalian-cream/80 leading-relaxed">
+                  ¿Seguro que quieres desmarcar el pago de
+                </p>
+                <p className="text-lg font-black text-kalian-gold uppercase italic">{confirmingUnpago.nombre}</p>
+                <p className="text-sm text-kalian-cream/70">
+                  correspondiente a{' '}
+                  <span className="font-black text-kalian-cream">
+                    {mesesES[confirmingUnpago.mes - 1]} {confirmingUnpago.anio !== anioActual ? confirmingUnpago.anio : ''}
+                  </span>?
+                </p>
+                <p className="text-[9px] font-black text-red-400/60 uppercase tracking-widest">
+                  El pago quedará como pendiente y podrás volver a registrarlo.
+                </p>
+              </div>
+              <div className="flex flex-col gap-3">
+                <button
+                  onClick={ejecutarDespagoConfirmado}
+                  className="w-full bg-red-500 text-white py-4 rounded-2xl kalian-poster-text text-base tracking-widest hover:bg-red-600 transition-all shadow-xl shadow-red-500/20"
+                >
+                  Sí, desmarcar pago
+                </button>
+                <button
+                  onClick={() => { setShowUnpayModal(false); setConfirmingUnpago(null); }}
+                  className="w-full py-4 text-kalian-gold/40 font-black uppercase text-[10px] tracking-widest hover:text-white transition-colors"
+                >
+                  Cancelar
                 </button>
               </div>
             </div>

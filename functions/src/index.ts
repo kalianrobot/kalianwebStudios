@@ -555,7 +555,6 @@ export const reconciliarNewsletterBrevo = onSchedule(
         await db.collection('newsletter_subscribers').add({
           email,
           nombre: nombre || email.split('@')[0],
-          interes: 'musica',
           estado: blacklisted ? 'baja' : 'activo',
           ...(blacklisted ? { motivo: 'bounce_o_baja', fecha_baja: admin.firestore.FieldValue.serverTimestamp() } : {}),
           fecha: admin.firestore.FieldValue.serverTimestamp(),

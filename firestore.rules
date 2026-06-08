@@ -228,7 +228,7 @@ service cloud.firestore {
           && data.nombre is string && data.nombre.size() > 0 && data.nombre.size() <= 100
           && data.email is string && data.email.size() <= 100 && data.email.matches('.+@.+\\..+')
           && data.acepto_terminos == true
-          && (!data.keys().hasAny(['interes']) || (data.interes is string && data.interes.size() <= 50));
+          && (!data.keys().hasAny(['politica_version']) || (data.politica_version is string && data.politica_version.size() <= 20));
     }
     match /newsletter_subscribers/{id} {
       allow create: if isValidNewsletter(incoming());

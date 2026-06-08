@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { db } from '../../firebase';
-import { collection, getDocs, getDocsFromServer, limit, doc, setDoc, getDoc, query, orderBy, DocumentData, deleteDoc, where, onSnapshot, writeBatch, serverTimestamp, deleteField } from 'firebase/firestore';
+import { collection, getDocs, getDocsFromServer, limit, doc, setDoc, getDoc, query, orderBy, DocumentData, where, onSnapshot, writeBatch, serverTimestamp, deleteField } from 'firebase/firestore';
 import { Link } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
 import { createSocioAuth } from '../../lib/adminAuth';
@@ -184,27 +184,46 @@ const AdminSocios = () => {
   }, [mesActual, anioActual, user]);
 
   const handleCleanup = async () => {
-    if (!window.confirm("¿Seguro que quieres limpiar la base de datos? Se eliminarán soci@s que lleven más de 4 meses inactivos.")) return;
+    if (!window.confirm(
+      "¿Bloquear y anonimizar soci@s con más de 4 meses de inactividad?\n\n" +
+      "Por obligación contable y fiscal (LGT art. 66 y CCom art. 30) no se pueden borrar " +
+      "los datos asociados a pagos: se anonimizan los datos personales (nombre, email) y " +
+      "el documento queda 'bloqueado' a disposición exclusiva de autoridades durante el " +
+      "plazo de prescripción de las acciones legales.\n\n" +
+      "Esta acción NO borra finanzas, pagos_mensuales ni asistencias asociadas."
+    )) return;
     setCleaning(true);
     try {
       const cuatroMesesAtras = new Date();
       cuatroMesesAtras.setMonth(cuatroMesesAtras.getMonth() - 4);
       const limiteIso = cuatroMesesAtras.toISOString().split('T')[0];
 
-      let eliminados = 0;
+      let bloqueados = 0;
       for (const s of socios) {
+        if (s.bloqueado) continue;
         const exp = s.membresias || {};
         const fechas = Object.values(exp) as string[];
-        
+
         // Si no tiene ninguna fecha de expiración o todas son muy antiguas
         const ultimaExp = fechas.length > 0 ? fechas.sort().reverse()[0] : s.fechaAlta?.split('T')[0] || '1900-01-01';
 
         if (ultimaExp < limiteIso) {
-          await deleteDoc(doc(db, "socios", s.id));
-          eliminados++;
+          await updateDoc(doc(db, "socios", s.id), {
+            bloqueado: true,
+            fechaBloqueo: serverTimestamp(),
+            deletedAt: serverTimestamp(),
+            nombre: 'ANONIMIZADO',
+            email: deleteField(),
+            telefono: deleteField(),
+            foto: deleteField(),
+            estado: 'inactivo',
+            localId: deleteField(),
+            'membresias.local': deleteField()
+          });
+          bloqueados++;
         }
       }
-      setMsg(`✅ Limpieza completada: ${eliminados} soci@s eliminados`);
+      setMsg(`✅ Limpieza completada: ${bloqueados} soci@s bloqueados y anonimizados`);
     } catch (err) {
       console.error(err);
       alert("Error en la limpieza");
@@ -536,7 +555,7 @@ const AdminSocios = () => {
                     disabled={cleaning}
                     className="bg-red-500/10 text-red-500 border border-red-500/20 px-6 py-3 rounded-2xl font-black text-[10px] uppercase tracking-widest hover:bg-red-500 hover:text-white transition-all disabled:opacity-50"
                   >
-                    {cleaning ? 'LIMPIANDO...' : '🧹 LIMPIEZA 4 MESES'}
+                    {cleaning ? 'BLOQUEANDO...' : '🔒 BLOQUEAR INACTIVOS 4M'}
                   </button>
                 </div>
               )}

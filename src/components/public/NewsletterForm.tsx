@@ -6,7 +6,7 @@ import NewsletterLegalModal from './NewsletterLegalModal';
 
 const isDev = import.meta.env.DEV;
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-const POLITICA_VERSION = '2026-06-08';
+const POLITICA_VERSION = '2026-06-08-v2';
 
 const NewsletterForm = () => {
   const { t } = useLanguage();

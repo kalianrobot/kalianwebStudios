@@ -8,7 +8,6 @@ const AdminNewsletter = () => {
   const [subs, setSubs] = useState<DocumentData[]>([]);
   const [loading, setLoading] = useState(true);
   const [msg, setMsg] = useState('');
-  const [filtro, setFiltro] = useState<'todos' | 'musica' | 'danza'>('todos');
   const [mostrarBajas, setMostrarBajas] = useState(false);
 
   const fetchSubs = async () => {
@@ -49,7 +48,6 @@ const AdminNewsletter = () => {
   const filtrados = subs.filter(s => {
     const esBaja = (s.estado || 'activo') === 'baja';
     if (!mostrarBajas && esBaja) return false;
-    if (filtro !== 'todos' && (s.interes || '').toLowerCase() !== filtro) return false;
     return true;
   });
 
@@ -62,11 +60,10 @@ const AdminNewsletter = () => {
     };
     // Solo exportamos activos para no enviar newsletter a quien se dio de baja
     const exportables = filtrados.filter(s => (s.estado || 'activo') === 'activo');
-    const header = ['Nombre', 'Email', 'Interes', 'Fecha'];
+    const header = ['Nombre', 'Email', 'Fecha'];
     const rows = exportables.map(s => [
       escape(s.nombre),
       escape(s.email),
-      escape(s.interes),
       escape(formatFecha(s.fecha)),
     ].join(','));
     const csv = [header.join(','), ...rows].join('\n');
@@ -100,20 +97,9 @@ const AdminNewsletter = () => {
 
         {msg && <div className="bg-kalian-gold text-black p-5 rounded-3xl mb-12 kalian-poster-text text-xl text-center shadow-2xl">{msg}</div>}
 
-        {/* Filtro por interés + bajas */}
-        <div className="flex gap-2 mb-8 flex-wrap items-center">
-          {(['todos', 'musica', 'danza'] as const).map(f => (
-            <button
-              key={f}
-              onClick={() => setFiltro(f)}
-              className={`px-6 py-3 rounded-full text-[10px] font-black uppercase tracking-widest transition-all border ${
-                filtro === f ? 'bg-kalian-gold text-black border-kalian-gold' : 'bg-transparent text-kalian-cream/50 border-kalian-gold/20 hover:border-kalian-gold/50'
-              }`}
-            >
-              {f === 'todos' ? 'Todos' : f === 'musica' ? 'Música' : 'Danza'}
-            </button>
-          ))}
-          <label className="ml-auto flex items-center gap-3 px-5 py-3 rounded-full border border-red-500/20 bg-red-500/5 cursor-pointer select-none text-[10px] font-black uppercase tracking-widest text-red-400 hover:bg-red-500/10 transition-all">
+        {/* Filtro de bajas */}
+        <div className="flex gap-2 mb-8 flex-wrap items-center justify-end">
+          <label className="flex items-center gap-3 px-5 py-3 rounded-full border border-red-500/20 bg-red-500/5 cursor-pointer select-none text-[10px] font-black uppercase tracking-widest text-red-400 hover:bg-red-500/10 transition-all">
             <input type="checkbox" checked={mostrarBajas} onChange={e => setMostrarBajas(e.target.checked)} className="accent-red-500" />
             Mostrar bajas {totalBajas > 0 && `(${totalBajas})`}
           </label>
@@ -122,10 +108,9 @@ const AdminNewsletter = () => {
         <div className="bg-black/40 border border-kalian-gold/10 rounded-[3rem] overflow-hidden shadow-2xl">
           <div className="p-8 border-b border-kalian-gold/10 bg-black/20">
             <div className="grid grid-cols-12 gap-4 text-[10px] font-black uppercase tracking-widest text-kalian-gold/60">
-              <div className="col-span-4">Nombre</div>
+              <div className="col-span-5">Nombre</div>
               <div className="col-span-4">Email</div>
-              <div className="col-span-2 text-center">Interés</div>
-              <div className="col-span-2 text-right">Fecha / Acción</div>
+              <div className="col-span-3 text-right">Fecha / Acción</div>
             </div>
           </div>
 
@@ -141,7 +126,7 @@ const AdminNewsletter = () => {
               const esBaja = (s.estado || 'activo') === 'baja';
               return (
               <div key={s.id} className={`p-8 grid grid-cols-12 gap-4 items-center group transition-all ${esBaja ? 'bg-red-500/5 opacity-70' : 'hover:bg-white/5'}`}>
-                <div className="col-span-4">
+                <div className="col-span-5">
                   <div className="flex items-center gap-3 flex-wrap">
                     <p className="text-lg kalian-poster-text text-kalian-cream group-hover:text-kalian-gold transition-colors">{s.nombre || 'Sin nombre'}</p>
                     {esBaja && (
@@ -154,14 +139,7 @@ const AdminNewsletter = () => {
                 <div className="col-span-4">
                   <p className="text-[11px] font-bold text-kalian-cream/60 break-all">{s.email}</p>
                 </div>
-                <div className="col-span-2 flex justify-center">
-                  <span className={`px-3 py-1 rounded-full text-[9px] font-black uppercase tracking-widest border ${
-                    (s.interes || '').toLowerCase() === 'musica' ? 'bg-indigo-500/10 text-indigo-400 border-indigo-500/20' : 'bg-pink-500/10 text-pink-400 border-pink-500/20'
-                  }`}>
-                    {s.interes || '—'}
-                  </span>
-                </div>
-                <div className="col-span-2 flex justify-end items-center gap-3">
+                <div className="col-span-3 flex justify-end items-center gap-3">
                   <span className="text-[10px] font-mono text-kalian-cream/30">{formatFecha(s.fecha)}</span>
                   <button
                     onClick={() => handleDelete(s.id)}

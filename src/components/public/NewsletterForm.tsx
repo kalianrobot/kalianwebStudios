@@ -2,17 +2,20 @@ import React, { useState } from 'react';
 import { db } from '../../firebase';
 import { collection, addDoc, serverTimestamp } from 'firebase/firestore';
 import { useLanguage } from '../../context/LanguageContext';
+import NewsletterLegalModal from './NewsletterLegalModal';
 
 const isDev = import.meta.env.DEV;
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+const POLITICA_VERSION = '2026-06-08-v2';
 
 const NewsletterForm = () => {
   const { t } = useLanguage();
-  const [form, setForm] = useState({ nombre: '', email: '', interes: 'musica' });
+  const [form, setForm] = useState({ nombre: '', email: '' });
   const [aceptado, setAceptado] = useState(false);
   const [cargando, setCargando] = useState(false);
   const [exito, setExito] = useState(false);
   const [error, setError] = useState('');
+  const [showLegal, setShowLegal] = useState(false);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -50,10 +53,10 @@ const NewsletterForm = () => {
       await addDoc(collection(db, "newsletter_subscribers"), {
         nombre,
         email,
-        interes: form.interes,
         fecha: serverTimestamp(),
         ip,
         acepto_terminos: true,
+        politica_version: POLITICA_VERSION,
         estado: 'activo'
       });
 
@@ -72,8 +75,7 @@ const NewsletterForm = () => {
           body: JSON.stringify({
             email,
             attributes: {
-              NOMBRE: nombre,
-              INTERES: form.interes.toUpperCase()
+              NOMBRE: nombre
             },
             ...(BREVO_LIST_ID ? { listIds: [Number(BREVO_LIST_ID)] } : {}),
             updateEnabled: true
@@ -92,7 +94,7 @@ const NewsletterForm = () => {
       }
 
       setExito(true);
-      setForm({ nombre: '', email: '', interes: 'musica' });
+      setForm({ nombre: '', email: '' });
     } catch (err: any) {
       if (isDev) console.error("Error en suscripción:", err);
       setError(t('newsletter.submitError'));
@@ -149,23 +151,11 @@ const NewsletterForm = () => {
           />
         </div>
 
-        <div className="space-y-1">
-          <label className="text-[10px] font-black uppercase text-slate-200 ml-4 tracking-widest">{t('newsletter.interest')}</label>
-          <select
-            className="w-full p-5 bg-white/10 border border-white/20 rounded-2xl outline-none focus:ring-2 ring-indigo-500 text-white font-black uppercase tracking-widest transition-all appearance-none"
-            value={form.interes}
-            onChange={e => setForm({...form, interes: e.target.value})}
-          >
-            <option value="musica" className="bg-slate-900 text-white">{t('newsletter.musicCategory')}</option>
-            <option value="danza" className="bg-slate-900 text-white">{t('newsletter.danceCategory')}</option>
-          </select>
-        </div>
-
         <div className="pt-4">
           <label className="flex gap-4 cursor-pointer group">
             <div className="relative flex items-center">
-              <input 
-                type="checkbox" 
+              <input
+                type="checkbox"
                 className="peer sr-only"
                 checked={aceptado}
                 onChange={e => setAceptado(e.target.checked)}
@@ -177,18 +167,25 @@ const NewsletterForm = () => {
               </div>
             </div>
             <span className="text-[11px] text-slate-400 font-bold leading-tight select-none">
-              {t('newsletter.acceptTerms')} <span className="text-indigo-400 underline">{t('newsletter.privacyPolicy')}</span>.
+              {t('newsletter.acceptTerms')}{' '}
+              <button
+                type="button"
+                onClick={(e) => { e.preventDefault(); setShowLegal(true); }}
+                className="text-indigo-400 underline hover:text-white transition-colors"
+              >
+                {t('newsletter.privacyPolicy')}
+              </button>.
             </span>
           </label>
         </div>
 
         {error && <p className="text-red-400 text-[10px] font-black uppercase tracking-widest text-center animate-pulse">{error}</p>}
 
-        <button 
+        <button
           disabled={!aceptado || cargando}
           className={`w-full p-6 rounded-[2rem] font-black uppercase tracking-widest text-sm transition-all shadow-2xl ${
-            aceptado && !cargando 
-            ? 'bg-indigo-600 text-white hover:bg-indigo-500 active:scale-95' 
+            aceptado && !cargando
+            ? 'bg-indigo-600 text-white hover:bg-indigo-500 active:scale-95'
             : 'bg-slate-800 text-slate-600 cursor-not-allowed'
           }`}
         >
@@ -202,6 +199,8 @@ const NewsletterForm = () => {
           </p>
         </div>
       </form>
+
+      <NewsletterLegalModal isOpen={showLegal} onClose={() => setShowLegal(false)} />
     </div>
   );
 };

@@ -67,7 +67,62 @@ Backlog ordenado por impacto/coste.
 
 ---
 
-## 4. Cómo usar este documento
+## 4. Hallazgos pendientes — auditoría junio 2026
+
+Auditoría exhaustiva de `firestore.rules`, Cloud Functions y cliente. Los hallazgos abajo se gestionan como sprints. Cuando uno se cierre, mover de "pendiente" a "✅ cerrado" indicando el PR/commit.
+
+### Sprint 1 — Críticos
+
+| # | Área | Hallazgo | Mitigación | Estado |
+|---|---|---|---|---|
+| C1 | Cliente | `VITE_BREVO_API_KEY` expuesta en bundle (`src/lib/brevoService.ts`, `NewsletterForm.tsx:64`). Permite enviar emails como Kalian, enumerar contactos. | Migrar envíos a Cloud Function callable. Quitar la VITE_ var. | 🟡 pendiente |
+| C2 | Functions | `sendReservationConfirmation` es `onCall` **sin auth ni validación de origen**. Cualquiera dispara emails con remitente verificado. | Validar que `manageToken` existe en `reservas` y leer los datos del doc, no del request. | 🟢 en curso |
+| C3 | Functions | Inyección HTML en plantillas de email (`${nombre}`, `${eventoTitulo}`, etc. sin escape). CSS injection / phishing en clientes de email. | Helper `escapeHtml` aplicado a toda interpolación. | 🟢 en curso |
+| C4 | Functions | PII (emails completos) en logs de `brevoWebhook`, `onNewsletterSubscriberDeleted`, `reconciliarNewsletterBrevo`. Retención por defecto 30 días → riesgo RGPD. | Helper `maskEmail()` o hash SHA-256 corto. | 🟡 pendiente |
+
+### Sprint 2 — Altos
+
+| # | Área | Hallazgo | Mitigación |
+|---|---|---|---|
+| A1 | Functions | `brevoWebhook` sin HMAC ni validación de timestamp → replay si secret se filtra. | Validar timestamp del payload + rate limit por IP. |
+| A2 | Functions | `onNewsletterSubscriberDeleted` no reintenta ante 500/timeout/429 de Brevo → contacto sigue activo aunque borrado de Firestore (RGPD). | Retry con backoff exponencial (3 intentos) o Cloud Task. |
+| A3 | Functions | `validatePuertaAccess` compara contraseña con `!==` (timing) y sin rate limit. | `crypto.timingSafeEqual()` + throttle por IP. |
+| A4 | Cliente | Cálculo de `totalPagar` 100% client-side (`ReservaForm.tsx`). Firestore no valida precio. | Mover cálculo a Cloud Function. Cobertura inmediata de futuros pagos electrónicos. |
+| A5 | Hosting | CSP con `'unsafe-inline'` en `script-src` (`firebase.json:49`). XSS residual sin protección. | Migrar a nonces o eliminar scripts inline. |
+| A6 | Cliente | `console.error/warn` con `uid`/`email` sin guard `isDev` (`ReservaForm.tsx:167,382,387`). PII en DevTools y herramientas de monitorización. | `if (isDev)` o helper `logger.dev()`. |
+
+### Sprint 3 — Medios (higiene)
+
+- `isValidReserva`, `isValidSolicitud`, `isValidNewsletter` sin `hasOnly`.
+- `emailTitular` en reservas sin regex (las otras `isValid*` sí la tienen).
+- `isPorteroAforoUpdate` no valida que los nuevos valores sean `number`.
+- Matching de email en `socios/{id}` sin `.lower()` (inconsistente con `reservas`).
+- `pagos_mensuales` sin función `isValid*`.
+- `callBrevo` sin timeout.
+- `reconciliarNewsletterBrevo` no usa transacciones en los updates.
+- Validación de respuesta Brevo asume JSON sin comprobar `content-type`.
+- Validaciones de fechas (`apertura_socios`, `apertura_general`) solo client-side.
+
+### Sprint 4 — Bajos (limpieza)
+
+- Doble `match /asistencia_eventos` (líneas 246 y 257) — redundante (las reglas se OR-ean), pero confuso.
+- Regex de email `.+@.+\\..+` muy laxa.
+- Fallback de `aforo_maximo` a 9999 en `isSafeAforoUpdate`.
+- `ticketID` con `Math.random()` (no es secreto pero predecible).
+- `node-fetch@2.7.0` → migrar al `fetch` nativo de Node 22.
+- Comentarios en `firestore.rules` que revelan lógica defensiva.
+- Cupones (`cupon`, `precioCupon`) en docs `eventos` con lectura pública.
+
+### Falsos positivos descartados
+
+- **UID de Firebase en QR del carnet**: no es secreto, es identificador que el usuario enseña él mismo.
+- **`firebase-applet-config.json` commiteado**: público por diseño; la seguridad real está en `firestore.rules` + restricciones de API key en GCP.
+- **`localStorage.kalian_lang`**: solo idioma, no PII.
+- **`target="_blank"`**: ya tiene `rel="noreferrer"` en los puntos auditados.
+
+---
+
+## 5. Cómo usar este documento
 
 - **En code review** de PRs que toquen `firestore.rules`, `functions/src/index.ts` o flujos sensibles (auth, pagos, reservas): repasar las invariantes (§1) y los payloads relevantes (§2).
 - **Al añadir una colección o un nuevo flujo**: enumerar sus invariantes en §1 y los ataques plausibles en §2.

@@ -199,8 +199,8 @@ const eu: Record<string, string> = {
   'newsletter.invalidName': 'Izen baliogabea.',
   'newsletter.invalidEmail': 'Email baliogabea.',
   'newsletter.submitError': 'Arazo bat egon da harpidetza prozesatzean. Saiatu berriro.',
-  'newsletter.successTitle': 'Ederto!',
-  'newsletter.successMessage': 'Begiratu zure emaila harpidetza baieztatzeko eta Kalianeko berriak jasotzen hasteko.',
+  'newsletter.successTitle': 'Ia prest!',
+  'newsletter.successMessage': 'Berresteko mezua bidali dizugu emailera. Sakatu estekan zure harpidetza aktibatu eta Kalianeko berriak jasotzen hasteko.',
   'newsletter.back': 'Bueltatu',
   'newsletter.title': 'Egin bat',
   'newsletter.titleHighlight': 'Newsletter',
@@ -214,6 +214,20 @@ const eu: Record<string, string> = {
   'newsletter.subscribe': 'Harpidetu Orain',
   'newsletter.dataProtectionTitle': 'Datuen Babesari buruzko Oinarrizko Informazioa',
   'newsletter.dataProtectionText': 'Arduraduna: Kalian HKG Elkartea. Helburua: buletina bidaltzea. Legitimazioa: adostasuna. Hartzailea: Brevo (Sendinblue SAS, EB). Eskubideak: sarbidea, zuzenketa, ezabaketa eta aurkaritza info@kalian.es helbidean.',
+
+  // Newsletter — Egoera orria (berretsia / baja / berretsi gabe)
+  'newsletterEstado.confirmado.title': 'Harpidetza berretsia!',
+  'newsletterEstado.confirmado.body': 'Eskerrik asko zure emaila berresteagatik. Hemendik aurrera Kalianeko berriak, ekitaldiak eta deskontu esklusiboak jasoko dituzu.',
+  'newsletterEstado.confirmado.cta': 'Hasierara itzuli',
+  'newsletterEstado.baja.title': 'Baja eman duzu',
+  'newsletterEstado.baja.body': 'Zure baja prozesatu dugu. Ez duzu Kalianeko newsletter mezurik gehiago jasoko. Akats bat izan bada, edozein momentutan berriz harpide zaitezke.',
+  'newsletterEstado.baja.cta': 'Hasierara itzuli',
+  'newsletterEstado.noReconfirmado.title': 'Harpidetza amaitu da',
+  'newsletterEstado.noReconfirmado.body': 'Ez dugu zure berrespena epearen barruan jaso, beraz, zure emaila zerrendatik ezabatu dugu DBEOaren arabera. Berriak jasotzen jarraitu nahi baduzu, berriz harpide zaitezke.',
+  'newsletterEstado.noReconfirmado.cta': 'Berriz harpidetu',
+  'newsletterEstado.fallback.title': 'Kalian Newsletter',
+  'newsletterEstado.fallback.body': 'Ezin izan dugu eskatutako ekintza identifikatu. Itzuli hasierara edo erabili zure emaileko esteka.',
+  'newsletterEstado.fallback.cta': 'Hasierara itzuli',
 
   // Newsletter Lege Modala
   'nlLegal.eyebrow': 'DATUEN BABESA',

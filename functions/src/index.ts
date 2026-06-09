@@ -486,6 +486,11 @@ export const onNewsletterSubscriberDeleted = onDocumentDeleted(
 // Cada lunes a las 04:00 UTC reconcilia ambas direcciones:
 // - Contactos en Brevo no presentes en Firestore → se importan
 // - Contactos blacklisted en Brevo pero activos en Firestore → se marcan baja
+// - Docs en 'pendiente_confirmacion' presentes en Brevo (DOI completado) → se promueven a 'activo'
+// - Docs en 'pendiente_confirmacion' con más de DIAS_MAX_PENDIENTE días → se marcan baja
+// - Docs activos en Firestore ausentes de Brevo → se marcan baja (campaña de reconfirmación o limpieza Brevo)
+const DIAS_MAX_PENDIENTE = 14;
+
 export const reconciliarNewsletterBrevo = onSchedule(
   {
     schedule: 'every monday 04:00',
@@ -526,29 +531,36 @@ export const reconciliarNewsletterBrevo = onSchedule(
       offset += limit;
     }
 
-    // Construir índice de emails ya en Firestore
+    // Construir índice de emails ya en Firestore (con ref + datos cacheados)
     const snap = await db.collection('newsletter_subscribers').get();
-    const emailsFirestore = new Map<string, admin.firestore.DocumentReference>();
+    const docsFirestore = new Map<string, { ref: admin.firestore.DocumentReference; data: any }>();
     for (const docu of snap.docs) {
-      const e = ((docu.data() as any).email || '').toLowerCase().trim();
-      if (e) emailsFirestore.set(e, docu.ref);
+      const d = docu.data() as any;
+      const e = (d.email || '').toLowerCase().trim();
+      if (e) docsFirestore.set(e, { ref: docu.ref, data: d });
     }
 
     let marcadosBaja = 0;
+    let promovidosActivo = 0;
     let importados = 0;
 
     for (const [email, { nombre, blacklisted }] of contactosBrevo) {
-      if (emailsFirestore.has(email)) {
-        // Ya existe en Firestore — solo actualizar si está blacklisted y activo
-        const ref = emailsFirestore.get(email)!;
-        const d = snap.docs.find(dd => ((dd.data() as any).email || '').toLowerCase() === email)?.data() as any;
-        if (blacklisted && (d?.estado || 'activo') === 'activo') {
-          await ref.update({
+      const existente = docsFirestore.get(email);
+      if (existente) {
+        const estadoActual = existente.data?.estado || 'activo';
+        if (blacklisted && estadoActual === 'activo') {
+          await existente.ref.update({
             estado: 'baja',
             motivo: 'reconciliacion',
             fecha_baja: admin.firestore.FieldValue.serverTimestamp(),
           });
           marcadosBaja++;
+        } else if (!blacklisted && estadoActual === 'pendiente_confirmacion') {
+          await existente.ref.update({
+            estado: 'activo',
+            fecha_confirmacion: admin.firestore.FieldValue.serverTimestamp(),
+          });
+          promovidosActivo++;
         }
       } else {
         // No existe en Firestore → importar
@@ -565,11 +577,44 @@ export const reconciliarNewsletterBrevo = onSchedule(
       }
     }
 
+    // Limpieza de pendientes caducados y bajas por ausencia en Brevo
+    const ahora = Date.now();
+    const cortePendiente = ahora - DIAS_MAX_PENDIENTE * 24 * 60 * 60 * 1000;
+    let pendientesCaducados = 0;
+    let bajasPorAusencia = 0;
+
+    for (const [email, { ref, data }] of docsFirestore) {
+      const estadoActual = data?.estado || 'activo';
+      const enBrevo = contactosBrevo.has(email);
+
+      if (estadoActual === 'pendiente_confirmacion' && !enBrevo) {
+        const fechaMs = data?.fecha?.toMillis?.() ?? 0;
+        if (fechaMs > 0 && fechaMs < cortePendiente) {
+          await ref.update({
+            estado: 'baja',
+            motivo: 'no_confirmado',
+            fecha_baja: admin.firestore.FieldValue.serverTimestamp(),
+          });
+          pendientesCaducados++;
+        }
+      } else if (estadoActual === 'activo' && !enBrevo) {
+        await ref.update({
+          estado: 'baja',
+          motivo: 'reconciliacion',
+          fecha_baja: admin.firestore.FieldValue.serverTimestamp(),
+        });
+        bajasPorAusencia++;
+      }
+    }
+
     logger.info('reconciliarNewsletterBrevo: completado', {
       brevoContactos: contactosBrevo.size,
       firestoreAntes: snap.size,
       importados,
       marcadosBaja,
+      promovidosActivo,
+      pendientesCaducados,
+      bajasPorAusencia,
     });
   }
 );

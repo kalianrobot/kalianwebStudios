@@ -222,13 +222,16 @@ service cloud.firestore {
     }
 
     // --- NEWSLETTER ---
-    // A8: faltaba regla; se añade alta pública validada y lectura sólo admin
+    // A8: faltaba regla; se añade alta pública validada y lectura sólo admin.
+    // El alta pública sólo puede crear el documento en estado 'pendiente_confirmacion':
+    // la promoción a 'activo' la realiza Cloud Functions tras el doble opt-in de Brevo.
     function isValidNewsletter(data) {
       return data.keys().hasAll(['nombre', 'email', 'acepto_terminos'])
           && data.nombre is string && data.nombre.size() > 0 && data.nombre.size() <= 100
           && data.email is string && data.email.size() <= 100 && data.email.matches('.+@.+\\..+')
           && data.acepto_terminos == true
-          && (!data.keys().hasAny(['politica_version']) || (data.politica_version is string && data.politica_version.size() <= 20));
+          && (!data.keys().hasAny(['politica_version']) || (data.politica_version is string && data.politica_version.size() <= 20))
+          && (!data.keys().hasAny(['estado']) || data.estado == 'pendiente_confirmacion');
     }
     match /newsletter_subscribers/{id} {
       allow create: if isValidNewsletter(incoming());

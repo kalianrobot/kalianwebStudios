@@ -124,14 +124,20 @@ const AdminNewsletter = () => {
               </div>
             ) : filtrados.map(s => {
               const esBaja = (s.estado || 'activo') === 'baja';
+              const esPendiente = (s.estado || 'activo') === 'pendiente_confirmacion';
               return (
-              <div key={s.id} className={`p-8 grid grid-cols-12 gap-4 items-center group transition-all ${esBaja ? 'bg-red-500/5 opacity-70' : 'hover:bg-white/5'}`}>
+              <div key={s.id} className={`p-8 grid grid-cols-12 gap-4 items-center group transition-all ${esBaja ? 'bg-red-500/5 opacity-70' : esPendiente ? 'bg-amber-500/5' : 'hover:bg-white/5'}`}>
                 <div className="col-span-5">
                   <div className="flex items-center gap-3 flex-wrap">
                     <p className="text-lg kalian-poster-text text-kalian-cream group-hover:text-kalian-gold transition-colors">{s.nombre || 'Sin nombre'}</p>
                     {esBaja && (
                       <span className="px-2 py-0.5 bg-red-500/20 text-red-400 border border-red-500/30 rounded text-[9px] font-black uppercase tracking-widest" title={s.motivo || 'baja'}>
                         BAJA{s.motivo ? ` · ${s.motivo}` : ''}
+                      </span>
+                    )}
+                    {esPendiente && (
+                      <span className="px-2 py-0.5 bg-amber-500/20 text-amber-400 border border-amber-500/30 rounded text-[9px] font-black uppercase tracking-widest" title="Pendiente de doble opt-in en Brevo">
+                        PENDIENTE
                       </span>
                     )}
                   </div>

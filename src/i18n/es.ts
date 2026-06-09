@@ -199,8 +199,8 @@ const es: Record<string, string> = {
   'newsletter.invalidName': 'Nombre no válido.',
   'newsletter.invalidEmail': 'Email no válido.',
   'newsletter.submitError': 'Hubo un problema al procesar tu suscripción. Inténtalo de nuevo.',
-  'newsletter.successTitle': '¡Genial!',
-  'newsletter.successMessage': 'Revisa tu email para confirmar la suscripción y empezar a recibir noticias de Kalian.',
+  'newsletter.successTitle': '¡Casi listo!',
+  'newsletter.successMessage': 'Te hemos enviado un correo de confirmación. Haz clic en el enlace para activar tu suscripción y empezar a recibir noticias de Kalian.',
   'newsletter.back': 'Volver',
   'newsletter.title': 'Únete a la',
   'newsletter.titleHighlight': 'Newsletter',
@@ -214,6 +214,20 @@ const es: Record<string, string> = {
   'newsletter.subscribe': 'Suscribirme Ahora',
   'newsletter.dataProtectionTitle': 'Información Básica de Protección de Datos',
   'newsletter.dataProtectionText': 'Responsable: Asociación Kalian HKG. Finalidad: envío del boletín. Legitimación: consentimiento. Destinatario: Brevo (Sendinblue SAS, UE). Derechos: acceso, rectificación, supresión y oposición en info@kalian.es.',
+
+  // Newsletter — Página de estado (confirmación / baja / no reconfirmado)
+  'newsletterEstado.confirmado.title': '¡Suscripción confirmada!',
+  'newsletterEstado.confirmado.body': 'Gracias por confirmar tu email. A partir de ahora recibirás nuestras noticias, eventos y descuentos exclusivos.',
+  'newsletterEstado.confirmado.cta': 'Volver al inicio',
+  'newsletterEstado.baja.title': 'Te has dado de baja',
+  'newsletterEstado.baja.body': 'Hemos procesado tu baja. Ya no recibirás más correos del newsletter de Kalian. Si fue un error, puedes volver a suscribirte cuando quieras.',
+  'newsletterEstado.baja.cta': 'Volver al inicio',
+  'newsletterEstado.noReconfirmado.title': 'Suscripción finalizada',
+  'newsletterEstado.noReconfirmado.body': 'No hemos recibido tu reconfirmación dentro del plazo, así que hemos eliminado tu correo de la lista conforme al RGPD. Si quieres seguir recibiendo nuestras novedades, puedes volver a suscribirte.',
+  'newsletterEstado.noReconfirmado.cta': 'Volver a suscribirme',
+  'newsletterEstado.fallback.title': 'Newsletter Kalian',
+  'newsletterEstado.fallback.body': 'No hemos podido identificar la acción solicitada. Vuelve al inicio o usa el enlace de tu email.',
+  'newsletterEstado.fallback.cta': 'Volver al inicio',
 
   // Newsletter Legal Modal
   'nlLegal.eyebrow': 'PROTECCIÓN DE DATOS',

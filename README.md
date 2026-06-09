@@ -1,20 +1,53 @@
-<div align="center">
-<img width="1200" height="475" alt="GHBanner" src="https://github.com/user-attachments/assets/0aa67016-6eaf-458a-adb2-6e31a0763ed6" />
-</div>
+# Kalian HKG
 
-# Run and deploy your AI Studio app
+Plataforma web de la asociación cultural **Kalian Hiri Kultur Gunea**: cara pública, panel de socios, panel de staff/admin, panel de profesores, control de acceso de puerta, gestión de newsletter con doble opt-in y contabilidad.
 
-This contains everything you need to run your app locally.
+**Stack**: React 19 + Vite + TypeScript + Tailwind 4 · Firebase (Auth, Firestore, Functions, Hosting, Storage) en `europe-west1` · Brevo para email.
 
-View your app in AI Studio: https://ai.studio/apps/2b86a002-8098-484b-866a-10e6398dad6d
+---
 
-## Run Locally
+## Cómo arrancar
 
-**Prerequisites:**  Node.js
+```bash
+npm install
+npm run dev          # Vite dev server en :3000
+```
 
+Crea un `.env.local` con las variables necesarias (al menos `VITE_BREVO_API_KEY`, `VITE_BREVO_NEWSLETTER_LIST_ID`). La configuración de Firebase del cliente vive en `firebase-applet-config.json`.
 
-1. Install dependencies:
-   `npm install`
-2. Set the `GEMINI_API_KEY` in [.env.local](.env.local) to your Gemini API key
-3. Run the app:
-   `npm run dev`
+## Comandos
+
+| Comando | Qué hace |
+|---|---|
+| `npm run dev` | Vite dev server |
+| `npm run build` | Build de producción a `dist/` |
+| `npm run preview` | Sirve el build local |
+| `npm run lint` | `tsc --noEmit` (type-check) |
+| `npm run clean` | Borra `dist/` |
+| `firebase emulators:start` | Emuladores locales (Firestore :8080, Storage :9199) |
+| `firebase deploy` | Despliegue completo (hosting + functions + reglas) |
+
+## Estructura
+
+```
+src/                # SPA React (pages, components, context, i18n, lib)
+functions/          # Cloud Functions (Node 22, TypeScript)
+firestore.rules     # Reglas de seguridad Firestore
+storage.rules       # Reglas de Storage
+firebase.json       # Hosting + CSP + functions + emuladores
+```
+
+---
+
+## Documentación
+
+| Fichero | Rol | Cuándo leerlo |
+|---|---|---|
+| [README.md](README.md) | Entry point: qué es, cómo arrancar, mapa de docs | Primer contacto con el repo |
+| [SPEC.md](SPEC.md) | Cómo está construido (técnica) | Antes de tocar código |
+| [DOCUMENTATION.md](DOCUMENTATION.md) | Qué hace + manuales (Staff, Profesor, Socio, Portero) + reglas de negocio | Para explicar el sistema o usarlo |
+| [SECURITY_SPEC.md](SECURITY_SPEC.md) | Invariantes + Dirty Dozen contra `firestore.rules` | En code review de cambios sensibles |
+
+Las decisiones arquitectónicas o de producto que afecten al código se actualizan en `SPEC.md` en el mismo PR que las introduce. Las reglas de negocio o cambios de flujo de usuario, en `DOCUMENTATION.md`.
+
+> Si trabajas con **Claude Code** en este repo, hay un `CLAUDE.md` con las reglas operativas del agente (idioma, workflow git, trampas conocidas, qué no hacer). Se carga automáticamente en cada sesión.

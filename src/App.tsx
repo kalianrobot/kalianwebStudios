@@ -7,6 +7,7 @@ import { MASTER_EMAIL } from './lib/constants';
 // Componentes Públicos
 const LandingPage = lazy(() => import('./pages/LandingPage'));
 const NewsletterPage = lazy(() => import('./pages/NewsletterPage'));
+const NewsletterEstadoPage = lazy(() => import('./pages/NewsletterEstadoPage'));
 const HomeSocio = lazy(() => import('./components/socio/HomeSocio'));
 import Navbar from './components/public/Navbar';
 const LoginSocio = lazy(() => import('./components/auth/LoginSocio'));
@@ -113,6 +114,7 @@ function AppContent() {
         <Route path="/donaciones" element={<DonacionesPage />} />
         <Route path="/mi-reserva" element={<MiReserva />} />
         <Route path="/newsletter-kalian-privado" element={<NewsletterPage />} />
+        <Route path="/newsletter/estado" element={<NewsletterEstadoPage />} />
 
         {/* RUTAS STAFF (ADMIN) */}
         <Route path="/staff/login" element={

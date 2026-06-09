@@ -49,7 +49,9 @@ const NewsletterForm = () => {
         if (isDev) console.warn("No se pudo obtener la IP:", e);
       }
 
-      // 2. Guardar en Firestore
+      // 2. Guardar en Firestore. Estado intermedio 'pendiente_confirmacion':
+      // la suscripción solo se promueve a 'activo' tras el doble opt-in de Brevo,
+      // que se refleja por la reconciliación semanal (reconciliarNewsletterBrevo).
       await addDoc(collection(db, "newsletter_subscribers"), {
         nombre,
         email,
@@ -57,7 +59,7 @@ const NewsletterForm = () => {
         ip,
         acepto_terminos: true,
         politica_version: POLITICA_VERSION,
-        estado: 'activo'
+        estado: 'pendiente_confirmacion'
       });
 
       // 3. Petición a Brevo API

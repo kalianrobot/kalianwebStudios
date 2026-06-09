@@ -49,3 +49,5 @@ firebase.json       # Hosting + CSP + functions + emuladores
 | [SECURITY_SPEC.md](SECURITY_SPEC.md) | Invariantes + Dirty Dozen contra `firestore.rules` | En code review de cambios sensibles |
 
 Las decisiones arquitectónicas o de producto que afecten al código se actualizan en `SPEC.md` en el mismo PR que las introduce. Las reglas de negocio o cambios de flujo de usuario, en `DOCUMENTATION.md`.
+
+> Si trabajas con **Claude Code** en este repo, hay un `CLAUDE.md` con las reglas operativas del agente (idioma, workflow git, trampas conocidas, qué no hacer). Se carga automáticamente en cada sesión.

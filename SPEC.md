@@ -1,6 +1,14 @@
 # Kalian HKG — Spec
 
+> **Documentos relacionados**
+> - [README.md](README.md) — Entry point + cómo arrancar
+> - SPEC.md — Cómo está construido *(este documento)*
+> - [DOCUMENTATION.md](DOCUMENTATION.md) — Qué hace + manual
+> - [SECURITY_SPEC.md](SECURITY_SPEC.md) — Invariantes de seguridad
+
 Documento vivo de referencia para spec-driven development. Define qué es Kalian, cómo está construido y qué convenciones seguimos. Cuando una decisión queda fijada, vive aquí. Cuando algo cambia en el código, este documento se actualiza en el mismo PR.
+
+**Foco de este documento**: arquitectura, código y convenciones. Las **reglas de negocio** (cuota mensual, socio activo/inactivo, manuales por rol) viven en [DOCUMENTATION.md](DOCUMENTATION.md). Las **invariantes y payloads de seguridad** viven en [SECURITY_SPEC.md](SECURITY_SPEC.md).
 
 ---
 
@@ -72,6 +80,8 @@ Firebase. Tres bloques:
 
 ## 4. Dominios funcionales
 
+> Las **reglas de negocio** (cuota mensual, criterios de activo/inactivo, manuales de cada rol) están en [DOCUMENTATION.md](DOCUMENTATION.md). Aquí solo mapeamos qué módulos sirven a qué funcionalidad.
+
 | Módulo | Páginas / componentes | Notas |
 |---|---|---|
 | Landing | `LandingPage` | Home pública con CTA a programación, reservas, newsletter. |
@@ -142,6 +152,8 @@ Convenciones:
 ---
 
 ## 6. Roles y autorización
+
+> Las **invariantes y payloads de seguridad** que estas reglas garantizan están en [SECURITY_SPEC.md](SECURITY_SPEC.md).
 
 | Rol | Cómo se asigna | Qué puede |
 |---|---|---|
@@ -290,9 +302,20 @@ CSP y cabeceras de seguridad: definidas en `firebase.json` (HSTS, X-Frame DENY, 
 
 ## 13. Cómo usar este documento
 
-- **Antes de empezar una tarea**: léelo entero la primera vez; después solo las secciones que tocas.
-- **Al planificar un cambio**: si introduce un nuevo concepto, dominio, estado o convención, actualiza este documento en el mismo PR.
-- **Al refactorizar**: si descubres que el código se desvía de lo escrito aquí, elige qué es la verdad y actualiza el otro lado.
-- **Al revisar**: rechaza PRs que añadan complejidad sin reflejarse aquí.
+Cuatro documentos, cuatro responsabilidades. No dupliques entre ellos:
 
-El objetivo es que cualquier desarrollador (humano o agente) pueda ponerse al día leyendo este fichero y los puntos del código que cita.
+| Cuándo | Documento |
+|---|---|
+| Vas a tocar código | **SPEC.md** (este) |
+| Vas a explicar qué hace la app, manual de usuario, reglas de negocio | **DOCUMENTATION.md** |
+| Vas a revisar un cambio sensible o auditar seguridad | **SECURITY_SPEC.md** |
+| Es la primera vez que abres el repo | **README.md** |
+
+**Reglas para mantenerlos vivos**:
+- Si un PR introduce un nuevo concepto técnico (estado, función, integración, convención), actualiza SPEC.md en el mismo PR.
+- Si un PR cambia el flujo de usuario o una regla de negocio, actualiza DOCUMENTATION.md.
+- Si un PR introduce o cambia una invariante de seguridad, actualiza SECURITY_SPEC.md.
+- Si descubres que el código y un doc se contradicen, decide cuál es la verdad y actualiza el otro lado en el mismo PR.
+- Rechaza PRs que añadan complejidad sin reflejarse en el documento que corresponda.
+
+El objetivo es que cualquier desarrollador (humano o agente) pueda ponerse al día con `README → SPEC → DOCUMENTATION` y los puntos del código que citan.

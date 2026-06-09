@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { db } from '../../firebase';
 import { collection, addDoc, serverTimestamp } from 'firebase/firestore';
 import { useLanguage } from '../../context/LanguageContext';
+import { subscribeNewsletter } from '../../lib/brevoService';
 import NewsletterLegalModal from './NewsletterLegalModal';
 
 const isDev = import.meta.env.DEV;
@@ -62,37 +63,14 @@ const NewsletterForm = () => {
         estado: 'pendiente_confirmacion'
       });
 
-      // 3. Petición a Brevo API
-      const BREVO_API_KEY = import.meta.env.VITE_BREVO_API_KEY;
-      const BREVO_LIST_ID = import.meta.env.VITE_BREVO_NEWSLETTER_LIST_ID || '3';
-
-      if (BREVO_API_KEY) {
-        const brevoRes = await fetch('https://api.brevo.com/v3/contacts', {
-          method: 'POST',
-          headers: {
-            'accept': 'application/json',
-            'api-key': BREVO_API_KEY,
-            'content-type': 'application/json'
-          },
-          body: JSON.stringify({
-            email,
-            attributes: {
-              NOMBRE: nombre
-            },
-            ...(BREVO_LIST_ID ? { listIds: [Number(BREVO_LIST_ID)] } : {}),
-            updateEnabled: true
-          })
-        });
-
-        if (!brevoRes.ok) {
-          const brevoError = await brevoRes.json();
-          // Si el contacto ya existe, Brevo devuelve un 400 con un código específico
-          if (brevoRes.status === 400 && brevoError.code === 'duplicate_parameter') {
-            // No lo tratamos como error crítico para el usuario
-          } else {
-            throw new Error("Error al conectar con el servicio de email");
-          }
-        }
+      // 3. Alta en Brevo via Cloud Function (la API key vive solo en el servidor).
+      // Si Brevo falla, el doc queda en pendiente_confirmacion y la reconciliación
+      // semanal lo recogerá; mostramos éxito al usuario igualmente porque el
+      // consentimiento ya está registrado en Firestore.
+      try {
+        await subscribeNewsletter(nombre, email);
+      } catch (e) {
+        if (isDev) console.warn("Brevo subscribe falló, se recuperará por reconciliación", e);
       }
 
       setExito(true);

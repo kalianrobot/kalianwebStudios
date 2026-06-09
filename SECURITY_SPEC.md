@@ -75,7 +75,7 @@ Auditoría exhaustiva de `firestore.rules`, Cloud Functions y cliente. Los halla
 
 | # | Área | Hallazgo | Mitigación | Estado |
 |---|---|---|---|---|
-| C1 | Cliente | `VITE_BREVO_API_KEY` expuesta en bundle (`src/lib/brevoService.ts`, `NewsletterForm.tsx:64`). Permite enviar emails como Kalian, enumerar contactos. | Migrar envíos a Cloud Function callable. Quitar la VITE_ var. | 🟡 pendiente |
+| C1 | Cliente | `VITE_BREVO_API_KEY` expuesta en bundle (`src/lib/brevoService.ts`, `NewsletterForm.tsx:64`). Permite enviar emails como Kalian, enumerar contactos. | Migrar envíos a Cloud Function callable. Quitar la VITE_ var. | ✅ cerrado (`fix/security-criticos`) |
 | C2 | Functions | `sendReservationConfirmation` es `onCall` **sin auth ni validación de origen**. Cualquiera dispara emails con remitente verificado. | Validar que `manageToken` existe en `reservas` y leer los datos del doc, no del request. | ✅ cerrado (`fix/security-criticos`) |
 | C3 | Functions | Inyección HTML en plantillas de email (`${nombre}`, `${eventoTitulo}`, etc. sin escape). CSS injection / phishing en clientes de email. | Helper `escapeHtml` aplicado a toda interpolación. | ✅ cerrado (`fix/security-criticos`) |
 | C4 | Functions | PII (emails completos) en logs de `brevoWebhook`, `onNewsletterSubscriberDeleted`, `reconciliarNewsletterBrevo`. Retención por defecto 30 días → riesgo RGPD. | Helper `maskEmail()` o hash SHA-256 corto. | 🟡 pendiente |

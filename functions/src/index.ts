@@ -435,6 +435,77 @@ export const gestionarReservaInvitado = onCall(
   }
 );
 
+// ─── subscribeNewsletter ────────────────────────────────────────────────────
+// Callable SIN auth (alta pública). Validación de origen: el doc en
+// `newsletter_subscribers` con este email y `estado: 'pendiente_confirmacion'`
+// debe haberse creado en los últimos 5 minutos (lo escribe el cliente justo
+// antes via reglas validadas). Esto ata la function al flow legítimo y cierra
+// el vector de envío arbitrario a Brevo desde un endpoint público.
+export const subscribeNewsletter = onCall(
+  { secrets: [BREVO_API_KEY, BREVO_NEWSLETTER_LIST_ID], region: EU_REGION },
+  async (request) => {
+    const { nombre, email } = request.data as { nombre?: string; email?: string };
+
+    if (typeof nombre !== 'string' || nombre.trim().length === 0 || nombre.length > 100) {
+      throw new HttpsError('invalid-argument', 'Nombre no válido.');
+    }
+    if (typeof email !== 'string' || email.length > 100 || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+      throw new HttpsError('invalid-argument', 'Email no válido.');
+    }
+
+    const emailNorm = email.toLowerCase().trim();
+    const nombreNorm = nombre.trim();
+
+    // Verificación de origen: alta reciente pendiente en Firestore
+    const db = admin.firestore();
+    const snap = await db.collection('newsletter_subscribers')
+      .where('email', '==', emailNorm)
+      .limit(5)
+      .get();
+
+    if (snap.empty) {
+      throw new HttpsError('failed-precondition', 'Alta no encontrada.');
+    }
+
+    const cutoffMs = Date.now() - 5 * 60 * 1000;
+    const valido = snap.docs.some(doc => {
+      const d = doc.data() as any;
+      return d.estado === 'pendiente_confirmacion' && (d.fecha?.toMillis?.() ?? 0) >= cutoffMs;
+    });
+
+    if (!valido) {
+      throw new HttpsError('failed-precondition', 'Alta no encontrada o expirada.');
+    }
+
+    const listId = Number(BREVO_NEWSLETTER_LIST_ID.value()) || 3;
+    const res = await fetch('https://api.brevo.com/v3/contacts', {
+      method: 'POST',
+      headers: {
+        accept: 'application/json',
+        'api-key': BREVO_API_KEY.value(),
+        'content-type': 'application/json',
+      },
+      body: JSON.stringify({
+        email: emailNorm,
+        attributes: { NOMBRE: nombreNorm },
+        listIds: [listId],
+        updateEnabled: true,
+      }),
+    });
+
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({})) as any;
+      if (res.status === 400 && err.code === 'duplicate_parameter') {
+        return { ok: true, duplicate: true };
+      }
+      logger.error('subscribeNewsletter: Brevo error', { status: res.status, code: err.code });
+      throw new HttpsError('internal', 'No se pudo dar de alta en el servicio de email.');
+    }
+
+    return { ok: true };
+  }
+);
+
 // ─── brevoWebhook ───────────────────────────────────────────────────────────
 // Recibe eventos de Brevo (unsubscribed, hardBounce, spam) y actualiza
 // el doc correspondiente en `newsletter_subscribers` marcándolo como baja.

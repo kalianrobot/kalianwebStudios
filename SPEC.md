@@ -294,7 +294,6 @@ CSP y cabeceras de seguridad: definidas en `firebase.json` (HSTS, X-Frame DENY, 
 - Lanzar campaña de reconfirmación RGPD: dos CTA ("Sigo dentro" / "Darme de baja"), eliminar al final los `RECONFIRMADO != true`.
 
 ### Deuda técnica conocida
-- `VITE_BREVO_API_KEY` expuesta al cliente → migrar envíos al servidor (Cloud Function).
 - `brevoWebhook` aún no escucha confirmación DOI (se decidió delegar en la reconciliación). Reconsiderar si latencia semanal molesta.
 - `AdminNewsletter` no tiene filtro explícito por estado `pendiente_confirmacion` (solo badge visual).
 

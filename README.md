@@ -41,10 +41,11 @@ firebase.json       # Hosting + CSP + functions + emuladores
 
 ## Documentación
 
-Cuatro documentos con roles distintos. Léelos en este orden si vienes nuevo:
+| Fichero | Rol | Cuándo leerlo |
+|---|---|---|
+| [README.md](README.md) | Entry point: qué es, cómo arrancar, mapa de docs | Primer contacto con el repo |
+| [SPEC.md](SPEC.md) | Cómo está construido (técnica) | Antes de tocar código |
+| [DOCUMENTATION.md](DOCUMENTATION.md) | Qué hace + manuales (Staff, Profesor, Socio, Portero) + reglas de negocio | Para explicar el sistema o usarlo |
+| [SECURITY_SPEC.md](SECURITY_SPEC.md) | Invariantes + Dirty Dozen contra `firestore.rules` | En code review de cambios sensibles |
 
-- **[SPEC.md](SPEC.md)** — Cómo está construido. Stack real, arquitectura, modelo de datos, Cloud Functions, roles, i18n, branding, convenciones de código, roadmap. **Léelo si vas a tocar código.**
-- **[DOCUMENTATION.md](DOCUMENTATION.md)** — Qué hace. Reglas de negocio (cuota mensual, socio activo/inactivo), manuales de uso (Staff, Profesor, Socio, Portero), operativa. **Léelo si vas a usar la app o explicar qué hace.**
-- **[SECURITY_SPEC.md](SECURITY_SPEC.md)** — Invariantes de seguridad y los "Dirty Dozen" payloads contra las reglas Firestore. **Léelo en code review de cambios sensibles.**
-
-Las decisiones arquitectónicas o de producto que afecten al código se actualizan en el SPEC.md en el mismo PR que las introduce. Las reglas de negocio o cambios de flujo de usuario, en DOCUMENTATION.md.
+Las decisiones arquitectónicas o de producto que afecten al código se actualizan en `SPEC.md` en el mismo PR que las introduce. Las reglas de negocio o cambios de flujo de usuario, en `DOCUMENTATION.md`.

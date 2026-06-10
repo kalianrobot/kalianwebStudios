@@ -82,14 +82,14 @@ Auditoría exhaustiva de `firestore.rules`, Cloud Functions y cliente. Los halla
 
 ### Sprint 2 — Altos
 
-| # | Área | Hallazgo | Mitigación |
-|---|---|---|---|
-| A1 | Functions | `brevoWebhook` sin HMAC ni validación de timestamp → replay si secret se filtra. | Validar timestamp del payload + rate limit por IP. |
-| A2 | Functions | `onNewsletterSubscriberDeleted` no reintenta ante 500/timeout/429 de Brevo → contacto sigue activo aunque borrado de Firestore (RGPD). | Retry con backoff exponencial (3 intentos) o Cloud Task. |
-| A3 | Functions | `validatePuertaAccess` compara contraseña con `!==` (timing) y sin rate limit. | `crypto.timingSafeEqual()` + throttle por IP. |
-| A4 | Cliente | Cálculo de `totalPagar` 100% client-side (`ReservaForm.tsx`). Firestore no valida precio. | Mover cálculo a Cloud Function. Cobertura inmediata de futuros pagos electrónicos. |
-| A5 | Hosting | CSP con `'unsafe-inline'` en `script-src` (`firebase.json:49`). XSS residual sin protección. | Migrar a nonces o eliminar scripts inline. |
-| A6 | Cliente | `console.error/warn` con `uid`/`email` sin guard `isDev` (`ReservaForm.tsx:167,382,387`). PII en DevTools y herramientas de monitorización. | `if (isDev)` o helper `logger.dev()`. |
+| # | Área | Hallazgo | Mitigación | Estado |
+|---|---|---|---|---|
+| A1 | Functions | `brevoWebhook` sin HMAC ni validación de timestamp → replay si secret se filtra. | Validar timestamp del payload + rate limit por IP. | ✅ cerrado — timestamp validation en `brevoWebhook` (≤5 min). Brevo no firma HMAC; secret en query sigue siendo la primera línea de defensa. |
+| A2 | Functions | `onNewsletterSubscriberDeleted` no reintenta ante 500/timeout/429 de Brevo → contacto sigue activo aunque borrado de Firestore (RGPD). | Retry con backoff exponencial (3 intentos) o Cloud Task. | ✅ cerrado — `withRetry` (3 intentos, backoff 2 s/4 s) en `onNewsletterSubscriberDeleted`. |
+| A3 | Functions | `validatePuertaAccess` compara contraseña con `!==` (timing) y sin rate limit. | `crypto.timingSafeEqual()` + throttle por IP. | ✅ cerrado — `timingSafeEqual` + rate limit 5 intentos/min en memoria de instancia. |
+| A4 | Cliente | Cálculo de `totalPagar` 100% client-side (`ReservaForm.tsx`). Firestore no valida precio. | Mover cálculo a Cloud Function. Cobertura inmediata de futuros pagos electrónicos. | ✅ cerrado — `calcularPrecioReserva` callable; cliente usa resultado del servidor al enviar. Display local sigue siendo real-time. |
+| A5 | Hosting | CSP con `'unsafe-inline'` en `script-src` (`firebase.json:49`). XSS residual sin protección. | Migrar a nonces o eliminar scripts inline. | ✅ cerrado — `'unsafe-inline'` eliminado de `script-src`. App usa `<script type="module">` en producción; GTM no está activo en el código. |
+| A6 | Cliente | `console.error/warn` con `uid`/`email` sin guard `isDev` (`ReservaForm.tsx:167,382,387`). PII en DevTools y herramientas de monitorización. | `if (isDev)` o helper `logger.dev()`. | ✅ cerrado — todos los `console.error/warn` con PII envueltos en `isDev` (`ReservaForm.tsx`). |
 
 ### Sprint 3 — Medios (higiene)
 

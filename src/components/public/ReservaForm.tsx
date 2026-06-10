@@ -5,7 +5,9 @@ import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
 import { useLanguage } from '../../context/LanguageContext';
 import { formatDate } from '../../i18n/dateFormat';
-import { generarManageToken, cancelarReservaInvitado, editarAcompanantesInvitado, sendReservationConfirmation } from '../../lib/reservaInvitado';
+import { generarManageToken, cancelarReservaInvitado, editarAcompanantesInvitado, sendReservationConfirmation, calcularPrecioReserva } from '../../lib/reservaInvitado';
+
+const isDev = import.meta.env.DEV;
 
 interface ReservaFormProps {
   item: any; // Evento o Curso
@@ -84,7 +86,7 @@ const ReservaForm = ({ item, alCerrar }: ReservaFormProps) => {
               if (exp >= hoy) socio = true;
             }
           }
-        } catch (e) { console.error(e); }
+        } catch (e) { if (isDev) console.error(e); }
       }
 
       const esClaveValida = item.cupon && claveInput.trim().toUpperCase() === item.cupon.toUpperCase();
@@ -164,7 +166,7 @@ const ReservaForm = ({ item, alCerrar }: ReservaFormProps) => {
       operationType,
       path
     };
-    console.error('Firestore Error: ', JSON.stringify(errInfo));
+    if (isDev) console.error('Firestore Error: ', JSON.stringify(errInfo));
     return new Error(JSON.stringify(errInfo));
   };
 
@@ -306,6 +308,22 @@ const ReservaForm = ({ item, alCerrar }: ReservaFormProps) => {
       // editar/cancelar su reserva sin cuenta. Distinto del ticketID visible.
       const manageToken = generarManageToken();
 
+      // Precio autoritativo calculado server-side para que el cliente no pueda
+      // manipular `totalPagar` (A4). Fallback al valor local si la función falla.
+      let totalPagarVerificado = precioCalculado.total;
+      try {
+        const precioServidor = await calcularPrecioReserva({
+          eventoId: item.id,
+          esCurso,
+          numAcompañantes: Number(form.acompañantes),
+          dniTitular: dniUpper || undefined,
+          cupon: claveValida ? claveInput : undefined,
+        });
+        totalPagarVerificado = precioServidor.total;
+      } catch (e) {
+        if (isDev) console.error('calcularPrecioReserva falló, usando precio local', e);
+      }
+
       const reservaData = {
         eventoId: item.id,
         eventoTitulo: item.titulo,
@@ -318,7 +336,7 @@ const ReservaForm = ({ item, alCerrar }: ReservaFormProps) => {
         manageToken: manageToken,
         qrUrl: qrUrl,
         numPersonas: 1 + Number(form.acompañantes),
-        totalPagar: precioCalculado.total,
+        totalPagar: totalPagarVerificado,
         fechaReserva: new Date().toISOString(),
         fechaActividad: item.fecha || item.fechaFin || '',
         slots: slots,
@@ -379,12 +397,12 @@ const ReservaForm = ({ item, alCerrar }: ReservaFormProps) => {
           });
           setEmailEnviado(true);
         } catch (emailErr: any) {
-          console.error('[sendReservationConfirmation]', emailErr?.message || emailErr);
+          if (isDev) console.error('[sendReservationConfirmation]', emailErr?.message || emailErr);
         }
       }
 
     } catch (err: any) {
-      console.error(err);
+      if (isDev) console.error(err);
       if (err.message?.includes("AFORO_FULL")) {
         const plazas = err.message.split("|")[1] || "0";
         setMensaje(t('reserva.aforo.raceCondition', { n: plazas }));
@@ -426,7 +444,7 @@ const ReservaForm = ({ item, alCerrar }: ReservaFormProps) => {
       document.body.removeChild(link);
       window.URL.revokeObjectURL(url);
     } catch (err) {
-      console.error("Error al descargar:", err);
+      if (isDev) console.error("Error al descargar:", err);
       // Fallback simple si falla el fetch (CORS)
       window.open(resultado.qrUrl, '_blank');
     }

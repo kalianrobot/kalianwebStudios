@@ -48,3 +48,16 @@ export const cancelarReservaInvitado = (manageToken: string) =>
 
 export const editarAcompanantesInvitado = (manageToken: string, nuevoAcompanantes: number) =>
   callable({ manageToken, accion: 'editar', nuevoAcompanantes }).then(r => r.data);
+
+const callCalcularPrecio = httpsCallable<
+  { eventoId: string; esCurso: boolean; numAcompañantes: number; dniTitular?: string; cupon?: string },
+  { total: number; esSocio: boolean; esClave: boolean }
+>(functions, 'calcularPrecioReserva');
+
+export const calcularPrecioReserva = (params: {
+  eventoId: string;
+  esCurso: boolean;
+  numAcompañantes: number;
+  dniTitular?: string;
+  cupon?: string;
+}) => callCalcularPrecio(params).then(r => r.data);

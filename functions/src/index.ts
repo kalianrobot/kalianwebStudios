@@ -5,6 +5,7 @@ import { defineSecret } from 'firebase-functions/params';
 import { logger } from 'firebase-functions';
 import * as admin from 'firebase-admin';
 import fetch from 'node-fetch';
+import { timingSafeEqual } from 'crypto';
 
 admin.initializeApp();
 
@@ -52,6 +53,22 @@ function maskEmail(email: unknown): string {
   return `${user.slice(0, 2)}***@${domain}`;
 }
 
+// Reintenta una operación asíncrona con backoff exponencial (A2).
+async function withRetry<T>(fn: () => Promise<T>, maxAttempts = 3, baseDelayMs = 2000): Promise<T> {
+  let lastErr: unknown;
+  for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+    try { return await fn(); } catch (err) {
+      lastErr = err;
+      if (attempt < maxAttempts) await new Promise(r => setTimeout(r, baseDelayMs * (2 ** (attempt - 1))));
+    }
+  }
+  throw lastErr;
+}
+
+// Rate limiting en memoria por instancia para validatePuertaAccess (A3).
+// No persiste entre instancias, pero protege contra fuerza bruta en instancia caliente.
+const _puertaAttempts = new Map<string, number[]>();
+
 // ─── validatePuertaAccess ────────────────────────────────────────────────────
 // Sin auth: la tablet de puerta no tiene usuario Firebase. Valida la contraseña
 // compartida server-side y devuelve un Custom Token para operar como "portero".
@@ -66,6 +83,16 @@ export const validatePuertaAccess = onCall(
       throw new HttpsError('invalid-argument', 'Contraseña no válida.');
     }
 
+    // Rate limit: máx 5 intentos fallidos por IP en 60 s (A3)
+    const ip = (request.rawRequest as any)?.ip || 'unknown';
+    const ahora = Date.now();
+    const ventanaMs = 60_000;
+    const maxIntentos = 5;
+    const intentosPrevios = (_puertaAttempts.get(ip) || []).filter(t => ahora - t < ventanaMs);
+    if (intentosPrevios.length >= maxIntentos) {
+      throw new HttpsError('resource-exhausted', 'Demasiados intentos. Espera un momento.');
+    }
+
     const db = admin.firestore();
     const configSnap = await db.doc('configuracion/seguridad').get();
     if (!configSnap.exists) {
@@ -73,9 +100,18 @@ export const validatePuertaAccess = onCall(
     }
 
     const { clave_puerta } = configSnap.data() as { clave_puerta?: string };
-    if (!clave_puerta || password !== clave_puerta) {
+    if (!clave_puerta) throw new HttpsError('internal', 'Clave de puerta no configurada.');
+
+    // Comparación en tiempo constante para mitigar timing attack (A3)
+    const inputBuf = Buffer.from(password);
+    const expectedBuf = Buffer.from(clave_puerta);
+    const coincide = inputBuf.byteLength === expectedBuf.byteLength && timingSafeEqual(inputBuf, expectedBuf);
+    if (!coincide) {
+      intentosPrevios.push(ahora);
+      _puertaAttempts.set(ip, intentosPrevios);
       throw new HttpsError('permission-denied', 'Contraseña incorrecta.');
     }
+    _puertaAttempts.delete(ip);
 
     // Ensure the puerta service user doc exists so isPortero() rules pass
     const userRef = db.doc(`users/${PUERTA_UID}`);
@@ -444,6 +480,72 @@ export const gestionarReservaInvitado = onCall(
   }
 );
 
+// ─── calcularPrecioReserva ───────────────────────────────────────────────────
+// Callable SIN auth: calcula el precio autoritativo de una reserva server-side
+// para que el cliente no pueda manipular `totalPagar` antes de guardar (A4).
+// El cliente puede seguir haciendo el cálculo local para display en tiempo real;
+// al enviar el formulario usa este valor para el campo `totalPagar` en Firestore.
+export const calcularPrecioReserva = onCall(
+  { region: EU_REGION },
+  async (request) => {
+    const { eventoId, esCurso, numAcompañantes, dniTitular, cupon } = request.data as {
+      eventoId?: string;
+      esCurso?: boolean;
+      numAcompañantes?: number;
+      dniTitular?: string;
+      cupon?: string;
+    };
+
+    if (typeof eventoId !== 'string' || eventoId.length === 0 || eventoId.length > 128) {
+      throw new HttpsError('invalid-argument', 'eventoId no válido.');
+    }
+
+    const nAcomp = Math.max(0, Math.min(19, Number(numAcompañantes) || 0));
+    const db = admin.firestore();
+    const coleccion = esCurso ? 'cursos' : 'eventos';
+
+    const eventoSnap = await db.doc(`${coleccion}/${eventoId}`).get();
+    if (!eventoSnap.exists) throw new HttpsError('not-found', 'Actividad no encontrada.');
+
+    const evento = eventoSnap.data() as any;
+    const precioBase = Number(evento.precio_estandar || evento.precio || 0);
+    const categoria = String(evento.categoria || 'musica');
+
+    // Verificar membresía del titular por DNI (misma lógica que el cliente)
+    let esSocio = false;
+    if (dniTitular) {
+      const dniUpper = String(dniTitular).trim().toUpperCase();
+      const socioSnap = await db.doc(`socios/${dniUpper}`).get();
+      if (socioSnap.exists) {
+        const hoy = new Date().toISOString().split('T')[0];
+        const membresias = (socioSnap.data()?.membresias || {}) as Record<string, string>;
+        if (categoria === 'musica') {
+          esSocio = (membresias['musica'] || '') >= hoy || (membresias['local'] || '') >= hoy;
+        } else {
+          esSocio = (membresias[categoria] || '') >= hoy;
+        }
+      }
+    }
+
+    const cuponEvento = String(evento.cupon || '').toUpperCase();
+    const cuponInput = String(cupon || '').trim().toUpperCase();
+    const esClaveValida = cuponEvento.length > 0 && cuponInput === cuponEvento;
+
+    let precioTitular = precioBase;
+    let aplicadoSocio = false;
+    let aplicadoClave = false;
+
+    const pSocio = evento.tiene_descuento ? Number(evento.precio_descuento || 0) : precioBase;
+    const pClave = (esClaveValida && evento.precioCupon) ? Number(evento.precioCupon) : precioBase;
+
+    if (esSocio && pSocio < precioTitular) { precioTitular = pSocio; aplicadoSocio = true; }
+    if (esClaveValida && pClave < precioTitular) { precioTitular = pClave; aplicadoClave = true; aplicadoSocio = false; }
+
+    const total = esCurso ? precioTitular : precioTitular + (nAcomp * precioBase);
+    return { total, esSocio: aplicadoSocio, esClave: aplicadoClave };
+  }
+);
+
 // ─── subscribeNewsletter ────────────────────────────────────────────────────
 // Callable SIN auth (alta pública). Validación de origen: el doc en
 // `newsletter_subscribers` con este email y `estado: 'pendiente_confirmacion'`
@@ -535,7 +637,20 @@ export const brevoWebhook = onRequest(
       return;
     }
 
-    const body = req.body as { event?: string; email?: string };
+    const body = req.body as { event?: string; email?: string; date?: string };
+
+    // Validar antigüedad del payload para protección contra replay (A1).
+    // Brevo incluye campo `date` en formato "YYYY-MM-DD HH:MM:SS" UTC.
+    // Si el evento tiene más de 5 min, lo descartamos silenciosamente.
+    const payloadDate = body?.date;
+    if (payloadDate) {
+      const ts = Date.parse(payloadDate.includes('T') ? payloadDate : payloadDate.replace(' ', 'T') + 'Z');
+      if (!isNaN(ts) && Date.now() - ts > 5 * 60_000) {
+        logger.warn('brevoWebhook: payload demasiado antiguo, posible replay', { ip: req.ip });
+        res.status(200).send('ok');
+        return;
+      }
+    }
     const event = (body?.event || '').toLowerCase();
     const email = (body?.email || '').toLowerCase().trim();
 
@@ -591,23 +706,27 @@ export const onNewsletterSubscriberDeleted = onDocumentDeleted(
     const email = (data?.email || '').toLowerCase().trim();
     if (!email) return;
 
+    // Reintentar hasta 3 veces con backoff exponencial ante errores 5xx / red (A2).
     try {
-      const url = `https://api.brevo.com/v3/contacts/${encodeURIComponent(email)}`;
-      const r = await fetch(url, {
-        method: 'DELETE',
-        headers: {
-          'api-key': BREVO_API_KEY.value(),
-          accept: 'application/json',
-        },
-      });
-      if (!r.ok && r.status !== 404) {
-        const errBody = await r.text();
-        logger.error('onNewsletterSubscriberDeleted: Brevo DELETE falló', {
-          email: maskEmail(email), status: r.status, body: errBody,
+      await withRetry(async () => {
+        const url = `https://api.brevo.com/v3/contacts/${encodeURIComponent(email)}`;
+        const r = await fetch(url, {
+          method: 'DELETE',
+          headers: { 'api-key': BREVO_API_KEY.value(), accept: 'application/json' },
         });
-      }
+        if (r.status === 404) return; // Ya no existía en Brevo, OK
+        if (r.status === 429 || r.status >= 500) {
+          throw new Error(`Brevo DELETE status ${r.status}`);
+        }
+        if (!r.ok) {
+          const errBody = await r.text();
+          logger.error('onNewsletterSubscriberDeleted: Brevo DELETE falló (no reintentable)', {
+            email: maskEmail(email), status: r.status, body: errBody,
+          });
+        }
+      });
     } catch (err: any) {
-      logger.error('onNewsletterSubscriberDeleted: excepción', { error: err.message, email: maskEmail(email) });
+      logger.error('onNewsletterSubscriberDeleted: excepción tras reintentos', { error: err.message, email: maskEmail(email) });
     }
   }
 );

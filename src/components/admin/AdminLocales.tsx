@@ -122,8 +122,27 @@ const AdminLocales = () => {
       const snapRaw = await getDocs(q);
       const sociosVivos = snapRaw.docs.filter(d => !d.data().deletedAt);
 
-      // 3. Actualizar estado de pago de los socios
+      // 2b. Determinar a quién afecta esta operación (evita doble contabilización):
+      // - Al pagar: se excluye a quien ya tiene cuota individual viva (CUOTA_*) este mes.
+      // - Al revertir: solo se revierte a quien fue marcado por el bulk de este local,
+      //   no a quien pagó su cuota por otra vía.
+      const sociosAfectados: typeof sociosVivos = [];
+      const sociosExcluidos: string[] = [];
       for (const sDoc of sociosVivos) {
+        if (nuevoEstado) {
+          const finSnap = await getDoc(doc(db, "finanzas", `CUOTA_${anioActual}_${mesActual}_${sDoc.id}`));
+          const pagoIndividualVivo = finSnap.exists() && !finSnap.data().deletedAt;
+          if (pagoIndividualVivo) sociosExcluidos.push(sDoc.data().nombre || sDoc.id);
+          else sociosAfectados.push(sDoc);
+        } else {
+          const pagoSnap = await getDoc(doc(db, "pagos_mensuales", `${anioActual}_${mesActual}_${sDoc.id}`));
+          const cubiertoPorBulk = pagoSnap.exists() && pagoSnap.data().localId === local.id;
+          if (cubiertoPorBulk) sociosAfectados.push(sDoc);
+        }
+      }
+
+      // 3. Actualizar estado de pago de los socios afectados
+      for (const sDoc of sociosAfectados) {
         const socioId = sDoc.id;
         const pagoId = `${anioActual}_${mesActual}_${socioId}`;
         const pagoRef = doc(db, "pagos_mensuales", pagoId);
@@ -149,19 +168,21 @@ const AdminLocales = () => {
         }
       }
 
-      // 4. Registrar en Finanzas (Aportación o Devolución)
-      const montoTransaccion = sociosVivos.length * cuotaGlobal;
-      await registrarIngreso({
-        monto: nuevoEstado ? montoTransaccion : -montoTransaccion,
-        concepto: nuevoEstado
-          ? `Aportación Local ${local.nombre} (${sociosVivos.length} socios) - ${meses[mesActual-1]}`
-          : `REVERSIÓN: Aportación Local ${local.nombre} - ${meses[mesActual-1]}`,
-        categoria: 'Aportación Socio Local',
-        metodo: metodoPago,
-        local_id: local.id,
-        mes: mesActual,
-        anio: anioActual
-      });
+      // 4. Registrar en Finanzas (Aportación o Devolución) solo por los afectados
+      const montoTransaccion = sociosAfectados.length * cuotaGlobal;
+      if (montoTransaccion > 0) {
+        await registrarIngreso({
+          monto: nuevoEstado ? montoTransaccion : -montoTransaccion,
+          concepto: nuevoEstado
+            ? `Aportación Local ${local.nombre} (${sociosAfectados.length} socios) - ${meses[mesActual-1]}`
+            : `REVERSIÓN: Aportación Local ${local.nombre} (${sociosAfectados.length} socios) - ${meses[mesActual-1]}`,
+          categoria: 'Aportación Socio Local',
+          metodo: metodoPago,
+          local_id: local.id,
+          mes: mesActual,
+          anio: anioActual
+        });
+      }
 
       await batch.commit();
 
@@ -169,11 +190,14 @@ const AdminLocales = () => {
       if (socioIds.length > 0) {
         await syncMultipleSocios(socioIds);
       }
-      
+
       if (nuevoEstado) {
-        setMsg(`✅ Aportación de ${local.nombre} procesada (${montoTransaccion}€)`);
+        const notaExcluidos = sociosExcluidos.length > 0
+          ? ` (${sociosExcluidos.length} con cuota individual ya pagada, no se duplica: ${sociosExcluidos.join(', ')})`
+          : '';
+        setMsg(`✅ Aportación de ${local.nombre} procesada (${montoTransaccion}€)${notaExcluidos}`);
       } else {
-        setMsg(`⚠️ Pago revertido para ${local.nombre}. Soci@s marcados como pendientes.`);
+        setMsg(`⚠️ Pago revertido para ${local.nombre}: ${sociosAfectados.length} soci@s marcados como pendientes (los pagos individuales no se tocan).`);
       }
 
       setTimeout(() => setMsg(''), 3000);

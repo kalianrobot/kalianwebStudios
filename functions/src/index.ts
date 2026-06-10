@@ -4,7 +4,6 @@ import { onSchedule } from 'firebase-functions/v2/scheduler';
 import { defineSecret } from 'firebase-functions/params';
 import { logger } from 'firebase-functions';
 import * as admin from 'firebase-admin';
-import fetch from 'node-fetch';
 import { timingSafeEqual } from 'crypto';
 
 admin.initializeApp();
@@ -22,7 +21,7 @@ const BREVO_TIMEOUT_MS = 15_000;
 // Parsea la respuesta como JSON solo si el Content-Type lo confirma; en otro caso
 // devuelve un objeto vacío. Evita "Unexpected token" cuando Brevo manda HTML/texto
 // en errores de gateway o mantenimiento (Sprint 3 — higiene).
-async function safeJson(res: { headers: { get(name: string): string | null }; text(): Promise<string> }): Promise<any> {
+async function safeJson(res: Response): Promise<any> {
   const ct = res.headers.get('content-type') || '';
   if (!ct.toLowerCase().includes('application/json')) return {};
   try { return JSON.parse(await res.text()); } catch { return {}; }
@@ -40,7 +39,7 @@ async function callBrevo(apiKey: string, payload: object) {
         'content-type': 'application/json',
       },
       body: JSON.stringify(payload),
-      signal: controller.signal as any,
+      signal: controller.signal,
     });
     if (!res.ok) {
       const err = await safeJson(res);
@@ -625,7 +624,7 @@ export const subscribeNewsletter = onCall(
           listIds: [listId],
           updateEnabled: true,
         }),
-        signal: controller.signal as any,
+        signal: controller.signal,
       });
     } finally {
       clearTimeout(timeoutId);
@@ -744,7 +743,7 @@ export const onNewsletterSubscriberDeleted = onDocumentDeleted(
           r = await fetch(url, {
             method: 'DELETE',
             headers: { 'api-key': BREVO_API_KEY.value(), accept: 'application/json' },
-            signal: controller.signal as any,
+            signal: controller.signal,
           });
         } finally {
           clearTimeout(tid);
@@ -801,7 +800,7 @@ export const reconciliarNewsletterBrevo = onSchedule(
       try {
         r = await fetch(url, {
           headers: { 'api-key': apiKey, accept: 'application/json' },
-          signal: controller.signal as any,
+          signal: controller.signal,
         });
       } finally {
         clearTimeout(tid);

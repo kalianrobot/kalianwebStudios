@@ -110,7 +110,7 @@ Login vía `/login` con Google. Tras iniciar sesión:
 
 ## 6. Manual de Portero
 
-Acceso vía `/control-acceso`. **No requiere cuenta de usuario** — la tablet de puerta se autentica con una contraseña compartida server-side (`validatePuertaAccess` en Cloud Functions emite un custom token con rol `portero`).
+Acceso vía `/control-acceso`. **No requiere cuenta de usuario** — la tablet de puerta se autentica con una contraseña compartida server-side. `validatePuertaAccess` (Cloud Function) compara en tiempo constante (`timingSafeEqual`), aplica rate limit de 5 intentos/minuto por IP y emite un custom token con rol `portero`.
 
 Desde `ControlAcceso`:
 - **Selección del evento** del día.
@@ -134,9 +134,9 @@ Firestore en `europe-west1`. Se recomienda configurar **exportaciones programada
 
 ### 7.3 Sincronización con Brevo
 
-- Alta → Firestore + Brevo simultáneo (alta pendiente).
-- Baja → webhook `brevoWebhook` actualiza Firestore con `estado: 'baja'`.
-- Borrado admin → trigger `onNewsletterSubscriberDeleted` propaga DELETE a Brevo.
+- Alta → Firestore (estado `pendiente_confirmacion`) + Cloud Function `subscribeNewsletter` (la API key de Brevo vive solo en el servidor).
+- Baja → webhook `brevoWebhook` actualiza Firestore con `estado: 'baja'`. Valida antigüedad del payload contra replay.
+- Borrado admin → trigger `onNewsletterSubscriberDeleted` propaga DELETE a Brevo con reintentos (3, backoff exponencial).
 - Reconciliación semanal → ver §2.5.
 
 ### 7.4 RGPD

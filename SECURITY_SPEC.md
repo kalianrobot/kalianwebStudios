@@ -107,13 +107,15 @@ Auditoría exhaustiva de `firestore.rules`, Cloud Functions y cliente. Los halla
 
 ### Sprint 4 — Bajos (limpieza)
 
-- Doble `match /asistencia_eventos` (líneas 246 y 257) — redundante (las reglas se OR-ean), pero confuso.
-- Regex de email `.+@.+\\..+` muy laxa.
-- Fallback de `aforo_maximo` a 9999 en `isSafeAforoUpdate`.
-- `ticketID` con `Math.random()` (no es secreto pero predecible).
-- `node-fetch@2.7.0` → migrar al `fetch` nativo de Node 22.
-- Comentarios en `firestore.rules` que revelan lógica defensiva.
-- Cupones (`cupon`, `precioCupon`) en docs `eventos` con lectura pública.
+| # | Hallazgo | Estado |
+|---|---|---|
+| B1 | Doble `match /asistencia_eventos` — redundante, confuso. | ✅ cerrado — eliminada la regla más restrictiva; queda solo la que incluye `isTeacher()`. |
+| B2 | Regex de email `.+@.+\\..+` muy laxa (permite `@` en el local/domain). | ✅ cerrado — reemplazada por `[^@]+@[^@]+\\.[a-zA-Z]{2,}` en todas las `isValid*`. |
+| B3 | `ticketID` con `Math.random()` (predecible aunque no es secreto). | ✅ cerrado — `crypto.getRandomValues(new Uint8Array(4))` en `ReservaForm.tsx`. |
+| B4 | `node-fetch@2.7.0` — dependencia obsoleta cuando Node 22 tiene `fetch` nativo. | ✅ cerrado — eliminada la dependencia y el import; las `signal` casts `as any` también eliminadas. |
+| B5 | Comentarios en `firestore.rules` que revelan vectores corregidos (C1/C2/C3/A4/A5…). | ✅ cerrado — comentarios de código de vulnerabilidad eliminados; la historia vive en `SECURITY_SPEC.md` y en los commits. |
+| B6 | Fallback de `aforo_maximo` a 9999 en `isSafeAforoUpdate`. | 🟡 aceptado — fallback intencional para eventos sin campo `aforo_maximo`; cambiar a 0 rompería eventos existentes sin ese campo. Documentar en DOCUMENTATION.md que el campo es obligatorio al crear eventos. |
+| B7 | Cupones (`cupon`, `precioCupon`) en docs `eventos` con lectura pública. | 🟡 diseño aceptado — los cupones son códigos promocionales distribuidos activamente; moverlos a colección privada requeriría refactor del flujo `ReservaForm`. Riesgo real: usuario listo puede descubrir el cupón viendo el doc del evento en Firestore. Revisitar si se añaden cupones de uso único. |
 
 ### Falsos positivos descartados
 

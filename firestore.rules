@@ -49,10 +49,7 @@ service cloud.firestore {
     }
 
     // --- USERS ---
-    // C1: el campo 'role' sólo puede ser modificado por un admin. El usuario puede crear y
-    // mantener su propio perfil pero nunca tocar 'role'.
     match /users/{userId} {
-      // Users can read their own profile but cannot self-assign roles
       allow read: if (isSignedIn() && request.auth.uid == userId) || isAdmin();
       allow create: if isSignedIn() && request.auth.uid == userId
                     && !incoming().keys().hasAny(['role']);
@@ -136,9 +133,6 @@ service cloud.firestore {
     }
 
     // --- RESERVAS ---
-    // Sprint 3: allowlist de claves (hasOnly) + email regex.
-    // Mantiene cobertura de los campos legítimos que escribe ReservaForm.tsx;
-    // rechaza payloads con campos arbitrarios (defensa contra payload #2 de Dirty Dozen).
     function isValidReserva(data) {
       return data.keys().hasOnly([
               'eventoId', 'eventoTitulo', 'categoria',
@@ -152,17 +146,15 @@ service cloud.firestore {
           && data.eventoId is string && data.eventoId.size() <= 128
           && data.nombreTitular is string && data.nombreTitular.size() > 0 && data.nombreTitular.size() <= 200
           && data.dniTitular is string && (data.dniTitular.size() == 0 || (data.dniTitular.size() >= 7 && data.dniTitular.size() <= 20))
-          && data.emailTitular is string && data.emailTitular.size() <= 100 && data.emailTitular.matches('.+@.+\\..+')
+          && data.emailTitular is string && data.emailTitular.size() <= 100 && data.emailTitular.matches('[^@]+@[^@]+\\.[a-zA-Z]{2,}')
           && data.numPersonas is number && data.numPersonas >= 1 && data.numPersonas <= 20
           && data.uidTitular is string
           && (data.uidTitular == 'invitado' || data.uidTitular == request.auth.uid);
     }
     match /reservas/{id} {
-      // C3: se mantiene el flujo de invitado pero con validación más estricta del payload
       allow create: if isValidReserva(incoming()) &&
                     (exists(/databases/$(database)/documents/eventos/$(incoming().eventoId)) ||
                      exists(/databases/$(database)/documents/cursos/$(incoming().eventoId)));
-      // C2: SIN la cláusula 'dniTitular != null' que permitía lectura pública total
       allow read: if isAdmin()
                   || isPortero()
                   || (isSignedIn() && resource.data.uidTitular == request.auth.uid)
@@ -176,8 +168,6 @@ service cloud.firestore {
     }
 
     // --- SOCIOS ---
-    // A4: cualquier signed-in podía crear un socio con cualquier uid; ahora se exige
-    // coincidencia con request.auth.uid y forma mínima válida.
     function isValidSocioCreate(data) {
       return data.uid is string && data.uid == request.auth.uid
           && data.dni is string && data.dni.size() > 0 && data.dni.size() <= 20
@@ -221,8 +211,6 @@ service cloud.firestore {
     match /locales/{id}      { allow read: if true; allow write: if isAdmin(); }
 
     // --- SOLICITUDES CURSOS ---
-    // A3/A7: alta pública con validación de forma y longitudes.
-    // Sprint 3: hasOnly para impedir campos arbitrarios.
     function isValidSolicitud(data) {
       return data.keys().hasOnly([
               'nombre', 'email', 'mensaje', 'telefono', 'dni',
@@ -231,7 +219,7 @@ service cloud.firestore {
           ])
           && data.keys().hasAll(['nombre', 'email'])
           && data.nombre is string && data.nombre.size() > 0 && data.nombre.size() <= 200
-          && data.email is string && data.email.size() <= 100 && data.email.matches('.+@.+\\..+')
+          && data.email is string && data.email.size() <= 100 && data.email.matches('[^@]+@[^@]+\\.[a-zA-Z]{2,}')
           && (!data.keys().hasAny(['mensaje']) || (data.mensaje is string && data.mensaje.size() <= 2000))
           && (!data.keys().hasAny(['telefono']) || (data.telefono is string && data.telefono.size() <= 30))
           && (!data.keys().hasAny(['dni']) || (data.dni is string && data.dni.size() <= 20))
@@ -245,14 +233,11 @@ service cloud.firestore {
     }
 
     // --- NEWSLETTER ---
-    // A8: faltaba regla; se añade alta pública validada y lectura sólo admin.
-    // El alta pública sólo puede crear el documento en estado 'pendiente_confirmacion':
-    // la promoción a 'activo' la realiza Cloud Functions tras el doble opt-in de Brevo.
     function isValidNewsletter(data) {
       return data.keys().hasOnly(['nombre', 'email', 'acepto_terminos', 'politica_version', 'estado', 'fecha', 'ip'])
           && data.keys().hasAll(['nombre', 'email', 'acepto_terminos'])
           && data.nombre is string && data.nombre.size() > 0 && data.nombre.size() <= 100
-          && data.email is string && data.email.size() <= 100 && data.email.matches('.+@.+\\..+')
+          && data.email is string && data.email.size() <= 100 && data.email.matches('[^@]+@[^@]+\\.[a-zA-Z]{2,}')
           && data.acepto_terminos == true
           && (!data.keys().hasAny(['politica_version']) || (data.politica_version is string && data.politica_version.size() <= 20))
           && (!data.keys().hasAny(['estado']) || data.estado == 'pendiente_confirmacion')
@@ -264,8 +249,6 @@ service cloud.firestore {
     }
 
     // --- FINANZAS / CAJA ---
-    // Sprint 3: forma mínima de pagos_mensuales validada server-side.
-    // El ID convencional es `${anio}_${mes}_${socioId}` (ver TeacherDashboard y AdminSocios).
     function isValidPagoMensual(data) {
       return data.keys().hasOnly([
               'socioId', 'mes', 'anio', 'pagado', 'bloqueado', 'monto',
@@ -288,17 +271,15 @@ service cloud.firestore {
     }
     match /pagos_inscripciones/{id}   { allow read, write: if isAdmin() || isTeacher(); }
     match /caja_eventos/{id}          { allow read, write: if isAdmin() || isPortero(); }
-    match /asistencia_eventos/{id}    { allow read, create: if isAdmin() || isPortero(); }
 
     // --- NOTIFICACIONES ---
-    // A5: cualquier signed-in podía sobreescribir/borrar notificaciones de otros. Restringido al dueño.
     match /notificaciones/{id} {
       allow read: if isSignedIn() && (resource.data.userId == request.auth.uid || isAdmin());
       allow create: if isSignedIn() && incoming().userId == request.auth.uid;
       allow update, delete: if isSignedIn() && (existing().userId == request.auth.uid || isAdmin());
     }
 
-    // --- ASISTENCIA EVENTOS (teachers can also manage for class attendance) ---
+    // --- ASISTENCIA EVENTOS ---
     match /asistencia_eventos/{id} {
       allow read, write: if isAdmin() || isPortero() || isTeacher();
     }

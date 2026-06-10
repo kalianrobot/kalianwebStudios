@@ -302,7 +302,8 @@ const ReservaForm = ({ item, alCerrar }: ReservaFormProps) => {
       }
 
       // 4. GUARDAR RESERVA (TRANSACCIÓN ATÓMICA)
-      const tID = Math.random().toString(36).substring(2, 8).toUpperCase();
+      const tID = Array.from(crypto.getRandomValues(new Uint8Array(4)))
+        .map(b => b.toString(36).padStart(2, '0')).join('').toUpperCase().slice(0, 6);
       const qrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=KALIAN-RES-${tID}`;
       // Token de gestión seguro (capability token) para que un invitado pueda
       // editar/cancelar su reserva sin cuenta. Distinto del ticketID visible.

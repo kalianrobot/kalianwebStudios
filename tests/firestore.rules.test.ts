@@ -514,6 +514,42 @@ describe('audit: isValidNewsletter', () => {
       estado: 'pendiente_confirmacion',
     }));
   });
+
+  it('permite re-alta de un doc en baja sobreescribiendo a pendiente_confirmacion', async () => {
+    await testEnv.withSecurityRulesDisabled(async ctx => {
+      await setDoc(doc(ctx.firestore(), 'newsletter_subscribers', 'baja@x.es'), {
+        nombre: 'X', email: 'baja@x.es', acepto_terminos: true, estado: 'baja',
+      });
+    });
+    await assertSucceeds(setDoc(doc(db(anonCtx()), 'newsletter_subscribers', 'baja@x.es'), {
+      nombre: 'X', email: 'baja@x.es', acepto_terminos: true,
+      estado: 'pendiente_confirmacion',
+    }));
+  });
+
+  it('NO permite cambiar el email en un update', async () => {
+    await testEnv.withSecurityRulesDisabled(async ctx => {
+      await setDoc(doc(ctx.firestore(), 'newsletter_subscribers', 'alguien@x.es'), {
+        nombre: 'X', email: 'alguien@x.es', acepto_terminos: true, estado: 'baja',
+      });
+    });
+    await assertFails(setDoc(doc(db(anonCtx()), 'newsletter_subscribers', 'alguien@x.es'), {
+      nombre: 'X', email: 'otro@x.es', acepto_terminos: true,
+      estado: 'pendiente_confirmacion',
+    }));
+  });
+
+  it('NO permite update sobre un doc en estado activo', async () => {
+    await testEnv.withSecurityRulesDisabled(async ctx => {
+      await setDoc(doc(ctx.firestore(), 'newsletter_subscribers', 'activo@x.es'), {
+        nombre: 'X', email: 'activo@x.es', acepto_terminos: true, estado: 'activo',
+      });
+    });
+    await assertFails(setDoc(doc(db(anonCtx()), 'newsletter_subscribers', 'activo@x.es'), {
+      nombre: 'X', email: 'activo@x.es', acepto_terminos: true,
+      estado: 'pendiente_confirmacion',
+    }));
+  });
 });
 
 describe('audit: socios read case-insensitive email', () => {

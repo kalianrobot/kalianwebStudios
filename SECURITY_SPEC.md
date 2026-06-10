@@ -18,7 +18,7 @@ Estas afirmaciones deben ser ciertas en cualquier estado de la base de datos. Si
 2. **Reservas válidas**: una reserva solo se crea si referencia un `eventoId` que existe en `eventos` o `cursos`. (`isValidReserva` + `exists(/databases/.../eventos|cursos)`.)
 3. **Capacidad mínima**: `reservas.numPersonas ≥ 1 && ≤ 20`. (`isValidReserva`.)
 4. **Aforo monotónico (alta pública)**: el alta de reserva solo puede **incrementar** `eventos.{id}.aforo_reservado`, nunca decrementar, en pasos ≤ 20, y nunca por encima de `aforo_maximo`. (`isSafeAforoUpdate`.)
-5. **Newsletter — estado inicial**: el alta pública de `newsletter_subscribers` solo admite `estado: 'pendiente_confirmacion'`. La promoción a `'activo'` la hacen Cloud Functions o admin. (`isValidNewsletter`.)
+5. **Newsletter — estado inicial**: el alta pública de `newsletter_subscribers` solo admite `estado: 'pendiente_confirmacion'`. El doc ID es el email, así que la re-alta sobre un doc en `'baja'` o `'pendiente_confirmacion'` se permite (update público con `incoming().email == existing().email`) pero un doc en `'activo'` no puede degradarse desde un contexto anónimo. La promoción a `'activo'` la hacen Cloud Functions o admin. (`isValidNewsletter`.)
 6. **Ownership de reservas**: el lector de una reserva debe ser admin, portero, el `uidTitular`, o coincidir con `emailTitular` en su token. (`match /reservas/{id}` allow read.)
 7. **Edición de reserva por owner**: el titular puede modificar **solo** `acompañantes`. Cualquier otro campo requiere admin/portero. (`match /reservas/{id}` allow update.)
 8. **Capability tokens**: gestionar reserva de invitado requiere el `manageToken` (16-64 chars) emitido al hacer la reserva. La verificación ocurre en la Cloud Function `gestionarReservaInvitado`.

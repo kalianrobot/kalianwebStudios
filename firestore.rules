@@ -141,8 +141,9 @@ service cloud.firestore {
               'numPersonas', 'totalPagar', 'totalPendiente',
               'fechaReserva', 'fechaActividad',
               'slots', 'esCurso', 'acompañantes',
-              'asistentes_ingresados', 'cuponUsado', 'esSocio'
+              'asistentes_ingresados', 'cuponUsado', 'esSocio', 'precioVerificado'
           ])
+          && (!data.keys().hasAny(['precioVerificado']) || data.precioVerificado is bool)
           && data.eventoId is string && data.eventoId.size() <= 128
           && data.nombreTitular is string && data.nombreTitular.size() > 0 && data.nombreTitular.size() <= 200
           && data.dniTitular is string && (data.dniTitular.size() == 0 || (data.dniTitular.size() >= 7 && data.dniTitular.size() <= 20))

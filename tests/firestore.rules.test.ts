@@ -438,6 +438,15 @@ describe('audit: isValidReserva.hasOnly', () => {
       ...base, emailTitular: 'a@b.x',
     }));
   });
+
+  it('acepta precioVerificado booleano y rechaza otros tipos', async () => {
+    await assertSucceeds(addDoc(collection(db(socioCtx()), 'reservas'), {
+      ...base, precioVerificado: false,
+    }));
+    await assertFails(addDoc(collection(db(socioCtx()), 'reservas'), {
+      ...base, precioVerificado: 'no',
+    }));
+  });
 });
 
 describe('audit: isValidPagoMensual', () => {

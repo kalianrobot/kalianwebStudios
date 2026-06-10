@@ -59,13 +59,15 @@ SPA React. Routing en `src/App.tsx`. `Suspense + lazy()` para todas las páginas
 ### Backend
 Firebase. Tres bloques:
 1. **Firestore + reglas** (`firestore.rules`): única fuente de verdad para todos los datos del dominio. Reglas server-side estrictas por colección.
-2. **Cloud Functions** (`functions/src/index.ts`, region `europe-west1`):
-   - `validatePuertaAccess` — auth de tablet de puerta por contraseña compartida → custom token rol `portero`.
-   - `sendWelcomeEmail`, `sendMembershipUpdateEmail`, `sendReservationConfirmation` — emails transaccionales vía Brevo.
+2. **Cloud Functions** (`functions/src/index.ts`, region `europe-west1`, Node 22 con `fetch` nativo):
+   - `validatePuertaAccess` — auth de tablet de puerta por contraseña compartida → custom token rol `portero`. Compara con `timingSafeEqual` + rate limit 5 intentos/min por IP.
+   - `sendWelcomeEmail`, `sendMembershipUpdateEmail`, `sendReservationConfirmation` — emails transaccionales vía Brevo. Todas las plantillas escapan HTML en interpolaciones.
+   - `sendReservationConfirmation` lee la reserva del doc autoritativo por `manageToken`; el cliente no controla destinatario.
    - `gestionarReservaInvitado` — gestión de reserva sin login (capability token `manageToken`).
    - `calcularPrecioReserva` — precio autoritativo server-side; el cliente lo llama al enviar el formulario para que `totalPagar` no sea manipulable.
-   - `brevoWebhook` — recibe `unsubscribed/spam/hardbounce/blocked`, marca bajas en Firestore.
-   - `onNewsletterSubscriberDeleted` — sincroniza borrado admin → DELETE en Brevo.
+   - `subscribeNewsletter` — alta pública en Brevo, validada contra un doc `pendiente_confirmacion` reciente (≤5 min) en Firestore.
+   - `brevoWebhook` — recibe `unsubscribed/spam/hardbounce/blocked`, marca bajas en Firestore. Valida antigüedad del payload (≤5 min) contra replay.
+   - `onNewsletterSubscriberDeleted` — sincroniza borrado admin → DELETE en Brevo, con reintentos (3, backoff exponencial 2s/4s).
    - `reconciliarNewsletterBrevo` — cron semanal (lunes 04:00 UTC). Sincroniza ambas direcciones, promueve `pendiente_confirmacion → activo`, marca bajas por caducidad o ausencia en Brevo.
 3. **Hosting**: SPA estática con CSP estricto, HSTS, X-Frame-Options DENY (`firebase.json`).
 
@@ -286,6 +288,7 @@ CSP y cabeceras de seguridad: definidas en `firebase.json` (HSTS, X-Frame DENY, 
 - Reconciliación semanal ampliada: promociones, caducidad, baja por ausencia.
 - Badge "PENDIENTE" en `AdminNewsletter`.
 - Reglas Firestore: estado inicial restringido en alta pública.
+- **Auditoría de seguridad junio 2026** cerrada: Sprint 1 críticos (Brevo API key fuera del bundle, validación de origen en email confirmación, escape HTML, PII enmascarada en logs), Sprint 2 altos (timestamp en webhook, retry en delete-Brevo, `timingSafeEqual` + rate limit en puerta, precio server-side, CSP sin `unsafe-inline`, `isDev` en logs cliente), Sprint 3 medios (`hasOnly` en `isValid*`, regex emails, `isValidPagoMensual`, timeouts en Brevo, `safeJson`), Sprint 4 bajos (`ticketID` con `crypto`, `node-fetch` eliminado, limpieza de reglas). Detalle en [SECURITY_SPEC.md §4](SECURITY_SPEC.md).
 
 ### Pendiente operativo (no código)
 - Activar doble opt-in en la lista Brevo + plantilla DOI con URL final `/newsletter/estado?accion=confirmado`.

@@ -43,6 +43,15 @@ function escapeHtml(str: unknown): string {
     .replace(/'/g, '&#39;');
 }
 
+// Enmascara un email para logs: conserva los 2 primeros caracteres del local
+// y el dominio (útil para debug), oculta el resto (RGPD: minimizar PII en logs).
+function maskEmail(email: unknown): string {
+  if (typeof email !== 'string' || !email.includes('@')) return '***';
+  const [user, domain] = email.split('@');
+  if (!user || !domain) return '***';
+  return `${user.slice(0, 2)}***@${domain}`;
+}
+
 // ─── validatePuertaAccess ────────────────────────────────────────────────────
 // Sin auth: la tablet de puerta no tiene usuario Firebase. Valida la contraseña
 // compartida server-side y devuelve un Custom Token para operar como "portero".
@@ -549,7 +558,7 @@ export const brevoWebhook = onRequest(
         .get();
 
       if (snap.empty) {
-        logger.info('brevoWebhook: email no encontrado en Firestore', { email, event });
+        logger.info('brevoWebhook: email no encontrado en Firestore', { email: maskEmail(email), event });
         res.status(200).send('ok');
         return;
       }
@@ -559,9 +568,9 @@ export const brevoWebhook = onRequest(
         motivo: event,
         fecha_baja: admin.firestore.FieldValue.serverTimestamp(),
       });
-      logger.info('brevoWebhook: suscriptor marcado como baja', { email, event });
+      logger.info('brevoWebhook: suscriptor marcado como baja', { email: maskEmail(email), event });
     } catch (err: any) {
-      logger.error('brevoWebhook: error actualizando Firestore', { error: err.message, email, event });
+      logger.error('brevoWebhook: error actualizando Firestore', { error: err.message, email: maskEmail(email), event });
     }
     res.status(200).send('ok');
   }
@@ -594,11 +603,11 @@ export const onNewsletterSubscriberDeleted = onDocumentDeleted(
       if (!r.ok && r.status !== 404) {
         const errBody = await r.text();
         logger.error('onNewsletterSubscriberDeleted: Brevo DELETE falló', {
-          email, status: r.status, body: errBody,
+          email: maskEmail(email), status: r.status, body: errBody,
         });
       }
     } catch (err: any) {
-      logger.error('onNewsletterSubscriberDeleted: excepción', { error: err.message, email });
+      logger.error('onNewsletterSubscriberDeleted: excepción', { error: err.message, email: maskEmail(email) });
     }
   }
 );

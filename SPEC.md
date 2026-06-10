@@ -63,6 +63,7 @@ Firebase. Tres bloques:
    - `validatePuertaAccess` — auth de tablet de puerta por contraseña compartida → custom token rol `portero`.
    - `sendWelcomeEmail`, `sendMembershipUpdateEmail`, `sendReservationConfirmation` — emails transaccionales vía Brevo.
    - `gestionarReservaInvitado` — gestión de reserva sin login (capability token `manageToken`).
+   - `calcularPrecioReserva` — precio autoritativo server-side; el cliente lo llama al enviar el formulario para que `totalPagar` no sea manipulable.
    - `brevoWebhook` — recibe `unsubscribed/spam/hardbounce/blocked`, marca bajas en Firestore.
    - `onNewsletterSubscriberDeleted` — sincroniza borrado admin → DELETE en Brevo.
    - `reconciliarNewsletterBrevo` — cron semanal (lunes 04:00 UTC). Sincroniza ambas direcciones, promueve `pendiente_confirmacion → activo`, marca bajas por caducidad o ausencia en Brevo.
@@ -73,8 +74,6 @@ Firebase. Tres bloques:
 - **Webhooks** validados con `?secret=<BREVO_WEBHOOK_SECRET>` (Brevo no firma HMAC).
 - **Doble opt-in** activado nativamente en la lista de newsletter. NO usamos webhook DOI propio: la confirmación se refleja en Firestore vía la reconciliación semanal.
 - **Secretos (Firebase Secret Manager)**: `BREVO_API_KEY`, `BREVO_WEBHOOK_SECRET`, `BREVO_NEWSLETTER_LIST_ID`.
-
-⚠️ `VITE_BREVO_API_KEY` (cliente) es vulnerabilidad reconocida — debería moverse a Functions. Tracked.
 
 ---
 

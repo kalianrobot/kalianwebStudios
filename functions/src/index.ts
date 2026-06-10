@@ -5,6 +5,7 @@ import { defineSecret } from 'firebase-functions/params';
 import { logger } from 'firebase-functions';
 import * as admin from 'firebase-admin';
 import { timingSafeEqual } from 'crypto';
+import { safeJson, escapeHtml, maskEmail, withRetry } from './helpers';
 
 admin.initializeApp();
 
@@ -15,17 +16,8 @@ const BREVO_WEBHOOK_SECRET = defineSecret('BREVO_WEBHOOK_SECRET');
 const BREVO_NEWSLETTER_LIST_ID = defineSecret('BREVO_NEWSLETTER_LIST_ID');
 const SENDER = { name: 'Kalian Hiri Kultur Gunea', email: 'info@kalian.es' };
 
-// Timeout por defecto para llamadas a Brevo (Sprint 3 — higiene).
+// Timeout por defecto para llamadas a Brevo.
 const BREVO_TIMEOUT_MS = 15_000;
-
-// Parsea la respuesta como JSON solo si el Content-Type lo confirma; en otro caso
-// devuelve un objeto vacío. Evita "Unexpected token" cuando Brevo manda HTML/texto
-// en errores de gateway o mantenimiento (Sprint 3 — higiene).
-async function safeJson(res: Response): Promise<any> {
-  const ct = res.headers.get('content-type') || '';
-  if (!ct.toLowerCase().includes('application/json')) return {};
-  try { return JSON.parse(await res.text()); } catch { return {}; }
-}
 
 async function callBrevo(apiKey: string, payload: object) {
   const controller = new AbortController();
@@ -51,39 +43,7 @@ async function callBrevo(apiKey: string, payload: object) {
   }
 }
 
-// Escape HTML para evitar inyección (CSS/HTML/phishing) en plantillas de email
-// cuando se interpolan datos controlados por el usuario (nombre, título, etc.).
-function escapeHtml(str: unknown): string {
-  return String(str ?? '')
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;')
-    .replace(/'/g, '&#39;');
-}
-
-// Enmascara un email para logs: conserva los 2 primeros caracteres del local
-// y el dominio (útil para debug), oculta el resto (RGPD: minimizar PII en logs).
-function maskEmail(email: unknown): string {
-  if (typeof email !== 'string' || !email.includes('@')) return '***';
-  const [user, domain] = email.split('@');
-  if (!user || !domain) return '***';
-  return `${user.slice(0, 2)}***@${domain}`;
-}
-
-// Reintenta una operación asíncrona con backoff exponencial (A2).
-async function withRetry<T>(fn: () => Promise<T>, maxAttempts = 3, baseDelayMs = 2000): Promise<T> {
-  let lastErr: unknown;
-  for (let attempt = 1; attempt <= maxAttempts; attempt++) {
-    try { return await fn(); } catch (err) {
-      lastErr = err;
-      if (attempt < maxAttempts) await new Promise(r => setTimeout(r, baseDelayMs * (2 ** (attempt - 1))));
-    }
-  }
-  throw lastErr;
-}
-
-// Rate limiting en memoria por instancia para validatePuertaAccess (A3).
+// Rate limiting en memoria por instancia para validatePuertaAccess.
 // No persiste entre instancias, pero protege contra fuerza bruta en instancia caliente.
 const _puertaAttempts = new Map<string, number[]>();
 

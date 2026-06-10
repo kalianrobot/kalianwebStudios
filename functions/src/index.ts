@@ -32,6 +32,26 @@ async function callBrevo(apiKey: string, payload: object) {
   return res.json();
 }
 
+// Escape HTML para evitar inyección (CSS/HTML/phishing) en plantillas de email
+// cuando se interpolan datos controlados por el usuario (nombre, título, etc.).
+function escapeHtml(str: unknown): string {
+  return String(str ?? '')
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
+
+// Enmascara un email para logs: conserva los 2 primeros caracteres del local
+// y el dominio (útil para debug), oculta el resto (RGPD: minimizar PII en logs).
+function maskEmail(email: unknown): string {
+  if (typeof email !== 'string' || !email.includes('@')) return '***';
+  const [user, domain] = email.split('@');
+  if (!user || !domain) return '***';
+  return `${user.slice(0, 2)}***@${domain}`;
+}
+
 // ─── validatePuertaAccess ────────────────────────────────────────────────────
 // Sin auth: la tablet de puerta no tiene usuario Firebase. Valida la contraseña
 // compartida server-side y devuelve un Custom Token para operar como "portero".
@@ -79,6 +99,9 @@ export const sendWelcomeEmail = onCall(
       email: string; nombre: string; activationLink: string;
     };
 
+    const nombreSafe = escapeHtml(nombre);
+    const linkSafe = escapeHtml(activationLink);
+
     return callBrevo(BREVO_API_KEY.value(), {
       sender: SENDER,
       to: [{ email, name: nombre }],
@@ -99,11 +122,11 @@ export const sendWelcomeEmail = onCall(
         <div class="c">
           <div class="h"><h1>BIENVENIDO</h1><h1>A KALIAN</h1></div>
           <div class="b">
-            <p>Hola <span class="acc">${nombre}</span>,</p>
+            <p>Hola <span class="acc">${nombreSafe}</span>,</p>
             <p>Estamos encantados de tenerte como nuevo soci@s de nuestra comunidad cultural.</p>
             <div class="div"></div>
             <p>Para acceder a todas las ventajas, activa tu cuenta y define tu contraseña.</p>
-            <div style="margin:40px 0"><a href="${activationLink}" class="btn">ACTIVAR MI CUENTA</a></div>
+            <div style="margin:40px 0"><a href="${linkSafe}" class="btn">ACTIVAR MI CUENTA</a></div>
             <p style="font-size:12px;color:#666">Recibirás un segundo email de seguridad para completar el proceso.</p>
           </div>
           <div class="f"><p>KALIAN HIRI KULTUR GUNEA</p><p>Responsable: Kalian. Finalidad: Gestión de soci@s. Derechos: Acceso y supresión.</p></div>
@@ -129,10 +152,14 @@ export const sendMembershipUpdateEmail = onCall(
       .map(([cat, fecha]) => {
         const cat_nombre = cat === 'musica' ? 'Music Is Cool' : cat === 'danza' ? 'Club de Baile' : cat === 'local' ? 'Locales' : cat;
         return `<div style="background:#1A1A1A;border:1px solid #D4AF3733;padding:15px;margin-bottom:10px;border-radius:12px;text-align:left">
-          <p style="margin:0;color:#D4AF37;font-weight:900;text-transform:uppercase;font-size:12px">${cat_nombre}</p>
-          <p style="margin:5px 0 0;font-size:10px;color:#F5F5F066;font-weight:700">VÁLIDO HASTA: ${fecha}</p>
+          <p style="margin:0;color:#D4AF37;font-weight:900;text-transform:uppercase;font-size:12px">${escapeHtml(cat_nombre)}</p>
+          <p style="margin:5px 0 0;font-size:10px;color:#F5F5F066;font-weight:700">VÁLIDO HASTA: ${escapeHtml(fecha)}</p>
         </div>`;
       }).join('') || '<p style="color:#666;font-size:12px;font-style:italic">No tienes membresías activas.</p>';
+
+    const nombreSafe = escapeHtml(nombre);
+    const uidSafe = escapeHtml(uid);
+    const qrUrlSafe = escapeHtml(qrUrl);
 
     return callBrevo(BREVO_API_KEY.value(), {
       sender: SENDER,
@@ -152,10 +179,10 @@ export const sendMembershipUpdateEmail = onCall(
         <div class="c">
           <div class="h"><h1>CARNET DIGITAL</h1></div>
           <div class="b">
-            <p>Hola <span class="acc">${nombre}</span>,</p>
+            <p>Hola <span class="acc">${nombreSafe}</span>,</p>
             <p>Tu membresía en Kalian ha sido actualizada. Presenta este QR en el centro:</p>
-            <div class="qr"><img src="${qrUrl}" width="200" height="200" style="display:block"></div>
-            <p style="font-size:10px;color:#666;text-transform:uppercase;letter-spacing:2px;margin-bottom:40px">UID: ${uid}</p>
+            <div class="qr"><img src="${qrUrlSafe}" width="200" height="200" style="display:block"></div>
+            <p style="font-size:10px;color:#666;text-transform:uppercase;letter-spacing:2px;margin-bottom:40px">UID: ${uidSafe}</p>
             <div style="max-width:400px;margin:0 auto;padding-top:20px">
               <p style="font-size:12px;font-weight:900;text-transform:uppercase;color:#D4AF37;margin-bottom:15px;text-align:left">Tus Membresías Activas:</p>
               ${membresiasHtml}
@@ -168,23 +195,48 @@ export const sendMembershipUpdateEmail = onCall(
 );
 
 // ─── sendReservationConfirmation ────────────────────────────────────────────
-// Callable SIN auth: el invitado acaba de reservar y no tiene cuenta Firebase.
+// Callable SIN auth (el invitado acaba de reservar y no tiene cuenta Firebase).
+// Validación de origen: el `manageToken` debe existir en `reservas`. Todos los
+// datos del email se leen del doc autoritativo en Firestore — el cliente solo
+// pasa el token, lo demás se ignora. Esto cierra el vector de spam/phishing
+// que tenía esta function al aceptar `email`/`nombre`/`eventoTitulo` arbitrarios.
 export const sendReservationConfirmation = onCall(
   { secrets: [BREVO_API_KEY], region: EU_REGION },
   async (request) => {
-    const { email, nombre, eventoTitulo, ticketID, qrUrl, manageToken, fechaActividad } = request.data as {
-      email: string; nombre: string; eventoTitulo: string;
-      ticketID: string; qrUrl: string; manageToken: string;
-      fechaActividad?: string;
-    };
+    const { manageToken } = request.data as { manageToken?: string };
 
-    if (!email || !ticketID || !manageToken) {
-      throw new HttpsError('invalid-argument', 'Faltan datos obligatorios.');
+    if (typeof manageToken !== 'string' || manageToken.length < 16 || manageToken.length > 64) {
+      throw new HttpsError('invalid-argument', 'Token no válido.');
     }
+
+    const db = admin.firestore();
+    const snap = await db.collection('reservas')
+      .where('manageToken', '==', manageToken)
+      .limit(1)
+      .get();
+
+    if (snap.empty) {
+      // Error genérico: no revelamos si el token existe o no.
+      throw new HttpsError('not-found', 'Reserva no encontrada.');
+    }
+
+    const reserva = snap.docs[0].data() as any;
+    const email = String(reserva.emailTitular || '').toLowerCase().trim();
+    const nombre = String(reserva.nombreTitular || '');
+    const eventoTitulo = String(reserva.eventoTitulo || '');
+    const ticketID = String(reserva.ticketID || '');
+    const fechaActividad = String(reserva.fechaActividad || '');
+
+    if (!email || !ticketID) {
+      throw new HttpsError('failed-precondition', 'Reserva incompleta.');
+    }
+
+    // QR generado server-side a partir del ticketID validado, no del request.
+    const qrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${encodeURIComponent(ticketID)}`;
 
     // Formatear fecha y hora del evento (formato datetime-local: "2026-06-04T22:00")
     let fechaFormateada = '';
-    if (fechaActividad && typeof fechaActividad === 'string') {
+    if (fechaActividad) {
       const [dia, hora] = fechaActividad.split('T');
       if (dia) {
         const [y, m, d] = dia.split('-');
@@ -194,6 +246,13 @@ export const sendReservationConfirmation = onCall(
         fechaFormateada = `${Number(d)} de ${mesNombre} de ${y}` + (hora ? ` · ${hora.substring(0, 5)}h` : '');
       }
     }
+
+    const nombreSafe = escapeHtml(nombre);
+    const tituloSafe = escapeHtml(eventoTitulo);
+    const ticketSafe = escapeHtml(ticketID);
+    const fechaSafe = escapeHtml(fechaFormateada);
+    const qrUrlSafe = escapeHtml(qrUrl);
+    const tokenSafe = escapeHtml(manageToken);
 
     return callBrevo(BREVO_API_KEY.value(), {
       sender: SENDER,
@@ -217,14 +276,14 @@ export const sendReservationConfirmation = onCall(
         <div class="c">
           <div class="h"><h1>RESERVA CONFIRMADA</h1></div>
           <div class="b">
-            <p>Hola <span class="acc">${nombre}</span>,</p>
-            <p>Tu entrada para <span class="acc">${eventoTitulo}</span> está confirmada.</p>
-            ${fechaFormateada ? `<p style="font-size:14px;color:#D4AF37;text-transform:uppercase;letter-spacing:3px;font-weight:700;margin-top:-10px">${fechaFormateada}</p>` : ''}
-            <p class="tid">${ticketID}</p>
-            <div class="qr"><img src="${qrUrl}" width="200" height="200" style="display:block"></div>
+            <p>Hola <span class="acc">${nombreSafe}</span>,</p>
+            <p>Tu entrada para <span class="acc">${tituloSafe}</span> está confirmada.</p>
+            ${fechaSafe ? `<p style="font-size:14px;color:#D4AF37;text-transform:uppercase;letter-spacing:3px;font-weight:700;margin-top:-10px">${fechaSafe}</p>` : ''}
+            <p class="tid">${ticketSafe}</p>
+            <div class="qr"><img src="${qrUrlSafe}" width="200" height="200" style="display:block"></div>
             <p style="font-size:12px;color:#666">Presenta este código en la entrada. El pago de acompañantes (si los hay) se realiza en efectivo.</p>
             <div style="margin-top:24px;padding-top:20px;border-top:1px solid #D4AF3733">
-              <a href="https://kalian.es/mi-reserva?token=${manageToken}" class="btn">Gestionar mi reserva</a>
+              <a href="https://kalian.es/mi-reserva?token=${tokenSafe}" class="btn">Gestionar mi reserva</a>
               <p class="note">Desde ahí puedes cambiar el número de acompañantes o cancelar.</p>
             </div>
           </div>
@@ -385,6 +444,77 @@ export const gestionarReservaInvitado = onCall(
   }
 );
 
+// ─── subscribeNewsletter ────────────────────────────────────────────────────
+// Callable SIN auth (alta pública). Validación de origen: el doc en
+// `newsletter_subscribers` con este email y `estado: 'pendiente_confirmacion'`
+// debe haberse creado en los últimos 5 minutos (lo escribe el cliente justo
+// antes via reglas validadas). Esto ata la function al flow legítimo y cierra
+// el vector de envío arbitrario a Brevo desde un endpoint público.
+export const subscribeNewsletter = onCall(
+  { secrets: [BREVO_API_KEY, BREVO_NEWSLETTER_LIST_ID], region: EU_REGION },
+  async (request) => {
+    const { nombre, email } = request.data as { nombre?: string; email?: string };
+
+    if (typeof nombre !== 'string' || nombre.trim().length === 0 || nombre.length > 100) {
+      throw new HttpsError('invalid-argument', 'Nombre no válido.');
+    }
+    if (typeof email !== 'string' || email.length > 100 || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+      throw new HttpsError('invalid-argument', 'Email no válido.');
+    }
+
+    const emailNorm = email.toLowerCase().trim();
+    const nombreNorm = nombre.trim();
+
+    // Verificación de origen: alta reciente pendiente en Firestore
+    const db = admin.firestore();
+    const snap = await db.collection('newsletter_subscribers')
+      .where('email', '==', emailNorm)
+      .limit(5)
+      .get();
+
+    if (snap.empty) {
+      throw new HttpsError('failed-precondition', 'Alta no encontrada.');
+    }
+
+    const cutoffMs = Date.now() - 5 * 60 * 1000;
+    const valido = snap.docs.some(doc => {
+      const d = doc.data() as any;
+      return d.estado === 'pendiente_confirmacion' && (d.fecha?.toMillis?.() ?? 0) >= cutoffMs;
+    });
+
+    if (!valido) {
+      throw new HttpsError('failed-precondition', 'Alta no encontrada o expirada.');
+    }
+
+    const listId = Number(BREVO_NEWSLETTER_LIST_ID.value()) || 3;
+    const res = await fetch('https://api.brevo.com/v3/contacts', {
+      method: 'POST',
+      headers: {
+        accept: 'application/json',
+        'api-key': BREVO_API_KEY.value(),
+        'content-type': 'application/json',
+      },
+      body: JSON.stringify({
+        email: emailNorm,
+        attributes: { NOMBRE: nombreNorm },
+        listIds: [listId],
+        updateEnabled: true,
+      }),
+    });
+
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({})) as any;
+      if (res.status === 400 && err.code === 'duplicate_parameter') {
+        return { ok: true, duplicate: true };
+      }
+      logger.error('subscribeNewsletter: Brevo error', { status: res.status, code: err.code });
+      throw new HttpsError('internal', 'No se pudo dar de alta en el servicio de email.');
+    }
+
+    return { ok: true };
+  }
+);
+
 // ─── brevoWebhook ───────────────────────────────────────────────────────────
 // Recibe eventos de Brevo (unsubscribed, hardBounce, spam) y actualiza
 // el doc correspondiente en `newsletter_subscribers` marcándolo como baja.
@@ -428,7 +558,7 @@ export const brevoWebhook = onRequest(
         .get();
 
       if (snap.empty) {
-        logger.info('brevoWebhook: email no encontrado en Firestore', { email, event });
+        logger.info('brevoWebhook: email no encontrado en Firestore', { email: maskEmail(email), event });
         res.status(200).send('ok');
         return;
       }
@@ -438,9 +568,9 @@ export const brevoWebhook = onRequest(
         motivo: event,
         fecha_baja: admin.firestore.FieldValue.serverTimestamp(),
       });
-      logger.info('brevoWebhook: suscriptor marcado como baja', { email, event });
+      logger.info('brevoWebhook: suscriptor marcado como baja', { email: maskEmail(email), event });
     } catch (err: any) {
-      logger.error('brevoWebhook: error actualizando Firestore', { error: err.message, email, event });
+      logger.error('brevoWebhook: error actualizando Firestore', { error: err.message, email: maskEmail(email), event });
     }
     res.status(200).send('ok');
   }
@@ -473,11 +603,11 @@ export const onNewsletterSubscriberDeleted = onDocumentDeleted(
       if (!r.ok && r.status !== 404) {
         const errBody = await r.text();
         logger.error('onNewsletterSubscriberDeleted: Brevo DELETE falló', {
-          email, status: r.status, body: errBody,
+          email: maskEmail(email), status: r.status, body: errBody,
         });
       }
     } catch (err: any) {
-      logger.error('onNewsletterSubscriberDeleted: excepción', { error: err.message, email });
+      logger.error('onNewsletterSubscriberDeleted: excepción', { error: err.message, email: maskEmail(email) });
     }
   }
 );

@@ -131,4 +131,18 @@ Auditoría exhaustiva de `firestore.rules`, Cloud Functions y cliente. Los halla
 - **En code review** de PRs que toquen `firestore.rules`, `functions/src/index.ts` o flujos sensibles (auth, pagos, reservas): repasar las invariantes (§1) y los payloads relevantes (§2).
 - **Al añadir una colección o un nuevo flujo**: enumerar sus invariantes en §1 y los ataques plausibles en §2.
 - **Cuando un payload pase de ✅ a 🟡 o ⚠️**: actualizar este doc en el mismo PR que provoca el cambio.
-- Los tests conceptuales se materializan idealmente en `functions/test/rules.test.ts` con `@firebase/rules-unit-testing`.
+
+### Tests ejecutables
+
+Los invariantes y payloads de §2 tienen contraparte ejecutable en `tests/firestore.rules.test.ts` con `@firebase/rules-unit-testing` (Vitest):
+
+| Invariante / payload | `describe` correspondiente |
+|---|---|
+| Escalada de privilegios `users.role` | `users / privilege escalation` |
+| Lectura de socios cruzada | `socios` |
+| `isValidReserva.hasOnly` + email regex | `audit: isValidReserva.hasOnly` |
+| `isValidPagoMensual` (mes/anio range, type) | `audit: isValidPagoMensual` |
+| `isValidNewsletter` (doble opt-in, hasOnly) | `audit: isValidNewsletter` |
+| Lectura socios case-insensitive | `audit: socios read case-insensitive email` |
+
+Comandos: `npm run test:rules` (necesita emulador Firestore en `127.0.0.1:8080`), `npm run test:unit` para los helpers puros (`escapeHtml`, `withRetry`, `safeJson`, etc.).

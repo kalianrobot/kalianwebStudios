@@ -406,3 +406,123 @@ describe('master admin', () => {
     await assertSucceeds(setDoc(doc(db(masterCtx()), 'finanzas', 'master-test'), { monto: 999 }));
   });
 });
+
+// ══════════════════════════════════════════════════════════════════════════
+// PAYLOADS DEL AUDIT — verificación de invariantes nuevas
+// ══════════════════════════════════════════════════════════════════════════
+describe('audit: isValidReserva.hasOnly', () => {
+  const base = {
+    eventoId: 'evt-1',
+    uidTitular: 'socio-uid',
+    dniTitular: '12345678A',
+    nombreTitular: 'Jose Test',
+    emailTitular: 'jose@test.es',
+    numPersonas: 1,
+    acompañantes: 0,
+  };
+
+  it('rechaza campos no permitidos en la reserva', async () => {
+    await assertFails(addDoc(collection(db(socioCtx()), 'reservas'), {
+      ...base, campoExtra: 'inyectado',
+    }));
+  });
+
+  it('rechaza email mal formado', async () => {
+    await assertFails(addDoc(collection(db(socioCtx()), 'reservas'), {
+      ...base, emailTitular: 'no-es-email',
+    }));
+  });
+
+  it('rechaza emailTitular sin TLD válido', async () => {
+    await assertFails(addDoc(collection(db(socioCtx()), 'reservas'), {
+      ...base, emailTitular: 'a@b.x',
+    }));
+  });
+});
+
+describe('audit: isValidPagoMensual', () => {
+  const base = {
+    socioId: '12345678A', mes: 5, anio: 2026, pagado: true,
+  };
+
+  it('rechaza mes fuera de [1, 12]', async () => {
+    await assertFails(setDoc(doc(db(adminCtx()), 'pagos_mensuales', '2026_13_test'), {
+      ...base, mes: 13,
+    }));
+    await assertFails(setDoc(doc(db(adminCtx()), 'pagos_mensuales', '2026_0_test'), {
+      ...base, mes: 0,
+    }));
+  });
+
+  it('rechaza anio fuera de [2024, 2100]', async () => {
+    await assertFails(setDoc(doc(db(adminCtx()), 'pagos_mensuales', '2020_5_test'), {
+      ...base, anio: 2020,
+    }));
+    await assertFails(setDoc(doc(db(adminCtx()), 'pagos_mensuales', '2101_5_test'), {
+      ...base, anio: 2101,
+    }));
+  });
+
+  it('rechaza pagado de tipo distinto a bool', async () => {
+    await assertFails(setDoc(doc(db(adminCtx()), 'pagos_mensuales', '2026_5_typeFail'), {
+      ...base, pagado: 'sí',
+    }));
+  });
+
+  it('rechaza campos no permitidos', async () => {
+    await assertFails(setDoc(doc(db(adminCtx()), 'pagos_mensuales', '2026_5_extra'), {
+      ...base, campoExtra: 'inyectado',
+    }));
+  });
+
+  it('teacher puede crear pago válido', async () => {
+    await assertSucceeds(setDoc(doc(db(teacherCtx()), 'pagos_mensuales', '2026_6_teach'), {
+      socioId: '12345678A', mes: 6, anio: 2026, pagado: true,
+    }));
+  });
+});
+
+describe('audit: isValidNewsletter', () => {
+  it('rechaza estado != pendiente_confirmacion', async () => {
+    await assertFails(setDoc(doc(db(anonCtx()), 'newsletter_subscribers', 'hack-1'), {
+      nombre: 'X', email: 'x@x.es', acepto_terminos: true,
+      estado: 'activo',
+    }));
+  });
+
+  it('rechaza acepto_terminos != true', async () => {
+    await assertFails(setDoc(doc(db(anonCtx()), 'newsletter_subscribers', 'hack-2'), {
+      nombre: 'X', email: 'x@x.es', acepto_terminos: false,
+    }));
+  });
+
+  it('rechaza email sin TLD válido', async () => {
+    await assertFails(setDoc(doc(db(anonCtx()), 'newsletter_subscribers', 'hack-3'), {
+      nombre: 'X', email: 'a@b.x', acepto_terminos: true,
+    }));
+  });
+
+  it('rechaza campos no permitidos', async () => {
+    await assertFails(setDoc(doc(db(anonCtx()), 'newsletter_subscribers', 'hack-4'), {
+      nombre: 'X', email: 'x@x.es', acepto_terminos: true, role: 'admin',
+    }));
+  });
+
+  it('acepta alta correcta con estado pendiente_confirmacion', async () => {
+    await assertSucceeds(setDoc(doc(db(anonCtx()), 'newsletter_subscribers', 'ok-1'), {
+      nombre: 'OK', email: 'ok@ok.es', acepto_terminos: true,
+      estado: 'pendiente_confirmacion',
+    }));
+  });
+});
+
+describe('audit: socios read case-insensitive email', () => {
+  it('socio con email en mayúsculas en el documento puede leer su perfil', async () => {
+    await testEnv.withSecurityRulesDisabled(async ctx => {
+      await setDoc(doc(ctx.firestore(), 'socios', '11111111A'), {
+        uid: 'otro-uid', email: 'JOSE@TEST.ES', dni: '11111111A',
+      });
+    });
+    await assertSucceeds(getDoc(doc(db(socioCtx()), 'socios', '11111111A')));
+  });
+});

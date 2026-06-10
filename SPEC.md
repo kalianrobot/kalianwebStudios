@@ -257,6 +257,22 @@ Clase utilitaria global: `kalian-poster-text` para títulos grandes.
 - Una intención por commit.
 - Footer: enlace de sesión Claude Code.
 
+### Tests
+
+Vitest como runner único.
+
+| Carpeta | Comando | Requisitos |
+|---|---|---|
+| `tests/unit/**.test.ts` | `npm run test:unit` | Ninguno (puro Node) |
+| `tests/firestore.rules.test.ts` + `tests/storage.rules.test.ts` | `npm run test:rules` | Emulador Firestore en `127.0.0.1:8080` y Storage en `9199` |
+
+Cobertura unit actual:
+- `functions/src/helpers.ts` (extraídos de `index.ts`): `escapeHtml`, `maskEmail`, `withRetry`, `safeJson`.
+- `src/lib/slug.ts`: `normalizeToSlug`.
+- `src/lib/reservaInvitado.ts`: `generarManageToken`.
+
+Los tests de reglas cubren las invariantes del audit completo (Sprints 1-4): `isValidPagoMensual`, `isValidReserva.hasOnly`, `isValidNewsletter`, lectura case-insensitive de socios. Para invariantes y mapping payload ↔ regla ver `SECURITY_SPEC.md` §3.
+
 ---
 
 ## 11. Despliegue

@@ -436,6 +436,11 @@ export const gestionarReservaInvitado = onCall(
           `El máximo de acompañantes para esta actividad es ${maxAcomp}.`);
       }
 
+      const update: Record<string, any> = {
+        acompañantes: nuevo,
+        numPersonas: 1 + nuevo,
+      };
+
       if (!esCurso) {
         const aforoMax = Number(a.aforo_maximo || a.aforo_max || a.aforo_total || 0);
         const aforoRes = Number(a.aforo_reservado || 0);
@@ -446,12 +451,17 @@ export const gestionarReservaInvitado = onCall(
         tx.update(actRef, {
           aforo_reservado: admin.firestore.FieldValue.increment(diferencia),
         });
+
+        // Recalcular totalPagar: el componente del titular ya tiene cualquier
+        // descuento (socio/cupón) aplicado en la reserva original; los acompañantes
+        // pagan precioBase. Despejamos precioTitular y reaplicamos con `nuevo`.
+        const precioBase = Number(a.precio_estandar || a.precio || 0);
+        const totalActual = Number(r.totalPagar || 0);
+        const precioTitular = Math.max(0, totalActual - (actuales * precioBase));
+        update.totalPagar = precioTitular + (nuevo * precioBase);
       }
 
-      tx.update(reservaRef, {
-        acompañantes: nuevo,
-        numPersonas: 1 + nuevo,
-      });
+      tx.update(reservaRef, update);
     });
 
     return { ok: true, reserva: await resumenActividad() };
@@ -463,6 +473,60 @@ export const gestionarReservaInvitado = onCall(
 // para que el cliente no pueda manipular `totalPagar` antes de guardar (A4).
 // El cliente puede seguir haciendo el cálculo local para display en tiempo real;
 // al enviar el formulario usa este valor para el campo `totalPagar` en Firestore.
+
+// Lógica compartida con `gestionarReservaInvitado` para recalcular `totalPagar`
+// cuando cambian los acompañantes. Devuelve el total y qué descuento se aplicó.
+async function calcularPrecioInterno(params: {
+  eventoId: string;
+  esCurso: boolean;
+  nAcomp: number;
+  dniTitular?: string;
+  cupon?: string;
+}): Promise<{ total: number; esSocio: boolean; esClave: boolean }> {
+  const { eventoId, esCurso, nAcomp, dniTitular, cupon } = params;
+  const db = admin.firestore();
+  const coleccion = esCurso ? 'cursos' : 'eventos';
+
+  const eventoSnap = await db.doc(`${coleccion}/${eventoId}`).get();
+  if (!eventoSnap.exists) throw new HttpsError('not-found', 'Actividad no encontrada.');
+
+  const evento = eventoSnap.data() as any;
+  const precioBase = Number(evento.precio_estandar || evento.precio || 0);
+  const categoria = String(evento.categoria || 'musica');
+
+  let esSocio = false;
+  if (dniTitular) {
+    const dniUpper = String(dniTitular).trim().toUpperCase();
+    const socioSnap = await db.doc(`socios/${dniUpper}`).get();
+    if (socioSnap.exists) {
+      const hoy = new Date().toISOString().split('T')[0];
+      const membresias = (socioSnap.data()?.membresias || {}) as Record<string, string>;
+      if (categoria === 'musica') {
+        esSocio = (membresias['musica'] || '') >= hoy || (membresias['local'] || '') >= hoy;
+      } else {
+        esSocio = (membresias[categoria] || '') >= hoy;
+      }
+    }
+  }
+
+  const cuponEvento = String(evento.cupon || '').toUpperCase();
+  const cuponInput = String(cupon || '').trim().toUpperCase();
+  const esClaveValida = cuponEvento.length > 0 && cuponInput === cuponEvento;
+
+  let precioTitular = precioBase;
+  let aplicadoSocio = false;
+  let aplicadoClave = false;
+
+  const pSocio = evento.tiene_descuento ? Number(evento.precio_descuento || 0) : precioBase;
+  const pClave = (esClaveValida && evento.precioCupon) ? Number(evento.precioCupon) : precioBase;
+
+  if (esSocio && pSocio < precioTitular) { precioTitular = pSocio; aplicadoSocio = true; }
+  if (esClaveValida && pClave < precioTitular) { precioTitular = pClave; aplicadoClave = true; aplicadoSocio = false; }
+
+  const total = esCurso ? precioTitular : precioTitular + (nAcomp * precioBase);
+  return { total, esSocio: aplicadoSocio, esClave: aplicadoClave };
+}
+
 export const calcularPrecioReserva = onCall(
   { region: EU_REGION },
   async (request) => {
@@ -479,48 +543,13 @@ export const calcularPrecioReserva = onCall(
     }
 
     const nAcomp = Math.max(0, Math.min(19, Number(numAcompañantes) || 0));
-    const db = admin.firestore();
-    const coleccion = esCurso ? 'cursos' : 'eventos';
-
-    const eventoSnap = await db.doc(`${coleccion}/${eventoId}`).get();
-    if (!eventoSnap.exists) throw new HttpsError('not-found', 'Actividad no encontrada.');
-
-    const evento = eventoSnap.data() as any;
-    const precioBase = Number(evento.precio_estandar || evento.precio || 0);
-    const categoria = String(evento.categoria || 'musica');
-
-    // Verificar membresía del titular por DNI (misma lógica que el cliente)
-    let esSocio = false;
-    if (dniTitular) {
-      const dniUpper = String(dniTitular).trim().toUpperCase();
-      const socioSnap = await db.doc(`socios/${dniUpper}`).get();
-      if (socioSnap.exists) {
-        const hoy = new Date().toISOString().split('T')[0];
-        const membresias = (socioSnap.data()?.membresias || {}) as Record<string, string>;
-        if (categoria === 'musica') {
-          esSocio = (membresias['musica'] || '') >= hoy || (membresias['local'] || '') >= hoy;
-        } else {
-          esSocio = (membresias[categoria] || '') >= hoy;
-        }
-      }
-    }
-
-    const cuponEvento = String(evento.cupon || '').toUpperCase();
-    const cuponInput = String(cupon || '').trim().toUpperCase();
-    const esClaveValida = cuponEvento.length > 0 && cuponInput === cuponEvento;
-
-    let precioTitular = precioBase;
-    let aplicadoSocio = false;
-    let aplicadoClave = false;
-
-    const pSocio = evento.tiene_descuento ? Number(evento.precio_descuento || 0) : precioBase;
-    const pClave = (esClaveValida && evento.precioCupon) ? Number(evento.precioCupon) : precioBase;
-
-    if (esSocio && pSocio < precioTitular) { precioTitular = pSocio; aplicadoSocio = true; }
-    if (esClaveValida && pClave < precioTitular) { precioTitular = pClave; aplicadoClave = true; aplicadoSocio = false; }
-
-    const total = esCurso ? precioTitular : precioTitular + (nAcomp * precioBase);
-    return { total, esSocio: aplicadoSocio, esClave: aplicadoClave };
+    return calcularPrecioInterno({
+      eventoId,
+      esCurso: !!esCurso,
+      nAcomp,
+      dniTitular,
+      cupon,
+    });
   }
 );
 
@@ -814,6 +843,18 @@ export const reconciliarNewsletterBrevo = onSchedule(
             fecha_confirmacion: admin.firestore.FieldValue.serverTimestamp(),
           });
           promovidosActivo++;
+        } else if (!blacklisted && estadoActual === 'baja') {
+          // Posible re-alta: solo reactivamos si hay una alta más reciente que la baja.
+          const fechaAlta = existente.data?.fecha?.toMillis?.() ?? 0;
+          const fechaBaja = existente.data?.fecha_baja?.toMillis?.() ?? 0;
+          if (fechaAlta > fechaBaja) {
+            await existente.ref.update({
+              estado: 'activo',
+              fecha_confirmacion: admin.firestore.FieldValue.serverTimestamp(),
+              motivo: admin.firestore.FieldValue.delete(),
+            });
+            promovidosActivo++;
+          }
         }
       } else {
         // No existe en Firestore → importar

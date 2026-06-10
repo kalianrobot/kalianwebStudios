@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { db } from '../../firebase';
-import { collection, addDoc, serverTimestamp } from 'firebase/firestore';
+import { doc, setDoc, serverTimestamp } from 'firebase/firestore';
 import { useLanguage } from '../../context/LanguageContext';
 import { subscribeNewsletter } from '../../lib/brevoService';
 import NewsletterLegalModal from './NewsletterLegalModal';
@@ -50,10 +50,12 @@ const NewsletterForm = () => {
         if (isDev) console.warn("No se pudo obtener la IP:", e);
       }
 
-      // 2. Guardar en Firestore. Estado intermedio 'pendiente_confirmacion':
-      // la suscripción solo se promueve a 'activo' tras el doble opt-in de Brevo,
-      // que se refleja por la reconciliación semanal (reconciliarNewsletterBrevo).
-      await addDoc(collection(db, "newsletter_subscribers"), {
+      // 2. Guardar en Firestore con el email como doc ID. Esto convierte el alta
+      // en un upsert: si el usuario ya estaba (estado 'baja' por una baja anterior,
+      // o 'pendiente_confirmacion' si lo intentó hace poco), se sobreescribe en
+      // lugar de crear un duplicado. La regla `isValidNewsletter` + constraint
+      // `email == existing().email` impide tomar el doc de otra persona.
+      await setDoc(doc(db, "newsletter_subscribers", email), {
         nombre,
         email,
         fecha: serverTimestamp(),

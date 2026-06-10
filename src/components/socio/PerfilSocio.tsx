@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { auth, db } from '../../firebase';
-import { collection, query, where, getDocs, doc, updateDoc, DocumentData, getDoc, deleteDoc, increment } from 'firebase/firestore';
+import { collection, query, where, getDocs, doc, updateDoc, DocumentData, getDoc, deleteDoc, increment, writeBatch } from 'firebase/firestore';
 import { useNavigate } from 'react-router-dom';
 import { QRCodeSVG } from 'qrcode.react';
 import { useLanguage } from '../../context/LanguageContext';
@@ -205,14 +205,12 @@ const PerfilSocio = () => {
       const yaIngresados = reserva.asistentes_ingresados || 0;
       const pendientes = Math.max(0, totalReserva - yaIngresados);
       
+      const batch = writeBatch(db);
       if (pendientes > 0) {
-        await updateDoc(docRef, {
-          aforo_reservado: increment(-pendientes)
-        });
+        batch.update(docRef, { aforo_reservado: increment(-pendientes) });
       }
-
-      // Borrar reserva
-      await deleteDoc(doc(db, "reservas", reserva.id));
+      batch.delete(doc(db, "reservas", reserva.id));
+      await batch.commit();
       
       setReservasActivas(prev => prev.filter(r => r.id !== reserva.id));
       alert(t('profile.cancelSuccess'));
@@ -266,17 +264,26 @@ const PerfilSocio = () => {
         return;
       }
 
-      // Actualizar la reserva
-      await updateDoc(doc(db, "reservas", reserva.id), {
-        acompañantes: nuevoNum
-      });
+      const update: Record<string, any> = {
+        acompañantes: nuevoNum,
+        numPersonas: 1 + nuevoNum,
+      };
 
-      // Actualizar aforo_reservado en el evento/curso
-      await updateDoc(docRef, {
-        aforo_reservado: increment(diferencia)
-      });
+      if (!esCurso) {
+        const precioBase = Number(dataActividad.precio_estandar || dataActividad.precio || 0);
+        const totalActual = Number(reserva.totalPagar || 0);
+        const precioTitular = Math.max(0, totalActual - ((reserva.acompañantes || 0) * precioBase));
+        update.totalPagar = precioTitular + (nuevoNum * precioBase);
+      }
 
-      setReservasActivas(prev => prev.map(r => r.id === reserva.id ? { ...r, acompañantes: nuevoNum } : r));
+      const batch = writeBatch(db);
+      batch.update(doc(db, "reservas", reserva.id), update);
+      if (diferencia !== 0) {
+        batch.update(docRef, { aforo_reservado: increment(diferencia) });
+      }
+      await batch.commit();
+
+      setReservasActivas(prev => prev.map(r => r.id === reserva.id ? { ...r, ...update } : r));
     } catch (err) {
       console.error("Error al actualizar:", err);
       alert(t('profile.updateError'));

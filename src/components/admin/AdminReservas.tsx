@@ -120,10 +120,23 @@ const AdminReservas = () => {
         return;
       }
 
-      await updateDoc(doc(db, 'reservas', reserva.id), { acompañantes: nuevoNum });
-      if (diferencia !== 0) {
-        await updateDoc(docRef, { aforo_reservado: increment(diferencia) });
+      const update: Record<string, any> = {
+        acompañantes: nuevoNum,
+        numPersonas: 1 + nuevoNum,
+      };
+      if (!esCurso) {
+        const precioBase = Number(dataActividad.precio_estandar || dataActividad.precio || 0);
+        const totalActual = Number(reserva.totalPagar || 0);
+        const precioTitular = Math.max(0, totalActual - (actuales * precioBase));
+        update.totalPagar = precioTitular + (nuevoNum * precioBase);
       }
+
+      const batch = writeBatch(db);
+      batch.update(doc(db, 'reservas', reserva.id), update);
+      if (diferencia !== 0) {
+        batch.update(docRef, { aforo_reservado: increment(diferencia) });
+      }
+      await batch.commit();
 
       setMsg(`✅ Acompañantes actualizados: ${actuales} → ${nuevoNum} (aforo ${diferencia >= 0 ? '+' : ''}${diferencia})`);
       setTimeout(() => setMsg(''), 4000);

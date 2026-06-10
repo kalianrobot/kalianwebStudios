@@ -303,9 +303,8 @@ const AdminLocales = () => {
             email: inq.email || '',
             cuentaBancaria: inq.cuentaBancaria || '',
             verificado: true,
-            localId: editando.id, // Guardamos el ID del local para el perfil
+            localId: editando.id,
             [`membresias.local`]: editando.fechaExpiracion || '',
-            estado: 'activo' // Al asignar local, se activa
           };
 
           if (!socioSnap.exists()) {
@@ -314,6 +313,14 @@ const AdminLocales = () => {
             await updateDoc(socioRef, socioData);
           }
         }
+      }
+
+      const dnisActivos = (editando.inquilinos || [])
+        .map((i: any) => i.dni?.toUpperCase())
+        .filter(Boolean);
+      const dnisASincronizar = [...new Set([...dnisActivos, ...dnisBorrados])] as string[];
+      if (dnisASincronizar.length > 0) {
+        await syncMultipleSocios(dnisASincronizar);
       }
 
       setMsg("✅ Local actualizado y soci@s sincronizados");

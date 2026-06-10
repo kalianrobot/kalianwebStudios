@@ -245,7 +245,15 @@ service cloud.firestore {
     }
     match /newsletter_subscribers/{id} {
       allow create: if isValidNewsletter(incoming());
-      allow read, update, delete: if isAdmin();
+      // Re-alta pública: se permite update solo si el email no cambia y el doc
+      // estaba en 'baja' o 'pendiente_confirmacion'. Bloquea downgrades sobre
+      // suscripciones 'activo' y suplantación de docs ajenos.
+      allow update: if isValidNewsletter(incoming())
+                    && incoming().email == existing().email
+                    && (existing().get('estado', '') == 'baja'
+                        || existing().get('estado', '') == 'pendiente_confirmacion');
+      allow read, delete: if isAdmin();
+      allow update: if isAdmin();
     }
 
     // --- FINANZAS / CAJA ---

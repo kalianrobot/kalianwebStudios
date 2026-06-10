@@ -93,15 +93,17 @@ Auditoría exhaustiva de `firestore.rules`, Cloud Functions y cliente. Los halla
 
 ### Sprint 3 — Medios (higiene)
 
-- `isValidReserva`, `isValidSolicitud`, `isValidNewsletter` sin `hasOnly`.
-- `emailTitular` en reservas sin regex (las otras `isValid*` sí la tienen).
-- `isPorteroAforoUpdate` no valida que los nuevos valores sean `number`.
-- Matching de email en `socios/{id}` sin `.lower()` (inconsistente con `reservas`).
-- `pagos_mensuales` sin función `isValid*`.
-- `callBrevo` sin timeout.
-- `reconciliarNewsletterBrevo` no usa transacciones en los updates.
-- Validación de respuesta Brevo asume JSON sin comprobar `content-type`.
-- Validaciones de fechas (`apertura_socios`, `apertura_general`) solo client-side.
+| # | Hallazgo | Estado |
+|---|---|---|
+| M1 | `isValidReserva`, `isValidSolicitud`, `isValidNewsletter` sin `hasOnly` (campos arbitrarios inertes pero feos). | ✅ cerrado — `hasOnly` con allowlist explícita en las tres reglas. |
+| M2 | `emailTitular` en reservas sin regex (las otras `isValid*` sí la tienen). | ✅ cerrado — `data.emailTitular.matches('.+@.+\\..+')` añadido. |
+| M3 | `isPorteroAforoUpdate` no valida que los nuevos valores sean `number`. | ✅ cerrado — añadidos checks `aforo_actual is number` y `aforo_reservado is number`. |
+| M4 | Matching de email en `socios/{id}` sin `.lower()` (inconsistente con `reservas`). | ✅ cerrado — `.lower()` en ambos lados de la comparación. |
+| M5 | `pagos_mensuales` sin función `isValid*`. | ✅ cerrado — `isValidPagoMensual` con `hasOnly` + tipos + rangos (mes 1-12, año ≥2024). |
+| M6 | `callBrevo` sin timeout. | ✅ cerrado — `BREVO_TIMEOUT_MS = 15000` + `AbortController` en `callBrevo`, `subscribeNewsletter`, `onNewsletterSubscriberDeleted`, `reconciliarNewsletterBrevo`. |
+| M7 | Validación de respuesta Brevo asume JSON sin comprobar `content-type`. | ✅ cerrado — helper `safeJson(res)` valida `content-type: application/json` antes de parsear. |
+| M8 | `reconciliarNewsletterBrevo` no usa transacciones en los updates. | 🟡 pendiente — los updates son idempotentes (estado por email) y la cron corre una vez por semana; el coste de transaccionar supera al beneficio. Si en el futuro coinciden con altas concurrentes, revisitar. |
+| M9 | Validaciones de fechas (`apertura_socios`, `apertura_general`) solo client-side. | 🟡 pendiente — son fechas de marketing (cuándo aparecen los CTA), no autorización. El backend ya impide reservar por encima del aforo o sobre eventos inexistentes. Bajo riesgo. |
 
 ### Sprint 4 — Bajos (limpieza)
 

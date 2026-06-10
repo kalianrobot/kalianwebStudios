@@ -16,21 +16,40 @@ const BREVO_WEBHOOK_SECRET = defineSecret('BREVO_WEBHOOK_SECRET');
 const BREVO_NEWSLETTER_LIST_ID = defineSecret('BREVO_NEWSLETTER_LIST_ID');
 const SENDER = { name: 'Kalian Hiri Kultur Gunea', email: 'info@kalian.es' };
 
+// Timeout por defecto para llamadas a Brevo (Sprint 3 — higiene).
+const BREVO_TIMEOUT_MS = 15_000;
+
+// Parsea la respuesta como JSON solo si el Content-Type lo confirma; en otro caso
+// devuelve un objeto vacío. Evita "Unexpected token" cuando Brevo manda HTML/texto
+// en errores de gateway o mantenimiento (Sprint 3 — higiene).
+async function safeJson(res: { headers: { get(name: string): string | null }; text(): Promise<string> }): Promise<any> {
+  const ct = res.headers.get('content-type') || '';
+  if (!ct.toLowerCase().includes('application/json')) return {};
+  try { return JSON.parse(await res.text()); } catch { return {}; }
+}
+
 async function callBrevo(apiKey: string, payload: object) {
-  const res = await fetch('https://api.brevo.com/v3/smtp/email', {
-    method: 'POST',
-    headers: {
-      accept: 'application/json',
-      'api-key': apiKey,
-      'content-type': 'application/json',
-    },
-    body: JSON.stringify(payload),
-  });
-  if (!res.ok) {
-    const err = await res.json() as any;
-    throw new Error(err.message || 'Brevo error');
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), BREVO_TIMEOUT_MS);
+  try {
+    const res = await fetch('https://api.brevo.com/v3/smtp/email', {
+      method: 'POST',
+      headers: {
+        accept: 'application/json',
+        'api-key': apiKey,
+        'content-type': 'application/json',
+      },
+      body: JSON.stringify(payload),
+      signal: controller.signal as any,
+    });
+    if (!res.ok) {
+      const err = await safeJson(res);
+      throw new Error(err.message || `Brevo error ${res.status}`);
+    }
+    return safeJson(res);
+  } finally {
+    clearTimeout(timeoutId);
   }
-  return res.json();
 }
 
 // Escape HTML para evitar inyección (CSS/HTML/phishing) en plantillas de email
@@ -589,23 +608,31 @@ export const subscribeNewsletter = onCall(
     }
 
     const listId = Number(BREVO_NEWSLETTER_LIST_ID.value()) || 3;
-    const res = await fetch('https://api.brevo.com/v3/contacts', {
-      method: 'POST',
-      headers: {
-        accept: 'application/json',
-        'api-key': BREVO_API_KEY.value(),
-        'content-type': 'application/json',
-      },
-      body: JSON.stringify({
-        email: emailNorm,
-        attributes: { NOMBRE: nombreNorm },
-        listIds: [listId],
-        updateEnabled: true,
-      }),
-    });
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), BREVO_TIMEOUT_MS);
+    let res;
+    try {
+      res = await fetch('https://api.brevo.com/v3/contacts', {
+        method: 'POST',
+        headers: {
+          accept: 'application/json',
+          'api-key': BREVO_API_KEY.value(),
+          'content-type': 'application/json',
+        },
+        body: JSON.stringify({
+          email: emailNorm,
+          attributes: { NOMBRE: nombreNorm },
+          listIds: [listId],
+          updateEnabled: true,
+        }),
+        signal: controller.signal as any,
+      });
+    } finally {
+      clearTimeout(timeoutId);
+    }
 
     if (!res.ok) {
-      const err = await res.json().catch(() => ({})) as any;
+      const err = await safeJson(res);
       if (res.status === 400 && err.code === 'duplicate_parameter') {
         return { ok: true, duplicate: true };
       }
@@ -710,10 +737,18 @@ export const onNewsletterSubscriberDeleted = onDocumentDeleted(
     try {
       await withRetry(async () => {
         const url = `https://api.brevo.com/v3/contacts/${encodeURIComponent(email)}`;
-        const r = await fetch(url, {
-          method: 'DELETE',
-          headers: { 'api-key': BREVO_API_KEY.value(), accept: 'application/json' },
-        });
+        const controller = new AbortController();
+        const tid = setTimeout(() => controller.abort(), BREVO_TIMEOUT_MS);
+        let r;
+        try {
+          r = await fetch(url, {
+            method: 'DELETE',
+            headers: { 'api-key': BREVO_API_KEY.value(), accept: 'application/json' },
+            signal: controller.signal as any,
+          });
+        } finally {
+          clearTimeout(tid);
+        }
         if (r.status === 404) return; // Ya no existía en Brevo, OK
         if (r.status === 429 || r.status >= 500) {
           throw new Error(`Brevo DELETE status ${r.status}`);
@@ -760,12 +795,22 @@ export const reconciliarNewsletterBrevo = onSchedule(
 
     while (true) {
       const url = `https://api.brevo.com/v3/contacts/lists/${listId}/contacts?limit=${limit}&offset=${offset}`;
-      const r = await fetch(url, { headers: { 'api-key': apiKey, accept: 'application/json' } });
+      const controller = new AbortController();
+      const tid = setTimeout(() => controller.abort(), BREVO_TIMEOUT_MS);
+      let r;
+      try {
+        r = await fetch(url, {
+          headers: { 'api-key': apiKey, accept: 'application/json' },
+          signal: controller.signal as any,
+        });
+      } finally {
+        clearTimeout(tid);
+      }
       if (!r.ok) {
         logger.error('reconciliarNewsletterBrevo: fallo listando contactos', { status: r.status });
         return;
       }
-      const data = await r.json() as {
+      const data = await safeJson(r) as {
         contacts?: Array<{ email: string; emailBlacklisted?: boolean; attributes?: { NOMBRE?: string; FIRSTNAME?: string } }>
       };
       const contacts = data.contacts || [];

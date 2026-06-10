@@ -119,9 +119,12 @@ service cloud.firestore {
           && incoming().aforo_reservado <= int(existing().get('aforo_reservado', 0)) + 20
           && incoming().aforo_reservado <= int(existing().get('aforo_maximo', existing().get('aforo_max', 9999)));
     }
+    // Portero solo puede ajustar aforos, y con tipos válidos (Sprint 3 — higiene)
     function isPorteroAforoUpdate() {
-      return isPortero() &&
-             incoming().diff(existing()).affectedKeys().hasOnly(['aforo_actual', 'aforo_reservado']);
+      return isPortero()
+          && incoming().diff(existing()).affectedKeys().hasOnly(['aforo_actual', 'aforo_reservado'])
+          && (!incoming().keys().hasAny(['aforo_actual']) || incoming().aforo_actual is number)
+          && (!incoming().keys().hasAny(['aforo_reservado']) || incoming().aforo_reservado is number);
     }
     match /eventos/{id} {
       allow read: if true;
@@ -133,11 +136,23 @@ service cloud.firestore {
     }
 
     // --- RESERVAS ---
+    // Sprint 3: allowlist de claves (hasOnly) + email regex.
+    // Mantiene cobertura de los campos legítimos que escribe ReservaForm.tsx;
+    // rechaza payloads con campos arbitrarios (defensa contra payload #2 de Dirty Dozen).
     function isValidReserva(data) {
-      return data.eventoId is string && data.eventoId.size() <= 128
+      return data.keys().hasOnly([
+              'eventoId', 'eventoTitulo', 'categoria',
+              'uidTitular', 'dniTitular', 'nombreTitular', 'emailTitular',
+              'ticketID', 'manageToken', 'qrUrl',
+              'numPersonas', 'totalPagar', 'totalPendiente',
+              'fechaReserva', 'fechaActividad',
+              'slots', 'esCurso', 'acompañantes',
+              'asistentes_ingresados', 'cuponUsado', 'esSocio'
+          ])
+          && data.eventoId is string && data.eventoId.size() <= 128
           && data.nombreTitular is string && data.nombreTitular.size() > 0 && data.nombreTitular.size() <= 200
           && data.dniTitular is string && (data.dniTitular.size() == 0 || (data.dniTitular.size() >= 7 && data.dniTitular.size() <= 20))
-          && data.emailTitular is string && data.emailTitular.size() <= 100
+          && data.emailTitular is string && data.emailTitular.size() <= 100 && data.emailTitular.matches('.+@.+\\..+')
           && data.numPersonas is number && data.numPersonas >= 1 && data.numPersonas <= 20
           && data.uidTitular is string
           && (data.uidTitular == 'invitado' || data.uidTitular == request.auth.uid);
@@ -170,10 +185,11 @@ service cloud.firestore {
           && data.email is string && data.email.size() <= 100;
     }
     match /socios/{id} {
-      // Allow querying by uid OR email (PerfilSocio uses both as fallback)
+      // Allow querying by uid OR email (PerfilSocio uses both as fallback).
+      // Sprint 3: comparación de email en minúsculas, consistente con reservas.
       allow read: if isSignedIn() && (
         resource.data.uid == request.auth.uid ||
-        resource.data.email == request.auth.token.email ||
+        resource.data.get('email', '').lower() == request.auth.token.get('email', '').lower() ||
         isAdmin() || isPortero() ||
         isTeacher()
       );
@@ -205,16 +221,23 @@ service cloud.firestore {
     match /locales/{id}      { allow read: if true; allow write: if isAdmin(); }
 
     // --- SOLICITUDES CURSOS ---
-    // A3/A7: alta pública con validación de forma y longitudes
+    // A3/A7: alta pública con validación de forma y longitudes.
+    // Sprint 3: hasOnly para impedir campos arbitrarios.
     function isValidSolicitud(data) {
-      return data.keys().hasAll(['nombre', 'email'])
+      return data.keys().hasOnly([
+              'nombre', 'email', 'mensaje', 'telefono', 'dni',
+              'cursoId', 'cursoTitulo', 'categoria', 'subcategoria',
+              'modalidad', 'tipo', 'fechaSolicitud', 'estado'
+          ])
+          && data.keys().hasAll(['nombre', 'email'])
           && data.nombre is string && data.nombre.size() > 0 && data.nombre.size() <= 200
           && data.email is string && data.email.size() <= 100 && data.email.matches('.+@.+\\..+')
           && (!data.keys().hasAny(['mensaje']) || (data.mensaje is string && data.mensaje.size() <= 2000))
           && (!data.keys().hasAny(['telefono']) || (data.telefono is string && data.telefono.size() <= 30))
           && (!data.keys().hasAny(['dni']) || (data.dni is string && data.dni.size() <= 20))
           && (!data.keys().hasAny(['cursoId']) || (data.cursoId is string && data.cursoId.size() <= 128))
-          && (!data.keys().hasAny(['cursoTitulo']) || (data.cursoTitulo is string && data.cursoTitulo.size() <= 200));
+          && (!data.keys().hasAny(['cursoTitulo']) || (data.cursoTitulo is string && data.cursoTitulo.size() <= 200))
+          && (!data.keys().hasAny(['estado']) || data.estado == 'pendiente');
     }
     match /solicitudes_cursos/{id} {
       allow create: if isValidSolicitud(incoming());
@@ -226,12 +249,14 @@ service cloud.firestore {
     // El alta pública sólo puede crear el documento en estado 'pendiente_confirmacion':
     // la promoción a 'activo' la realiza Cloud Functions tras el doble opt-in de Brevo.
     function isValidNewsletter(data) {
-      return data.keys().hasAll(['nombre', 'email', 'acepto_terminos'])
+      return data.keys().hasOnly(['nombre', 'email', 'acepto_terminos', 'politica_version', 'estado', 'fecha', 'ip'])
+          && data.keys().hasAll(['nombre', 'email', 'acepto_terminos'])
           && data.nombre is string && data.nombre.size() > 0 && data.nombre.size() <= 100
           && data.email is string && data.email.size() <= 100 && data.email.matches('.+@.+\\..+')
           && data.acepto_terminos == true
           && (!data.keys().hasAny(['politica_version']) || (data.politica_version is string && data.politica_version.size() <= 20))
-          && (!data.keys().hasAny(['estado']) || data.estado == 'pendiente_confirmacion');
+          && (!data.keys().hasAny(['estado']) || data.estado == 'pendiente_confirmacion')
+          && (!data.keys().hasAny(['ip']) || (data.ip is string && data.ip.size() <= 64));
     }
     match /newsletter_subscribers/{id} {
       allow create: if isValidNewsletter(incoming());
@@ -239,8 +264,28 @@ service cloud.firestore {
     }
 
     // --- FINANZAS / CAJA ---
+    // Sprint 3: forma mínima de pagos_mensuales validada server-side.
+    // El ID convencional es `${anio}_${mes}_${socioId}` (ver TeacherDashboard y AdminSocios).
+    function isValidPagoMensual(data) {
+      return data.keys().hasOnly([
+              'socioId', 'mes', 'anio', 'pagado', 'bloqueado', 'monto',
+              'cursoId', 'profesorId', 'localId', 'metodo',
+              'actualizadoPor', 'fechaActualizacion'
+          ])
+          && data.socioId is string && data.socioId.size() > 0 && data.socioId.size() <= 128
+          && data.mes is number && data.mes >= 1 && data.mes <= 12
+          && data.anio is number && data.anio >= 2024 && data.anio <= 2100
+          && (!data.keys().hasAny(['pagado']) || data.pagado is bool)
+          && (!data.keys().hasAny(['bloqueado']) || data.bloqueado is bool)
+          && (!data.keys().hasAny(['monto']) || data.monto is number);
+    }
     match /finanzas/{id}              { allow read: if isAdmin(); allow write: if isAdmin() || isPortero(); }
-    match /pagos_mensuales/{id}       { allow read: if isAdmin() || isSignedIn(); allow write: if isAdmin() || isTeacher() || isPortero(); }
+    match /pagos_mensuales/{id} {
+      allow read: if isAdmin() || isSignedIn();
+      allow create: if (isAdmin() || isTeacher() || isPortero()) && isValidPagoMensual(incoming());
+      allow update: if (isAdmin() || isTeacher() || isPortero()) && isValidPagoMensual(incoming());
+      allow delete: if isAdmin();
+    }
     match /pagos_inscripciones/{id}   { allow read, write: if isAdmin() || isTeacher(); }
     match /caja_eventos/{id}          { allow read, write: if isAdmin() || isPortero(); }
     match /asistencia_eventos/{id}    { allow read, create: if isAdmin() || isPortero(); }

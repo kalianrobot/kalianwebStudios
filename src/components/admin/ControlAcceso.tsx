@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { db, auth as firebaseAuth } from '../../firebase';
 import { signOut } from 'firebase/auth';
-import { collection, query, where, getDocs, doc, updateDoc, increment, onSnapshot, getDoc, addDoc, setDoc, serverTimestamp } from 'firebase/firestore';
+import { collection, query, where, getDocs, doc, updateDoc, increment, onSnapshot, getDoc, addDoc, setDoc, serverTimestamp, runTransaction } from 'firebase/firestore';
 import { useAuth } from '../../context/AuthContext';
 import { useNavigate } from 'react-router-dom';
 import { Html5Qrcode } from 'html5-qrcode';
@@ -420,24 +420,48 @@ const ControlAcceso = ({ isPuertaMode = false }: { isPuertaMode?: boolean }) => 
 
     setCargando(true);
     try {
-      const nuevosSlots = [...reservaEncontrada.slots];
-      nuevosSlots[slotIdx] = { ...slot, ingresado: true };
-      const nuevosIngresados = nuevosSlots.filter((s: any) => s.ingresado).length;
-      const total = nuevosSlots.length;
+      // Transacción: relee la reserva del servidor y aborta si el slot ya está
+      // ingresado. Evita el check-in doble por doble tap o por estado local stale
+      // (p. ej. en entrarTodosPendientes).
+      const resultado = await runTransaction(db, async (tx) => {
+        const rRef = doc(db, "reservas", reservaEncontrada.id);
+        const rSnap = await tx.get(rRef);
+        if (!rSnap.exists()) throw new Error("La reserva ya no existe");
 
-      // 1. Actualizar reserva
-      await updateDoc(doc(db, "reservas", reservaEncontrada.id), {
-        slots: nuevosSlots,
-        asistentes_ingresados: nuevosIngresados,
-        estado: nuevosIngresados >= total ? 'validado' : 'pendiente',
-        ultimaEntrada: serverTimestamp()
+        const slotsServidor = [...(rSnap.data().slots || [])];
+        if (!slotsServidor[slotIdx] || slotsServidor[slotIdx].ingresado) {
+          return null; // Ya ingresado: no duplicar
+        }
+
+        slotsServidor[slotIdx] = { ...slotsServidor[slotIdx], ingresado: true };
+        const nuevosIngresados = slotsServidor.filter((s: any) => s.ingresado).length;
+        const total = slotsServidor.length;
+
+        tx.update(rRef, {
+          slots: slotsServidor,
+          asistentes_ingresados: nuevosIngresados,
+          estado: nuevosIngresados >= total ? 'validado' : 'pendiente',
+          ultimaEntrada: serverTimestamp()
+        });
+        tx.update(doc(db, "eventos", eventoSeleccionado.id), {
+          aforo_reservado: increment(-1),
+          aforo_actual: increment(1)
+        });
+
+        return { nuevosSlots: slotsServidor, nuevosIngresados, total };
       });
 
-      // 2. Aforo del evento
-      await updateDoc(doc(db, "eventos", eventoSeleccionado.id), {
-        aforo_reservado: increment(-1),
-        aforo_actual: increment(1)
-      });
+      if (!resultado) {
+        setMsg("⚠️ Esa entrada ya estaba registrada");
+        setReservaEncontrada((prev: any) => prev && {
+          ...prev,
+          slots: prev.slots.map((s: any, i: number) => i === slotIdx ? { ...s, ingresado: true } : s),
+        });
+        setCargando(false);
+        return;
+      }
+
+      const { nuevosSlots, nuevosIngresados, total } = resultado;
 
       // 3. Caja del mes
       const mesAnio = new Date().toISOString().substring(0, 7);

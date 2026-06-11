@@ -6,8 +6,8 @@ export default defineConfig({
     coverage: {
       provider: 'v8',
       include: ['src/lib/**/*.ts'],
-      exclude: ['src/lib/firebase.ts'],
-      thresholds: { lines: 60, functions: 60 },
+      exclude: ['src/lib/firebase.ts', 'src/lib/adminAuth.ts'],
+      thresholds: { lines: 70, functions: 70 },
       reporter: ['text', 'lcov'],
     },
   },

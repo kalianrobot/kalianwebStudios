@@ -10,7 +10,8 @@
     "clean": "rm -rf dist",
     "lint": "tsc --noEmit",
     "test:unit": "vitest run",
-    "test:rules": "vitest run tests/firestore.rules.test.ts tests/storage.rules.test.ts"
+    "test:rules": "vitest run tests/firestore.rules.test.ts tests/storage.rules.test.ts",
+    "test:integration": "vitest run tests/integration"
   },
   "dependencies": {
     "@fullcalendar/daygrid": "^6.1.20",

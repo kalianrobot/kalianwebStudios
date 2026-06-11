@@ -1,4 +1,4 @@
-import { vi, describe, it, expect, beforeAll, afterAll, beforeEach } from 'vitest';
+import { vi, describe, it, expect, beforeAll, afterAll } from 'vitest';
 import { initializeTestEnvironment, type RulesTestEnvironment } from '@firebase/rules-unit-testing';
 import { doc, setDoc, getDoc } from 'firebase/firestore';
 
@@ -28,10 +28,6 @@ beforeAll(async () => {
 });
 
 afterAll(async () => { await testEnv.cleanup(); });
-
-beforeEach(async () => {
-  await testEnv.clearFirestore();
-});
 
 // Helpers de fechas relativas a hoy
 const MAÑANA = new Date(Date.now() + 86_400_000).toISOString().split('T')[0];

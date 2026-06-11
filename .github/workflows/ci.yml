@@ -18,6 +18,11 @@ jobs:
           node-version: '22'
           cache: 'npm'
 
+      - uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '21'
+
       - name: Instalar dependencias (raíz)
         run: npm ci
 

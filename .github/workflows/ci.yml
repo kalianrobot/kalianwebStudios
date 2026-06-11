@@ -40,6 +40,19 @@ jobs:
       - name: Tests unitarios
         run: npm run test:unit
 
+      - name: Coverage (unit)
+        run: npm run test:coverage
+
+      - name: Upload coverage to Codecov
+        uses: codecov/codecov-action@v4
+        with:
+          files: ./coverage/lcov.info
+          token: ${{ secrets.CODECOV_TOKEN }}
+          fail_ci_if_error: false
+
+      - name: Auditoría de dependencias
+        run: npm audit --audit-level=critical
+
       - name: Instalar Firebase CLI
         run: npm install -g firebase-tools
 

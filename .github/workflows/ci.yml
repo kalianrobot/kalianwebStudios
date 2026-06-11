@@ -46,6 +46,6 @@ jobs:
       - name: Tests con emulador (reglas + integración)
         run: |
           firebase emulators:exec \
-            --only firestore \
+            --only firestore,storage \
             --project demo-kalian \
             "npm run test:rules && npm run test:integration"

@@ -46,14 +46,14 @@ describe('generarManageToken', () => {
 
 describe('callables de gestión de reserva', () => {
   it('consultarReserva llama con accion consultar', async () => {
-    mockCallable.mockResolvedValueOnce({ data: { ok: true, reserva: {} } });
+    mockCallable.mockResolvedValueOnce({ data: { ok: true, reserva: {} } } as any);
     const res = await consultarReserva('tok123');
     expect(mockCallable).toHaveBeenCalledWith({ manageToken: 'tok123', accion: 'consultar' });
     expect(res).toEqual({ ok: true, reserva: {} });
   });
 
   it('cancelarReservaInvitado llama con accion cancelar', async () => {
-    mockCallable.mockResolvedValueOnce({ data: { ok: true, cancelada: true } });
+    mockCallable.mockResolvedValueOnce({ data: { ok: true, cancelada: true } } as any);
     const res = await cancelarReservaInvitado('tok456');
     expect(mockCallable).toHaveBeenCalledWith({ manageToken: 'tok456', accion: 'cancelar' });
     expect(res).toEqual({ ok: true, cancelada: true });
@@ -66,7 +66,7 @@ describe('callables de gestión de reserva', () => {
   });
 
   it('calcularPrecioReserva devuelve total y flags', async () => {
-    mockCallable.mockResolvedValueOnce({ data: { total: 25, esSocio: true, esClave: false } });
+    mockCallable.mockResolvedValueOnce({ data: { total: 25, esSocio: true, esClave: false } } as any);
     const res = await calcularPrecioReserva({ eventoId: 'E1', esCurso: false, numAcompañantes: 1 });
     expect(res).toEqual({ total: 25, esSocio: true, esClave: false });
   });

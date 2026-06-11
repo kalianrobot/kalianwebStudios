@@ -25,7 +25,7 @@ describe('brevoService', () => {
   });
 
   it('subscribeNewsletter devuelve el data de la CF', async () => {
-    mockCallable.mockResolvedValueOnce({ data: { ok: true, duplicate: false } });
+    mockCallable.mockResolvedValueOnce({ data: { ok: true, duplicate: false } } as any);
     const res = await subscribeNewsletter('Ana', 'a@b.es');
     expect(res).toEqual({ ok: true, duplicate: false });
   });

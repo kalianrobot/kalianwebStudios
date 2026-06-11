@@ -236,7 +236,7 @@ const AdminReservas = () => {
           <input
             type="text"
             value={filtro}
-            onChange={e => setFiltro(e.target.value)}
+            onChange={e => setFiltro((e.target as HTMLInputElement).value)}
             placeholder="Buscar por nombre, DNI, email, UID, evento o ticket…"
             className="flex-1 px-5 py-3 rounded-xl border border-slate-200 bg-white text-sm focus:outline-none focus:ring-2 focus:ring-slate-900"
           />
@@ -244,7 +244,7 @@ const AdminReservas = () => {
             <input
               type="checkbox"
               checked={soloFuturas}
-              onChange={e => setSoloFuturas(e.target.checked)}
+              onChange={e => setSoloFuturas((e.target as HTMLInputElement).checked)}
               className="accent-slate-900"
             />
             Solo futuras

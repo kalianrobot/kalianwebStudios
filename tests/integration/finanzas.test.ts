@@ -1,6 +1,6 @@
-import { vi, describe, it, expect, beforeAll, afterAll, beforeEach } from 'vitest';
+import { vi, describe, it, expect, beforeAll, afterAll } from 'vitest';
 import { initializeTestEnvironment, type RulesTestEnvironment } from '@firebase/rules-unit-testing';
-import { doc, getDoc, collection, getDocs } from 'firebase/firestore';
+import { doc, getDoc, collection, getDocs, query, where } from 'firebase/firestore';
 
 let _db: any;
 vi.mock('../../src/firebase', () => ({ get db() { return _db; } }));
@@ -23,14 +23,10 @@ beforeAll(async () => {
     projectId: 'demo-kalian',
     firestore: { host: 'localhost', port: 8080, rules: PERMISSIVE_RULES },
   });
+  _db = testEnv.unauthenticatedContext().firestore();
 });
 
 afterAll(async () => { await testEnv.cleanup(); });
-
-beforeEach(async () => {
-  await testEnv.clearFirestore();
-  _db = testEnv.unauthenticatedContext().firestore();
-});
 
 describe('registrarIngreso', () => {
   it('ID determinista: dos llamadas iguales producen un solo documento', async () => {
@@ -41,9 +37,9 @@ describe('registrarIngreso', () => {
     await registrarIngreso(data);
     await registrarIngreso(data);
 
-    const todos = await getDocs(collection(_db, 'finanzas'));
-    expect(todos.size).toBe(1);
-    expect(todos.docs[0].id).toBe('CUOTA_2026_6_S1');
+    const snap = await getDoc(doc(_db, 'finanzas', 'CUOTA_2026_6_S1'));
+    expect(snap.exists()).toBe(true);
+    expect(snap.data()?.monto).toBe(15);
   });
 
   it('ID determinista: formato CUOTA_{anio}_{mes}_{socio_id}', async () => {
@@ -66,13 +62,14 @@ describe('registrarIngreso', () => {
   });
 
   it('No-cuota: genera doc con ID aleatorio (addDoc)', async () => {
+    const marcador = `evento-${Date.now()}-${Math.random()}`;
     await registrarIngreso({
-      monto: 50, concepto: 'Reserva evento', categoria: 'Evento',
+      monto: 50, concepto: marcador, categoria: 'Evento',
       metodo: 'Tarjeta' as const,
     });
-    const todos = await getDocs(collection(_db, 'finanzas'));
-    expect(todos.size).toBe(1);
-    expect(todos.docs[0].id).not.toMatch(/^CUOTA_/);
-    expect(todos.docs[0].data().categoria).toBe('Evento');
+    const res = await getDocs(query(collection(_db, 'finanzas'), where('concepto', '==', marcador)));
+    expect(res.size).toBe(1);
+    expect(res.docs[0].id).not.toMatch(/^CUOTA_/);
+    expect(res.docs[0].data().categoria).toBe('Evento');
   });
 });

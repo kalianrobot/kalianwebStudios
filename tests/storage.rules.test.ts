@@ -9,7 +9,7 @@ import { ref, uploadBytes, getDownloadURL, deleteObject } from 'firebase/storage
 import { doc, setDoc } from 'firebase/firestore';
 import { describe, it, beforeAll, afterAll, expect } from 'vitest';
 
-const PROJECT_ID = 'kalianhkg-886a6';
+const PROJECT_ID = 'demo-kalian';
 const MASTER_EMAIL = 'kalianrobot@gmail.com';
 
 let testEnv: RulesTestEnvironment;

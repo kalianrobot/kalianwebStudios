@@ -1,4 +1,4 @@
-import { vi, describe, it, expect, beforeAll, afterAll, beforeEach } from 'vitest';
+import { vi, describe, it, expect, beforeAll, afterAll } from 'vitest';
 import { initializeTestEnvironment, type RulesTestEnvironment } from '@firebase/rules-unit-testing';
 import { doc, setDoc, getDoc } from 'firebase/firestore';
 
@@ -24,14 +24,10 @@ beforeAll(async () => {
     projectId: 'demo-kalian',
     firestore: { host: 'localhost', port: 8080, rules: PERMISSIVE_RULES },
   });
+  _db = testEnv.unauthenticatedContext().firestore();
 });
 
 afterAll(async () => { await testEnv.cleanup(); });
-
-beforeEach(async () => {
-  await testEnv.clearFirestore();
-  _db = testEnv.unauthenticatedContext().firestore();
-});
 
 // Helpers de fechas relativas a hoy
 const MAÑANA = new Date(Date.now() + 86_400_000).toISOString().split('T')[0];

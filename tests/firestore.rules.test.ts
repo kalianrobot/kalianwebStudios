@@ -8,7 +8,7 @@ import { readFileSync } from 'fs';
 import { doc, getDoc, setDoc, updateDoc, deleteDoc, collection, addDoc } from 'firebase/firestore';
 import { describe, it, beforeAll, afterAll, afterEach, expect } from 'vitest';
 
-const PROJECT_ID = 'kalianhkg-886a6';
+const PROJECT_ID = 'demo-kalian';
 const MASTER_EMAIL = 'kalianrobot@gmail.com';
 
 let testEnv: RulesTestEnvironment;
@@ -180,13 +180,8 @@ describe('reservas', () => {
   });
 
   it('otro socio NO puede leer la reserva ajena', async () => {
-    // res-1 pertenece a socio-uid, no a socio2-uid
-    // La regla permite si dniTitular != null (lectura pública por DNI), así que esto es intencional
-    // Verificamos que socio2 sin DNI match no puede leer via uid
-    const snap = await getDoc(doc(db(socio2Ctx()), 'reservas', 'res-1'));
-    // La regla actual permite si dniTitular != null → el sistema permite lookup público por DNI
-    // (diseño deliberado para que el portero pueda buscar reservas)
-    expect(snap.exists()).toBe(true); // Comportamiento actual esperado
+    // res-1 pertenece a socio-uid (uid + email), socio2 no coincide en ninguna condición
+    await assertFails(getDoc(doc(db(socio2Ctx()), 'reservas', 'res-1')));
   });
 
   it('titular puede actualizar solo acompañantes', async () => {

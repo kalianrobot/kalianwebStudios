@@ -8,7 +8,7 @@ import { readFileSync } from 'fs';
 import { doc, getDoc, setDoc, updateDoc, deleteDoc, collection, addDoc } from 'firebase/firestore';
 import { describe, it, beforeAll, afterAll, afterEach, expect } from 'vitest';
 
-const PROJECT_ID = 'kalianhkg-886a6';
+const PROJECT_ID = 'demo-kalian';
 const MASTER_EMAIL = 'kalianrobot@gmail.com';
 
 let testEnv: RulesTestEnvironment;

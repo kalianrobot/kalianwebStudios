@@ -9,7 +9,7 @@
     "preview": "vite preview",
     "clean": "rm -rf dist",
     "lint": "tsc --noEmit",
-    "test:unit": "vitest run",
+    "test:unit": "vitest run tests/unit",
     "test:rules": "vitest run tests/firestore.rules.test.ts tests/storage.rules.test.ts",
     "test:integration": "vitest run tests/integration"
   },

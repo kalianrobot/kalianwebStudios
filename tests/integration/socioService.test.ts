@@ -24,13 +24,13 @@ beforeAll(async () => {
     projectId: 'demo-kalian',
     firestore: { host: 'localhost', port: 8080, rules: PERMISSIVE_RULES },
   });
+  _db = testEnv.unauthenticatedContext().firestore();
 });
 
 afterAll(async () => { await testEnv.cleanup(); });
 
 beforeEach(async () => {
   await testEnv.clearFirestore();
-  _db = testEnv.unauthenticatedContext().firestore();
 });
 
 // Helpers de fechas relativas a hoy

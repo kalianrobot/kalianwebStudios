@@ -1,0 +1,46 @@
+name: CI
+
+on:
+  push:
+    branches: [main, 'claude/**']
+  pull_request:
+    branches: [main]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: 'npm'
+
+      - name: Instalar dependencias (raíz)
+        run: npm ci
+
+      - name: Instalar dependencias (functions)
+        working-directory: functions
+        run: npm ci
+
+      - name: Type-check front
+        run: npm run lint
+
+      - name: Type-check functions
+        working-directory: functions
+        run: npx tsc --noEmit
+
+      - name: Tests unitarios
+        run: npm run test:unit
+
+      - name: Instalar Firebase CLI
+        run: npm install -g firebase-tools
+
+      - name: Tests con emulador (reglas + integración)
+        run: |
+          firebase emulators:exec \
+            --only firestore \
+            --project demo-kalian \
+            "npm run test:rules && npm run test:integration"

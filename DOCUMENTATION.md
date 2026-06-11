@@ -23,7 +23,7 @@ Una sola web sirve **cinco interfaces** según el rol del usuario autenticado: p
 ### 2.1 Cuota Única Mensual (15 €)
 
 - Todo socio activo aporta **15 €/mes** para el sostenimiento de la asociación.
-- **Jerarquía de cobro**: si un socio pertenece a un local, el pago mensual del local cubre la cuota de todos sus inquilinos.
+- **Jerarquía de cobro**: si un socio pertenece a un local, el pago mensual del local cubre la cuota de todos sus inquilinos. Si un inquilino ya pagó su cuota individual ese mes (`CUOTA_*` viva en `finanzas`), el pago bulk del local **lo excluye** del importe para no contabilizar dos veces; la reversión del bulk solo revierte a los socios que fueron marcados por ese bulk (`pagos_mensuales.localId`).
 - El profesor valida la cuota al pasar lista (panel teacher).
 - **Registro de pago**: `src/lib/finanzas.ts → registrarIngreso()`. Para cuotas usa un ID determinista `CUOTA_{anio}_{mes}_{socio_id}` en la colección `finanzas`, lo que evita duplicados aunque se marque varias veces el mismo mes.
 - **Reversión (soft-delete)**: desmarcar un pago no borra el documento; pone `deletedAt`. Los balances contables filtran por `deletedAt == null`.

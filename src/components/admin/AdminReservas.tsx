@@ -299,6 +299,12 @@ const AdminReservas = () => {
                           {r.esSocio && (
                             <span className="px-2 py-0.5 bg-blue-100 text-blue-800 rounded text-[9px] font-black uppercase">Socio</span>
                           )}
+                          {r.precioVerificado === false && (
+                            <span
+                              className="px-2 py-0.5 bg-red-100 text-red-800 rounded text-[9px] font-black uppercase"
+                              title="El precio no pudo verificarse server-side al crear la reserva; revisar totalPagar manualmente"
+                            >Precio sin verificar</span>
+                          )}
                         </div>
                       </td>
                       <td className="p-4 text-slate-700 text-[12px] break-all">{r.emailTitular || '—'}</td>

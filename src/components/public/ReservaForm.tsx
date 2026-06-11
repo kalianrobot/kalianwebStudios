@@ -310,8 +310,10 @@ const ReservaForm = ({ item, alCerrar }: ReservaFormProps) => {
       const manageToken = generarManageToken();
 
       // Precio autoritativo calculado server-side para que el cliente no pueda
-      // manipular `totalPagar` (A4). Fallback al valor local si la función falla.
+      // manipular `totalPagar` (A4). Fallback al valor local si la función falla,
+      // marcando la reserva para revisión manual en AdminReservas.
       let totalPagarVerificado = precioCalculado.total;
+      let precioVerificado = true;
       try {
         const precioServidor = await calcularPrecioReserva({
           eventoId: item.id,
@@ -322,6 +324,7 @@ const ReservaForm = ({ item, alCerrar }: ReservaFormProps) => {
         });
         totalPagarVerificado = precioServidor.total;
       } catch (e) {
+        precioVerificado = false;
         if (isDev) console.error('calcularPrecioReserva falló, usando precio local', e);
       }
 
@@ -346,7 +349,8 @@ const ReservaForm = ({ item, alCerrar }: ReservaFormProps) => {
         acompañantes: Number(form.acompañantes),
         asistentes_ingresados: 0,
         cuponUsado: claveValida ? claveInput : null,
-        esSocio: esSocioReal
+        esSocio: esSocioReal,
+        precioVerificado
       };
 
       try {

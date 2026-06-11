@@ -15,7 +15,7 @@ Spec de seguridad operativa: invariantes que las reglas de Firestore deben mante
 Estas afirmaciones deben ser ciertas en cualquier estado de la base de datos. Si una falla, hay un bug en `firestore.rules` o en el código que escribe.
 
 1. **Roles**: el campo `users/{uid}.role` solo lo puede modificar un admin. Un usuario nunca se autoasigna `'admin'`. (`firestore.rules` → `match /users/{userId}` allow update sin `role`.)
-2. **Reservas válidas**: una reserva solo se crea si referencia un `eventoId` que existe en `eventos` o `cursos`. (`isValidReserva` + `exists(/databases/.../eventos|cursos)`.)
+2. **Reservas válidas**: una reserva solo se crea si referencia un `eventoId` que existe en `eventos` o `cursos`. (`isValidReserva` + `exists(/databases/.../eventos|cursos)`.) El campo opcional `precioVerificado` (bool) marca si `totalPagar` se validó server-side con `calcularPrecioReserva`; cuando es `false` AdminReservas muestra un aviso para revisión manual.
 3. **Capacidad mínima**: `reservas.numPersonas ≥ 1 && ≤ 20`. (`isValidReserva`.)
 4. **Aforo monotónico (alta pública)**: el alta de reserva solo puede **incrementar** `eventos.{id}.aforo_reservado`, nunca decrementar, en pasos ≤ 20, y nunca por encima de `aforo_maximo`. (`isSafeAforoUpdate`.)
 5. **Newsletter — estado inicial**: el alta pública de `newsletter_subscribers` solo admite `estado: 'pendiente_confirmacion'`. El doc ID es el email, así que la re-alta sobre un doc en `'baja'` o `'pendiente_confirmacion'` se permite (update público con `incoming().email == existing().email`) pero un doc en `'activo'` no puede degradarse desde un contexto anónimo. La promoción a `'activo'` la hacen Cloud Functions o admin. (`isValidNewsletter`.)

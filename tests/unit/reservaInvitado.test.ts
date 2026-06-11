@@ -1,14 +1,22 @@
 import { describe, it, expect, vi } from 'vitest';
 
+const mockCallable = vi.hoisted(() => vi.fn(() => Promise.resolve({ data: { ok: true } })));
+
 vi.mock('../../src/firebase', () => ({
   functions: {},
 }));
 
 vi.mock('firebase/functions', () => ({
-  httpsCallable: () => () => Promise.resolve({ data: {} }),
+  httpsCallable: vi.fn(() => mockCallable),
 }));
 
-import { generarManageToken } from '../../src/lib/reservaInvitado';
+import {
+  generarManageToken,
+  consultarReserva,
+  cancelarReservaInvitado,
+  editarAcompanantesInvitado,
+  calcularPrecioReserva,
+} from '../../src/lib/reservaInvitado';
 
 describe('generarManageToken', () => {
   it('genera un token de 28 caracteres', () => {
@@ -33,5 +41,33 @@ describe('generarManageToken', () => {
     let coincidencias = 0;
     for (let i = 0; i < a.length; i++) if (a[i] === b[i]) coincidencias++;
     expect(coincidencias).toBeLessThan(20);
+  });
+});
+
+describe('callables de gestión de reserva', () => {
+  it('consultarReserva llama con accion consultar', async () => {
+    mockCallable.mockResolvedValueOnce({ data: { ok: true, reserva: {} } } as any);
+    const res = await consultarReserva('tok123');
+    expect(mockCallable).toHaveBeenCalledWith({ manageToken: 'tok123', accion: 'consultar' });
+    expect(res).toEqual({ ok: true, reserva: {} });
+  });
+
+  it('cancelarReservaInvitado llama con accion cancelar', async () => {
+    mockCallable.mockResolvedValueOnce({ data: { ok: true, cancelada: true } } as any);
+    const res = await cancelarReservaInvitado('tok456');
+    expect(mockCallable).toHaveBeenCalledWith({ manageToken: 'tok456', accion: 'cancelar' });
+    expect(res).toEqual({ ok: true, cancelada: true });
+  });
+
+  it('editarAcompanantesInvitado pasa nuevoAcompanantes', async () => {
+    mockCallable.mockResolvedValueOnce({ data: { ok: true } });
+    await editarAcompanantesInvitado('tok789', 3);
+    expect(mockCallable).toHaveBeenCalledWith({ manageToken: 'tok789', accion: 'editar', nuevoAcompanantes: 3 });
+  });
+
+  it('calcularPrecioReserva devuelve total y flags', async () => {
+    mockCallable.mockResolvedValueOnce({ data: { total: 25, esSocio: true, esClave: false } } as any);
+    const res = await calcularPrecioReserva({ eventoId: 'E1', esCurso: false, numAcompañantes: 1 });
+    expect(res).toEqual({ total: 25, esSocio: true, esClave: false });
   });
 });

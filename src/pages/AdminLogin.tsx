@@ -18,10 +18,10 @@ const AdminLogin = () => {
     const isMaster = user?.email?.toLowerCase() === MASTER_EMAIL;
     const hasAdminAccess = role === 'admin' || isMaster;
 
-    isDev && console.log("AdminLogin: Access check:", { role, user: user?.email, isMaster, hasAdminAccess });
+    if (isDev) console.log("AdminLogin: Access check:", { role, user: user?.email, isMaster, hasAdminAccess });
 
     if (hasAdminAccess) {
-      isDev && console.log("AdminLogin: Navegando a /staff");
+      if (isDev) console.log("AdminLogin: Navegando a /staff");
       navigate('/staff');
     } else if (user && !hasAdminAccess) {
       setError(t('auth.noStaffPerms'));
@@ -33,9 +33,9 @@ const AdminLogin = () => {
     setLoading(true);
     setError('');
     try {
-      isDev && console.log("AdminLogin: Iniciando sesión...");
+      if (isDev) console.log("AdminLogin: Iniciando sesión...");
       await loginAdmin(email, pass);
-      isDev && console.log("AdminLogin: loginAdmin finalizado exitosamente");
+      if (isDev) console.log("AdminLogin: loginAdmin finalizado exitosamente");
       // No navegamos manualmente, dejamos que el useEffect de role lo haga
     } catch (err: any) {
       console.error("Error de login admin:", err);

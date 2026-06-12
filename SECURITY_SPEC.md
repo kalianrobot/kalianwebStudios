@@ -146,3 +146,36 @@ Los invariantes y payloads de §2 tienen contraparte ejecutable en `tests/firest
 | Lectura socios case-insensitive | `audit: socios read case-insensitive email` |
 
 Comandos: `npm run test:rules` (necesita emulador Firestore en `127.0.0.1:8080`), `npm run test:unit` para los helpers puros (`escapeHtml`, `withRetry`, `safeJson`, etc.).
+
+---
+
+## 6. Escaneo estático
+
+Dos capas complementarias en CI, ambas gratuitas:
+
+### Capa 1 — ESLint security plugin
+
+Integrado en `eslint.config.js` vía `eslint-plugin-security`. Se ejecuta en cada `npm run lint` (local + CI). Detecta patrones JS clásicos:
+
+- `detect-eval-with-expression` — uso de `eval()` con strings dinámicos.
+- `detect-non-literal-regexp` / `detect-unsafe-regex` — regex catastrófico (ReDoS).
+- `detect-object-injection` — acceso `obj[clave]` con clave externa (prototype pollution).
+- `detect-child-process` / `detect-non-literal-fs-filename` — comandos shell sin sanitizar.
+
+Findings actuales: ~385 warnings, 0 errores. Triaje gradual; los `detect-object-injection` en context providers son falsos positivos legítimos (claves controladas por tipos TS).
+
+### Capa 2 — Semgrep en CI
+
+Paso `SAST (Semgrep)` en `.github/workflows/ci.yml` con rulesets OSS:
+
+- `p/javascript`, `p/typescript`, `p/react` — patrones específicos del stack.
+- `p/owasp-top-ten` — OWASP A01-A10 (broken access, injection, XSS, etc.).
+- `p/secrets` — claves de API, tokens hardcoded.
+
+Exclusiones en `.semgrepignore`: `dist/`, `coverage/`, `tests/`, `node_modules/`, `functions/lib/`. Findings de severidad ERROR rompen el build; WARNING solo se reportan.
+
+### Qué NO cubre
+
+- **CodeQL** (GitHub Advanced Security) — descartado por coste en repos privados.
+- **SAST con taint analysis cross-language** — requeriría Snyk Code o similar. Opcional, sin urgencia.
+- **DAST** (escaneo dinámico) — no aplicable hasta tener entorno de staging dedicado.

@@ -273,6 +273,18 @@ Cobertura unit actual:
 
 Los tests de reglas cubren las invariantes del audit completo (Sprints 1-4): `isValidPagoMensual`, `isValidReserva.hasOnly`, `isValidNewsletter`, lectura case-insensitive de socios. Para invariantes y mapping payload ↔ regla ver `SECURITY_SPEC.md` §3.
 
+### CI
+
+Pipeline en `.github/workflows/ci.yml` (Node 22, Java 21):
+1. Type-check + ESLint del front (`npm run lint` ahora ejecuta `tsc --noEmit && eslint .`).
+2. Type-check de Cloud Functions (`npx tsc --noEmit` en `functions/`).
+3. Unit tests + coverage (subida a Codecov).
+4. `npm audit --audit-level=critical` (SCA de dependencias).
+5. **SAST con Semgrep** — rulesets OSS `p/javascript`, `p/typescript`, `p/react`, `p/owasp-top-ten`, `p/secrets`. Exclusiones en `.semgrepignore`.
+6. Tests de reglas + integración con emuladores Firebase.
+
+Detalles de las capas de seguridad estática en `SECURITY_SPEC.md` §6.
+
 ---
 
 ## 11. Despliegue

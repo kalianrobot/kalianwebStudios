@@ -53,6 +53,16 @@ jobs:
       - name: Auditoría de dependencias
         run: npm audit --audit-level=critical
 
+      - name: SAST (Semgrep)
+        uses: semgrep/semgrep-action@v1
+        with:
+          config: >-
+            p/javascript
+            p/typescript
+            p/react
+            p/owasp-top-ten
+            p/secrets
+
       - name: Instalar Firebase CLI
         run: npm install -g firebase-tools
 

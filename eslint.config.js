@@ -1,6 +1,7 @@
 import firebaseRulesPlugin from '@firebase/eslint-plugin-security-rules';
 import tseslint from 'typescript-eslint';
 import reactHooks from 'eslint-plugin-react-hooks';
+import security from 'eslint-plugin-security';
 
 export default tseslint.config(
   { ignores: ['dist/**/*', 'node_modules/**/*', 'tests/**/*'] },
@@ -13,6 +14,7 @@ export default tseslint.config(
     files: ['src/**/*.{ts,tsx}'],
     extends: [
       ...tseslint.configs.recommended,
+      security.configs.recommended,
     ],
     plugins: {
       'react-hooks': reactHooks,

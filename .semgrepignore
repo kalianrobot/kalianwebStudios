@@ -1,0 +1,7 @@
+dist/
+coverage/
+node_modules/
+functions/lib/
+tests/
+*.test.ts
+*.test.tsx

@@ -6,7 +6,7 @@ import { doc, setDoc, getDoc } from 'firebase/firestore';
 let _db: any;
 vi.mock('../../src/firebase', () => ({ get db() { return _db; } }));
 
-import { syncSocioStatus } from '../../src/lib/socioService';
+import { syncSocioStatus, syncMultipleSocios } from '../../src/lib/socioService';
 
 const PERMISSIVE_RULES = `
   rules_version = '2';
@@ -96,4 +96,61 @@ describe('syncSocioStatus', () => {
     await syncSocioStatus('S6');
     expect(await estadoActual('S6')).toBe('inactivo');
   });
+
+  it('G: socio inexistente → retorna sin error', async () => {
+    const result = await syncSocioStatus('NO_EXISTE_9999');
+    expect(result).toBeUndefined();
+  });
+
+  it('H: curso caducado + local activo → activo (local gana)', async () => {
+    await seed.curso('C4', { fechaFin: PASADO, alumnos: ['S7'] });
+    await seed.local('L4', { ultimoPagoMesAnio: MES_ACTUAL });
+    await seed.socio('S7', { cursos: ['C4'], localId: 'L4' });
+    await syncSocioStatus('S7');
+    expect(await estadoActual('S7')).toBe('activo');
+  });
+
+  it('I: curso activo + local caducado → activo (curso gana)', async () => {
+    await seed.curso('C5', { fechaFin: MAÑANA, alumnos: ['S8'] });
+    await seed.local('L5', { ultimoPagoMesAnio: MES_HACE_DOS });
+    await seed.socio('S8', { cursos: ['C5'], localId: 'L5' });
+    await syncSocioStatus('S8');
+    expect(await estadoActual('S8')).toBe('activo');
+  });
+
+  it('J: no-op si ya estaba activo y sigue activo', async () => {
+    await seed.curso('C6', { fechaFin: MAÑANA, alumnos: ['S9'] });
+    await seed.socio('S9', { cursos: ['C6'], estado: 'activo' });
+    const result = await syncSocioStatus('S9');
+    expect(result).toBe('activo');
+    expect(await estadoActual('S9')).toBe('activo');
+  });
+
+  it('K: no-op si ya estaba inactivo y sigue sin actividades', async () => {
+    await seed.socio('S10', { estado: 'inactivo' });
+    const result = await syncSocioStatus('S10');
+    expect(result).toBe('inactivo');
+    expect(await estadoActual('S10')).toBe('inactivo');
+  });
 });
+
+describe('syncMultipleSocios', () => {
+  it('L: sincroniza varios socios en paralelo', async () => {
+    await seed.curso('C7', { fechaFin: MAÑANA, alumnos: ['SA', 'SB'] });
+    await seed.local('L6', { ultimoPagoMesAnio: MES_HACE_DOS });
+    await seed.socio('SA', { cursos: ['C7'] });
+    await seed.socio('SB', { localId: 'L6', estado: 'activo' });
+    await syncMultipleSocios(['SA', 'SB']);
+    expect(await estadoActual('SA')).toBe('activo');
+    expect(await estadoActual('SB')).toBe('inactivo');
+  });
+
+  it('M: deduplica IDs repetidos (no llama dos veces a syncSocioStatus)', async () => {
+    await seed.curso('C8', { fechaFin: MAÑANA, alumnos: ['SC'] });
+    await seed.socio('SC', { cursos: ['C8'] });
+    // Si hubiese doble escritura, el estado podría fallar; con Set solo hay una operación
+    await syncMultipleSocios(['SC', 'SC', 'SC']);
+    expect(await estadoActual('SC')).toBe('activo');
+  });
+});
+

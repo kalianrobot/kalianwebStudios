@@ -72,4 +72,51 @@ describe('registrarIngreso', () => {
     expect(res.docs[0].id).not.toMatch(/^CUOTA_/);
     expect(res.docs[0].data().categoria).toBe('Evento');
   });
+
+  it('Cuota sin mes → addDoc (ID no determinista)', async () => {
+    const marcador = `cuota-sin-mes-${Date.now()}`;
+    await registrarIngreso({
+      monto: 15, concepto: marcador, categoria: 'Socio' as const,
+      metodo: 'Efectivo' as const, socio_id: 'S3',
+      // mes ausente → no cumple condición determinista
+    });
+    const res = await getDocs(query(collection(_db, 'finanzas'), where('concepto', '==', marcador)));
+    expect(res.size).toBe(1);
+    expect(res.docs[0].id).not.toMatch(/^CUOTA_/);
+  });
+
+  it('Cuota sin socio_id → addDoc (ID no determinista)', async () => {
+    const marcador = `cuota-sin-socio-${Date.now()}`;
+    await registrarIngreso({
+      monto: 15, concepto: marcador, categoria: 'Socio' as const,
+      metodo: 'Efectivo' as const, mes: 6, anio: 2026,
+      // socio_id ausente → no cumple condición determinista
+    });
+    const res = await getDocs(query(collection(_db, 'finanzas'), where('concepto', '==', marcador)));
+    expect(res.size).toBe(1);
+    expect(res.docs[0].id).not.toMatch(/^CUOTA_/);
+  });
+
+  it('Campos opcionales se persisten: local_id, cursoId, eventoId', async () => {
+    await registrarIngreso({
+      monto: 200, concepto: 'Aportación local enero', categoria: 'Aportación Socio Local',
+      metodo: 'Transferencia' as const, local_id: 'LOC1', cursoId: 'CUR1', eventoId: 'EVT1',
+    });
+    const res = await getDocs(query(collection(_db, 'finanzas'), where('local_id', '==', 'LOC1')));
+    expect(res.size).toBeGreaterThan(0);
+    const data = res.docs[0].data();
+    expect(data.cursoId).toBe('CUR1');
+    expect(data.eventoId).toBe('EVT1');
+    expect(data.metodo).toBe('Transferencia');
+  });
+
+  it('deletedAt se inicializa a null en addDoc', async () => {
+    const marcador = `deletedAt-check-${Date.now()}`;
+    await registrarIngreso({
+      monto: 30, concepto: marcador, categoria: 'Curso',
+      metodo: 'Efectivo' as const,
+    });
+    const res = await getDocs(query(collection(_db, 'finanzas'), where('concepto', '==', marcador)));
+    expect(res.docs[0].data().deletedAt).toBeNull();
+  });
 });

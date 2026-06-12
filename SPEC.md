@@ -264,6 +264,7 @@ Vitest como runner único.
 | Carpeta | Comando | Requisitos |
 |---|---|---|
 | `tests/unit/**.test.ts` | `npm run test:unit` | Ninguno (puro Node) |
+| `tests/integration/**.test.ts` | `npm run test:integration` | Emulador Firestore en `127.0.0.1:8080` |
 | `tests/firestore.rules.test.ts` + `tests/storage.rules.test.ts` | `npm run test:rules` | Emulador Firestore en `127.0.0.1:8080` y Storage en `9199` |
 
 Cobertura unit actual:
@@ -272,6 +273,48 @@ Cobertura unit actual:
 - `src/lib/reservaInvitado.ts`: `generarManageToken`.
 
 Los tests de reglas cubren las invariantes del audit completo (Sprints 1-4): `isValidPagoMensual`, `isValidReserva.hasOnly`, `isValidNewsletter`, lectura case-insensitive de socios. Para invariantes y mapping payload ↔ regla ver `SECURITY_SPEC.md` §3.
+
+#### Cobertura de integración (21 casos)
+
+Los tests de integración mockean `src/firebase.ts` con un Firestore del emulador (reglas permisivas — las reglas reales se testean aparte en `test:rules`).
+
+**`tests/integration/socioService.test.ts` — `syncSocioStatus` (11 casos)**
+
+| Caso | Escenario | Estado esperado |
+|---|---|---|
+| A | Curso con `fechaFin` futura | `activo` |
+| B | Curso con `fechaFin` pasada | `inactivo` |
+| C | Local con pago el mes actual | `activo` |
+| D | Local con pago el mes anterior (periodo de gracia) | `activo` |
+| E | Local con pago de hace 2+ meses | `inactivo` |
+| F | Curso vigente pero con `deletedAt` (soft-deleted, no cuenta) | `inactivo` |
+| G | Socio inexistente | retorna `undefined`, sin error |
+| H | Curso caducado + local activo (el local gana) | `activo` |
+| I | Curso activo + local caducado (el curso gana) | `activo` |
+| J | Ya estaba `activo` y sigue activo (no-op, sin write) | `activo` |
+| K | Ya estaba `inactivo` y sigue sin actividades (no-op) | `inactivo` |
+
+**`tests/integration/socioService.test.ts` — `syncMultipleSocios` (2 casos)**
+
+| Caso | Escenario | Resultado esperado |
+|---|---|---|
+| L | Batch con varios socios de resultado distinto | Cada socio acaba en su estado correcto |
+| M | IDs repetidos en el array | Deduplicación vía `Set`, una sola sync por socio |
+
+**`tests/integration/finanzas.test.ts` — `registrarIngreso` (8 casos)**
+
+| Escenario | Resultado esperado |
+|---|---|
+| Dos llamadas idénticas con categoría cuota | Un solo doc (upsert vía `setDoc` con ID determinista) |
+| Cuota completa (`socio_id` + `mes` + `anio`) | ID `CUOTA_{anio}_{mes}_{socio_id}` |
+| Categoría `cuota_socio` | Se normaliza a `'Socio'` y `deletedAt: null` |
+| Categoría no-cuota (ej. `Evento`) | `addDoc` con ID aleatorio |
+| Cuota sin `mes` | Cae a `addDoc` (no cumple condición determinista) |
+| Cuota sin `socio_id` | Cae a `addDoc` (no cumple condición determinista) |
+| Campos opcionales (`local_id`, `cursoId`, `eventoId`) | Se persisten en el doc |
+| Path `addDoc` | `deletedAt` se inicializa a `null` también |
+
+Sin cobertura de integración todavía: lógica de Cloud Functions (`subscribeNewsletter`, `gestionarReservaInvitado`), soft-delete/desmarcado en finanzas, y flujos admin (AdminLocales, AdminSocios).
 
 ### CI
 

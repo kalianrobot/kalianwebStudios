@@ -37,6 +37,9 @@ jobs:
         working-directory: functions
         run: npx tsc --noEmit
 
+      - name: Build front (validación)
+        run: npm run build
+
       - name: Tests unitarios
         run: npm run test:unit
 

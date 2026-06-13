@@ -385,6 +385,7 @@ CSP y cabeceras de seguridad: definidas en `firebase.json` (HSTS, X-Frame DENY, 
 - Activar doble opt-in en la lista Brevo + plantilla DOI con URL final `/newsletter/estado?accion=confirmado`.
 - Crear atributos `RECONFIRMADO` (bool) + `FECHA_RECONFIRMACION` (date) en Brevo.
 - Lanzar campaña de reconfirmación RGPD: dos CTA ("Sigo dentro" / "Darme de baja"), eliminar al final los `RECONFIRMADO != true`.
+- **Purga periódica de Artifact Registry** (cada 2-3 meses): borrar versiones antiguas de las imágenes de Cloud Functions en https://console.cloud.google.com/artifacts?project=kalianhkg-886a6 para no cruzar el tier gratuito (0.5 GB/mes). Firebase no las purga solo; cada deploy del CD deja una imagen nueva de ~100-300 MB. Mantener solo la última versión productiva de cada function. Alternativa futura: cleanup policy en Artifact Registry (keep last N versions).
 
 ### Deuda técnica conocida
 - `brevoWebhook` aún no escucha confirmación DOI (se decidió delegar en la reconciliación). Reconsiderar si latencia semanal molesta.

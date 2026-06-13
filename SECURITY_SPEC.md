@@ -179,3 +179,38 @@ Exclusiones en `.semgrepignore`: `dist/`, `coverage/`, `tests/`, `node_modules/`
 - **CodeQL** (GitHub Advanced Security) — descartado por coste en repos privados.
 - **SAST con taint analysis cross-language** — requeriría Snyk Code o similar. Opcional, sin urgencia.
 - **DAST** (escaneo dinámico) — no aplicable hasta tener entorno de staging dedicado.
+
+---
+
+## 7. Pipeline CD — Service Account y secrets
+
+Deploy automático a Firebase (`.github/workflows/cd.yml`) tras CI verde en `main`.
+
+### Service Account (`github-actions-cd@kalianhkg-886a6.iam.gserviceaccount.com`)
+
+Roles asignados, principio de mínimo privilegio:
+
+| Rol | Para qué | Por qué no menos |
+|---|---|---|
+| `roles/firebase.admin` | Deploy de hosting, firestore.rules, storage.rules | El rol granular `roles/firebasehosting.admin` no cubre reglas |
+| `roles/cloudfunctions.admin` | Deploy + update de Cloud Functions Gen2 | Functions Gen2 necesita admin para gestionar la imagen Cloud Run subyacente |
+| `roles/iam.serviceAccountUser` | Asignar el SA de runtime a las functions Gen2 | Sin él, deploy de functions falla con `iam.serviceAccountUser permission denied` |
+
+Roles que **NO** se otorgan:
+- `roles/owner`, `roles/editor` — demasiado amplios.
+- `roles/secretmanager.admin` — el SA no necesita gestionar los `defineSecret('BREVO_*')`; esos se rotan manualmente.
+
+### Secrets en GitHub Actions
+
+| Secret | Origen | Uso |
+|---|---|---|
+| `FIREBASE_SERVICE_ACCOUNT` | JSON descargado de GCP Console (paso de alta del SA) | Auth deploy |
+| `VITE_FIREBASE_*` (×7) | Firebase Console → Project settings → SDK setup | Inyectados en `npm run build` |
+| `VITE_BREVO_API_KEY`, `VITE_BREVO_NEWSLETTER_LIST_ID` | Brevo Account → API keys | Inyectados en `npm run build` (deuda técnica conocida, ver CLAUDE.md §5) |
+
+### Invariantes operativos
+
+- **Rotación de la key del SA**: cada 90 días. Generar nueva key → actualizar `FIREBASE_SERVICE_ACCOUNT` en GitHub → revocar la vieja en GCP.
+- **Sin `--force` en el deploy**: si Firebase iba a borrar una function, falla y se revisa manualmente. Nunca añadir `--force` sin permiso explícito.
+- **Deploy parcial no transaccional**: `firebase deploy` despliega target a target. Si hosting OK y functions falla, queda inconsistente. Aceptable para este proyecto (volumen bajo, rollback con re-deploy del commit anterior).
+- **Channels de preview**: no se usan. Toda PR se valida con CI; el merge a `main` va directo a producción.

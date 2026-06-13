@@ -321,17 +321,37 @@ Sin cobertura de integración todavía: lógica de Cloud Functions (`subscribeNe
 Pipeline en `.github/workflows/ci.yml` (Node 22, Java 21):
 1. Type-check + ESLint del front (`npm run lint` ahora ejecuta `tsc --noEmit && eslint .`).
 2. Type-check de Cloud Functions (`npx tsc --noEmit` en `functions/`).
-3. Unit tests + coverage (subida a Codecov).
-4. `npm audit --audit-level=critical` (SCA de dependencias).
-5. **SAST con Semgrep** — rulesets OSS `p/javascript`, `p/typescript`, `p/react`, `p/owasp-top-ten`, `p/secrets`. Exclusiones en `.semgrepignore`.
-6. Tests de reglas + integración con emuladores Firebase.
+3. **Build de validación** (`npm run build`) — detecta `import` rotos que TypeScript no pilla pero Vite sí.
+4. Unit tests + coverage (subida a Codecov).
+5. `npm audit --audit-level=critical` (SCA de dependencias).
+6. **SAST con Semgrep** — rulesets OSS `p/javascript`, `p/typescript`, `p/react`, `p/owasp-top-ten`, `p/secrets`. Exclusiones en `.semgrepignore`.
+7. Tests de reglas + integración con emuladores Firebase.
 
 Detalles de las capas de seguridad estática en `SECURITY_SPEC.md` §6.
+
+### CD
+
+Pipeline en `.github/workflows/cd.yml`. Disparado por `workflow_run` cuando el CI termina con `success` en `main` — nunca se despliega con CI rojo y no se duplican gates de tests.
+
+Flujo:
+1. Push/merge a `main` dispara el CI.
+2. Si el CI pasa, GitHub dispara `workflow_run` y el CD arranca con `head_sha` del commit de main.
+3. `npm ci` (raíz + functions) → `npm run build` con secrets `VITE_*` inyectados desde GitHub Secrets.
+4. Autenticación a Firebase con Service Account JSON (`secrets.FIREBASE_SERVICE_ACCOUNT` → `GOOGLE_APPLICATION_CREDENTIALS`).
+5. `firebase deploy --project kalianhkg-886a6 --non-interactive` despliega **los 4 targets a la vez**: hosting, functions, firestore.rules, storage.rules.
+
+Detalles operativos:
+- `concurrency: cd-main` con `cancel-in-progress: false` — no se aborta un deploy a la mitad para arrancar otro.
+- Sin `--force`: si Firebase detecta que va a borrar una function (renombrada/eliminada), el deploy falla y se revisa manualmente.
+- Setup inicial (Service Account, secrets) documentado en `README.md`. Lista de roles del SA en `SECURITY_SPEC.md` §7.
 
 ---
 
 ## 11. Despliegue
 
+**Producción**: automático vía CD (ver §10 → CD). Push o merge a `main` → CI → si verde, deploy completo a Firebase.
+
+**Manual** (solo emergencia, requiere credenciales locales):
 ```bash
 npm run build            # vite build → dist/
 firebase deploy          # hosting + functions + reglas

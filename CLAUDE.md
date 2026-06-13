@@ -69,8 +69,8 @@ Cuando termines un cambio en código, corre el type-check antes de commit. No co
 
 ## 6. Cosas que NO hacer sin permiso explícito
 
-- `firebase deploy` (ningún `--only` incluido).
-- Push a `main`, force-push a cualquier rama.
+- `firebase deploy` manual (ningún `--only` incluido). El deploy a producción va por CD automático tras merge a `main`; no lo dispares tú a mano.
+- Push a `main`, force-push a cualquier rama. (Merge a `main` autorizado explícitamente: OK. Push directo: nunca sin pedirlo.)
 - Modificar `firebase-applet-config.json`, `.env`, `.env.local` o cualquier fichero con credenciales.
 - Tocar `firestore.rules` sin actualizar `SECURITY_SPEC.md` en el mismo PR.
 - Borrar documentos de `newsletter_subscribers` directamente — pasa por el flujo admin (dispara `onNewsletterSubscriberDeleted` que sincroniza con Brevo).

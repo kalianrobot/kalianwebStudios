@@ -195,10 +195,11 @@ Roles asignados, principio de mínimo privilegio:
 | `roles/firebase.admin` | Deploy de hosting, firestore.rules, storage.rules | El rol granular `roles/firebasehosting.admin` no cubre reglas |
 | `roles/cloudfunctions.admin` | Deploy + update de Cloud Functions Gen2 | Functions Gen2 necesita admin para gestionar la imagen Cloud Run subyacente |
 | `roles/iam.serviceAccountUser` | Asignar el SA de runtime a las functions Gen2 | Sin él, deploy de functions falla con `iam.serviceAccountUser permission denied` |
+| `roles/secretmanager.admin` | Leer y configurar bindings de los `defineSecret('BREVO_*')` durante el deploy | `secretAccessor` solo permite leer versiones; la CLI de Firebase necesita `secrets.get` + `setIamPolicy` |
+| `roles/cloudscheduler.admin` | Actualizar el cron job de `reconciliarNewsletterBrevo` (`onSchedule`) | Sin él, deploy falla con `cloudscheduler.jobs.update denied` |
 
 Roles que **NO** se otorgan:
 - `roles/owner`, `roles/editor` — demasiado amplios.
-- `roles/secretmanager.admin` — el SA no necesita gestionar los `defineSecret('BREVO_*')`; esos se rotan manualmente.
 
 ### Secrets en GitHub Actions
 

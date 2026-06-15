@@ -69,6 +69,8 @@ En [GCP Console](https://console.cloud.google.com/iam-admin/serviceaccounts) (pr
    - `Firebase Admin`
    - `Cloud Functions Admin`
    - `Service Account User`
+   - `Secret Manager Admin`
+   - `Cloud Scheduler Admin`
 3. Pestaña **Keys → Add key → Create new key → JSON**. Descarga el fichero.
 
 ### 2. Configurar secrets en GitHub

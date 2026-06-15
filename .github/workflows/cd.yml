@@ -16,10 +16,9 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      # nosemgrep: yaml.github-actions.security.workflow-run-target-code-checkout
       # Seguro: el filtro branches:[main] de workflow_run rechaza disparos desde
-      # forks (que llevarían refs/pull/N/head, no main). Repo privado, sin PRs externos.
-      - uses: actions/checkout@v4
+      # forks (refs/pull/N/head, no main). Repo privado, sin PRs externos.
+      - uses: actions/checkout@v4 # nosemgrep: yaml.github-actions.security.workflow-run-target-code-checkout
         with:
           ref: ${{ github.event.workflow_run.head_sha }}
 

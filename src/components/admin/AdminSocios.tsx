@@ -288,6 +288,7 @@ const AdminSocios = () => {
         fechaAlta: new Date().toISOString(),
         deletedAt: null
       });
+      await syncSocioStatus(dniUpper);
 
       setMsg("✅ Soci@s creado y email enviado");
       setTimeout(() => setMsg(''), 3000);

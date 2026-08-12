@@ -29,7 +29,7 @@ export const HomeSocio = () => {
   const [cursoDetalle, setCursoDetalle] = useState<any | null>(null);
 
   const [solicitudCurso, setSolicitudCurso] = useState<{ curso: any, tipo: 'consulta' | 'solicitud_inscripcion', modalidad?: any } | null>(null);
-  const [formSolicitud, setFormSolicitud] = useState({ nombre: '', email: '', telefono: '', dni: '', mensaje: '', especialidad: '', aceptoTerminos: false });
+  const [formSolicitud, setFormSolicitud] = useState({ nombre: '', email: '', telefono: '', dni: '', mensaje: '', aceptoTerminos: false });
   const [modalidadSeleccionada, setModalidadSeleccionada] = useState<{ [cursoId: string]: any }>({});
   const [enviandoSolicitud, setEnviandoSolicitud] = useState(false);
   const [mensajeSolicitud, setMensajeSolicitud] = useState('');
@@ -190,7 +190,7 @@ export const HomeSocio = () => {
       setTimeout(() => {
         setSolicitudCurso(null);
         setMensajeSolicitud('');
-        setFormSolicitud({ nombre: '', email: '', telefono: '', dni: '', mensaje: '', especialidad: '', aceptoTerminos: false });
+        setFormSolicitud({ nombre: '', email: '', telefono: '', dni: '', mensaje: '', aceptoTerminos: false });
       }, 5000);
     } catch (err) {
       console.error(err);

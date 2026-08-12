@@ -216,7 +216,7 @@ service cloud.firestore {
       return data.keys().hasOnly([
               'nombre', 'email', 'mensaje', 'telefono', 'dni',
               'cursoId', 'cursoTitulo', 'categoria', 'subcategoria',
-              'modalidad', 'tipo', 'fechaSolicitud', 'estado'
+              'modalidad', 'tipo', 'fechaSolicitud', 'estado', 'aceptoTerminos'
           ])
           && data.keys().hasAll(['nombre', 'email'])
           && data.nombre is string && data.nombre.size() > 0 && data.nombre.size() <= 200
@@ -226,7 +226,8 @@ service cloud.firestore {
           && (!data.keys().hasAny(['dni']) || (data.dni is string && data.dni.size() <= 20))
           && (!data.keys().hasAny(['cursoId']) || (data.cursoId is string && data.cursoId.size() <= 128))
           && (!data.keys().hasAny(['cursoTitulo']) || (data.cursoTitulo is string && data.cursoTitulo.size() <= 200))
-          && (!data.keys().hasAny(['estado']) || data.estado == 'pendiente');
+          && (!data.keys().hasAny(['estado']) || data.estado == 'pendiente')
+          && (!data.keys().hasAny(['aceptoTerminos']) || data.aceptoTerminos is bool);
     }
     match /solicitudes_cursos/{id} {
       allow create: if isValidSolicitud(incoming());

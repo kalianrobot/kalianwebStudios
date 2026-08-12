@@ -27,6 +27,7 @@ Estas afirmaciones deben ser ciertas en cualquier estado de la base de datos. Si
 11. **Webhook autenticado**: `brevoWebhook` rechaza cualquier request sin `?secret=<BREVO_WEBHOOK_SECRET>` válido. (`functions/src/index.ts` → `brevoWebhook`.)
 12. **Portero acotado**: el custom token de `portero` solo permite actualizar `aforo_actual`/`aforo_reservado` en eventos. Nada más. (`isPorteroAforoUpdate`.)
 13. **Reset de contraseña no enumera emails**: `requestPasswordReset` responde siempre `{ ok: true }`, exista o no el email en Firebase Auth (mismo criterio que la invariante #10 de newsletter). Protegido además por rate limit 5 intentos/60s por IP, igual que `validatePuertaAccess`. (`functions/src/index.ts` → `requestPasswordReset`.)
+14. **Allowlist de `solicitudes_cursos` sincronizada con el formulario**: `isValidSolicitud.hasOnly` debe incluir todo campo que el cliente escriba en `addDoc`, o el alta se rechaza con `permission-denied` (regresión detectada: `HomeSocio.tsx` mandaba `aceptoTerminos` sin que la regla lo permitiera). `aceptoTerminos` se añadió a la allowlist como `bool` opcional; el campo `especialidad` (nunca poblado por ningún input) se eliminó del cliente en vez de añadirse a la regla.
 
 ---
 

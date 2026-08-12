@@ -62,7 +62,9 @@ Firebase. Tres bloques:
 2. **Cloud Functions** (`functions/src/index.ts`, region `europe-west1`, Node 22 con `fetch` nativo):
    - `validatePuertaAccess` — auth de tablet de puerta por contraseña compartida → custom token rol `portero`. Compara con `timingSafeEqual` + rate limit 5 intentos/min por IP.
    - `sendWelcomeEmail`, `sendMembershipUpdateEmail`, `sendReservationConfirmation`, `requestPasswordReset` — emails transaccionales vía Brevo. Todas las plantillas escapan HTML en interpolaciones.
-   - `requestPasswordReset` — genera el link de reset con `admin.auth().generatePasswordResetLink` y lo envía por Brevo desde `info@kalian.es` (en vez del email por defecto de Firebase Auth, que sale desde `firebaseapp.com` con peor entrega). Sin auth, rate limit 5/min/IP, no revela si el email existe.
+   - `requestPasswordReset` — genera el link de reset con `admin.auth().generatePasswordResetLink` y lo envía por Brevo desde `info@kalian.es` (en vez del email por defecto de Firebase Auth, que sale desde `firebaseapp.com` con peor entrega y que Google va a deprecar). Sin auth, rate limit 5/min/IP, no revela si el email existe.
+
+**Emails de auth — regla de oro**: ningún flujo del cliente puede invocar `sendPasswordResetEmail`/`sendEmailVerification`/`sendSignInLinkToEmail` de `firebase/auth`. La regla ESLint `no-restricted-imports` en `eslint.config.js` bloquea esos imports con mensaje explicativo. Todo email de auth pasa por Cloud Function → Brevo → `info@kalian.es`.
    - `sendReservationConfirmation` lee la reserva del doc autoritativo por `manageToken`; el cliente no controla destinatario.
    - `gestionarReservaInvitado` — gestión de reserva sin login (capability token `manageToken`).
    - `calcularPrecioReserva` — precio autoritativo server-side; el cliente lo llama al enviar el formulario para que `totalPagar` no sea manipulable.
@@ -383,6 +385,8 @@ CSP y cabeceras de seguridad: definidas en `firebase.json` (HSTS, X-Frame DENY, 
 - **Auditoría de seguridad junio 2026** cerrada: Sprint 1 críticos (Brevo API key fuera del bundle, validación de origen en email confirmación, escape HTML, PII enmascarada en logs), Sprint 2 altos (timestamp en webhook, retry en delete-Brevo, `timingSafeEqual` + rate limit en puerta, precio server-side, CSP sin `unsafe-inline`, `isDev` en logs cliente), Sprint 3 medios (`hasOnly` en `isValid*`, regex emails, `isValidPagoMensual`, timeouts en Brevo, `safeJson`), Sprint 4 bajos (`ticketID` con `crypto`, `node-fetch` eliminado, limpieza de reglas). Detalle en [SECURITY_SPEC.md §4](SECURITY_SPEC.md).
 
 ### Pendiente operativo (no código)
+- **Firebase Auth: desactivar templates por defecto**. En Firebase Console → Authentication → Templates → "Password reset" (y "Email verification" si se activase alguna vez): dejarlos desactivados o apuntando a un dominio custom. El envío desde `noreply@<project>.firebaseapp.com` está deprecado por Google y va a spam. Todos nuestros emails de auth ya salen desde `info@kalian.es` vía Brevo (`requestPasswordReset`).
+- **Custom action URL** (medio plazo): configurar `https://kalian.es/auth/action` como Authorized domain + action URL en Firebase Auth, añadir ruta en `App.tsx` con `verifyPasswordResetCode`/`confirmPasswordReset` para que el reset se complete bajo nuestro dominio en lugar de `firebaseapp.com`. Requiere pantalla nueva de "nueva contraseña".
 - Activar doble opt-in en la lista Brevo + plantilla DOI con URL final `/newsletter/estado?accion=confirmado`.
 - Crear atributos `RECONFIRMADO` (bool) + `FECHA_RECONFIRMACION` (date) en Brevo.
 - Lanzar campaña de reconfirmación RGPD: dos CTA ("Sigo dentro" / "Darme de baja"), eliminar al final los `RECONFIRMADO != true`.

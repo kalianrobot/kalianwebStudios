@@ -103,6 +103,78 @@ export const validatePuertaAccess = onCall(
   }
 );
 
+// ─── requestPasswordReset ────────────────────────────────────────────────────
+// Sin auth: quien la llama por definición no tiene sesión (o, en el caso de
+// createSocioAuth, opera contra una sesión secundaria). Genera el link con
+// el Admin SDK y lo envía por Brevo desde info@kalian.es en vez del email por
+// defecto de Firebase Auth (dominio firebaseapp.com, mala reputación/entrega).
+const _resetAttempts = new Map<string, number[]>();
+
+export const requestPasswordReset = onCall(
+  { secrets: [BREVO_API_KEY], region: EU_REGION },
+  async (request) => {
+    const { email } = request.data as { email?: string };
+
+    if (typeof email !== 'string' || email.length < 3 || email.length > 254 || !email.includes('@')) {
+      throw new HttpsError('invalid-argument', 'Email no válido.');
+    }
+
+    // Rate limit: máx 5 intentos por IP en 60 s (mismo criterio que validatePuertaAccess)
+    const ip = (request.rawRequest as any)?.ip || 'unknown';
+    const ahora = Date.now();
+    const ventanaMs = 60_000;
+    const maxIntentos = 5;
+    const intentosPrevios = (_resetAttempts.get(ip) || []).filter(t => ahora - t < ventanaMs);
+    if (intentosPrevios.length >= maxIntentos) {
+      throw new HttpsError('resource-exhausted', 'Demasiados intentos. Espera un momento.');
+    }
+    intentosPrevios.push(ahora);
+    _resetAttempts.set(ip, intentosPrevios);
+
+    let link: string;
+    try {
+      link = await admin.auth().generatePasswordResetLink(email);
+    } catch (err: any) {
+      // No revelar si el email existe o no (anti-enumeración, igual que la
+      // invariante de newsletter): responder éxito igualmente sin enviar nada.
+      logger.info('requestPasswordReset: sin envío', { email: maskEmail(email), code: err?.code });
+      return { ok: true };
+    }
+
+    const linkSafe = escapeHtml(link);
+
+    await callBrevo(BREVO_API_KEY.value(), {
+      sender: SENDER,
+      to: [{ email }],
+      subject: 'Restablece tu contraseña de Kalian',
+      htmlContent: `<!DOCTYPE html><html><head>
+        <style>
+          body{margin:0;padding:0;background:#0A0A0A;font-family:Inter,sans-serif;color:#F5F5F0}
+          .c{max-width:600px;margin:0 auto;background:#0A0A0A;border:1px solid #D4AF3733}
+          .h{padding:60px 40px;text-align:center;border-bottom:1px solid #D4AF3733}
+          .b{padding:40px;text-align:center}
+          .f{padding:30px;text-align:center;background:#000;border-top:1px solid #D4AF3733;font-size:10px;color:#666}
+          h1{color:#D4AF37;font-size:40px;font-weight:900;text-transform:uppercase;letter-spacing:-2px;margin:0;line-height:.9;font-style:italic}
+          p{font-size:16px;line-height:1.6;color:#F5F5F0CC;margin-bottom:25px}
+          .btn{display:inline-block;background:#D4AF37;color:#000;padding:20px 40px;text-decoration:none;font-weight:900;text-transform:uppercase;letter-spacing:2px;font-size:14px}
+          .div{height:2px;width:40px;background:#D4AF37;margin:30px auto}
+        </style></head><body>
+        <div class="c">
+          <div class="h"><h1>RESTABLECER</h1><h1>CONTRASEÑA</h1></div>
+          <div class="b">
+            <p>Has solicitado restablecer tu contraseña de Kalian.</p>
+            <div class="div"></div>
+            <div style="margin:40px 0"><a href="${linkSafe}" class="btn">RESTABLECER CONTRASEÑA</a></div>
+            <p style="font-size:12px;color:#666">Si no has sido tú, ignora este email: tu contraseña no cambiará.</p>
+          </div>
+          <div class="f"><p>KALIAN HIRI KULTUR GUNEA</p><p>Responsable: Kalian. Finalidad: Gestión de soci@s. Derechos: Acceso y supresión.</p></div>
+        </div></body></html>`,
+    });
+
+    return { ok: true };
+  }
+);
+
 // ─── sendWelcomeEmail ────────────────────────────────────────────────────────
 export const sendWelcomeEmail = onCall(
   { secrets: [BREVO_API_KEY], region: EU_REGION },

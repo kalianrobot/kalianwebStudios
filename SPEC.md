@@ -61,7 +61,8 @@ Firebase. Tres bloques:
 1. **Firestore + reglas** (`firestore.rules`): única fuente de verdad para todos los datos del dominio. Reglas server-side estrictas por colección.
 2. **Cloud Functions** (`functions/src/index.ts`, region `europe-west1`, Node 22 con `fetch` nativo):
    - `validatePuertaAccess` — auth de tablet de puerta por contraseña compartida → custom token rol `portero`. Compara con `timingSafeEqual` + rate limit 5 intentos/min por IP.
-   - `sendWelcomeEmail`, `sendMembershipUpdateEmail`, `sendReservationConfirmation` — emails transaccionales vía Brevo. Todas las plantillas escapan HTML en interpolaciones.
+   - `sendWelcomeEmail`, `sendMembershipUpdateEmail`, `sendReservationConfirmation`, `requestPasswordReset` — emails transaccionales vía Brevo. Todas las plantillas escapan HTML en interpolaciones.
+   - `requestPasswordReset` — genera el link de reset con `admin.auth().generatePasswordResetLink` y lo envía por Brevo desde `info@kalian.es` (en vez del email por defecto de Firebase Auth, que sale desde `firebaseapp.com` con peor entrega). Sin auth, rate limit 5/min/IP, no revela si el email existe.
    - `sendReservationConfirmation` lee la reserva del doc autoritativo por `manageToken`; el cliente no controla destinatario.
    - `gestionarReservaInvitado` — gestión de reserva sin login (capability token `manageToken`).
    - `calcularPrecioReserva` — precio autoritativo server-side; el cliente lo llama al enviar el formulario para que `totalPagar` no sea manipulable.

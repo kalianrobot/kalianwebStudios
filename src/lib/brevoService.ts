@@ -23,6 +23,11 @@ const callSubscribeNewsletter = httpsCallable<
   { ok: boolean; duplicate?: boolean }
 >(functions, 'subscribeNewsletter');
 
+const callPasswordReset = httpsCallable<
+  { email: string },
+  { ok: boolean }
+>(functions, 'requestPasswordReset');
+
 export const sendWelcomeEmail = async (email: string, nombre: string, activationLink: string) => {
   await callWelcome({ email, nombre, activationLink });
 };
@@ -39,4 +44,8 @@ export const sendMembershipUpdateEmail = async (
 export const subscribeNewsletter = async (nombre: string, email: string) => {
   const res = await callSubscribeNewsletter({ nombre, email });
   return res.data;
+};
+
+export const requestPasswordReset = async (email: string) => {
+  await callPasswordReset({ email });
 };

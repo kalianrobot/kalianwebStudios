@@ -1,6 +1,7 @@
 import { initializeApp, getApps } from "firebase/app";
-import { getAuth, createUserWithEmailAndPassword, sendPasswordResetEmail } from "firebase/auth";
+import { getAuth, createUserWithEmailAndPassword } from "firebase/auth";
 import firebaseConfig from "../../firebase-applet-config.json";
+import { requestPasswordReset } from "./brevoService";
 
 const isDev = import.meta.env.DEV;
 
@@ -34,7 +35,7 @@ export const createSocioAuth = async (email: string) => {
     if (isDev) console.log("createSocioAuth: Usuario creado en Auth con UID:", user.uid);
 
     try {
-      await sendPasswordResetEmail(secondaryAuth, email);
+      await requestPasswordReset(email);
     } catch (resetErr) {
       if (isDev) console.warn("createSocioAuth: Error al enviar reset (no crítico):", resetErr);
     }
@@ -44,7 +45,7 @@ export const createSocioAuth = async (email: string) => {
     if (isDev) console.error("createSocioAuth: Error capturado:", error.code);
     if (error.code === 'auth/email-already-in-use') {
       try {
-        await sendPasswordResetEmail(secondaryAuth, email);
+        await requestPasswordReset(email);
       } catch (e) {
         if (isDev) console.warn("createSocioAuth: Error al enviar reset a usuario existente:", e);
       }

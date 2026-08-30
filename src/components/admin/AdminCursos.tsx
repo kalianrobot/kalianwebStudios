@@ -5,6 +5,7 @@ import { Link, useSearchParams } from 'react-router-dom';
 import { Trash2 } from 'lucide-react';
 import { syncMultipleSocios, syncSocioStatus } from '../../lib/socioService';
 import { normalizeToSlug } from '../../lib/slug';
+import { normalizeDni, isValidDni } from '../../lib/dni';
 import { registrarIngreso, MetodoPago } from '../../lib/finanzas';
 
 import { createSocioAuth } from '../../lib/adminAuth';
@@ -952,9 +953,8 @@ const AdminCursos = () => {
       return;
     }
 
-    const dniUpper = dni.toUpperCase();
-    const dniRe = /^[0-9XYZ][0-9]{7}[A-Z]$/;
-    if (!dniRe.test(dniUpper)) {
+    const dniUpper = normalizeDni(dni);
+    if (!isValidDni(dniUpper)) {
       alert(`❌ DNI/NIE no válido: "${dniUpper}"\nFormato: 8 dígitos + letra (ej: 12345678A) o NIE (ej: X1234567A)`);
       return;
     }

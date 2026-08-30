@@ -7,6 +7,7 @@ import { useNavigate } from 'react-router-dom';
 import { Html5Qrcode } from 'html5-qrcode';
 import { Camera, X, Users, Ticket, UserPlus, LogOut, CreditCard, Banknote, Landmark, Calculator, FileDown } from 'lucide-react';
 import { registrarIngreso, MetodoPago } from '../../lib/finanzas';
+import { normalizeDni } from '../../lib/dni';
 import { jsPDF } from 'jspdf';
 import autoTable from 'jspdf-autotable';
 
@@ -360,7 +361,7 @@ const ControlAcceso = ({ isPuertaMode = false }: { isPuertaMode?: boolean }) => 
   // identifier puede ser DNI (doc id de socios) o UID (campo `uid`).
   const verificarSlotComoSocio = async (slotIdx: number, identifier: string) => {
     if (!reservaEncontrada || !eventoSeleccionado) return;
-    const term = identifier.trim().toUpperCase();
+    const term = normalizeDni(identifier);
     if (!term) return;
 
     setCargando(true);
@@ -531,7 +532,7 @@ const ControlAcceso = ({ isPuertaMode = false }: { isPuertaMode?: boolean }) => 
 
   const verificarWalkInSocio = async (identifier: string) => {
     if (!eventoSeleccionado) return;
-    const term = identifier.trim().toUpperCase();
+    const term = normalizeDni(identifier);
     if (!term) return;
 
     setCargando(true);

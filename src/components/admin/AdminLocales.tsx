@@ -6,6 +6,7 @@ import { useAuth } from '../../context/AuthContext';
 import { registrarIngreso, MetodoPago } from '../../lib/finanzas';
 import { fetchConfig } from '../../lib/configService';
 import { syncMultipleSocios } from '../../lib/socioService';
+import { normalizeDni, isValidDni } from '../../lib/dni';
 
 const AdminLocales = () => {
   const { user } = useAuth();
@@ -215,12 +216,11 @@ const AdminLocales = () => {
 
     // Validación de DNI/NIE de todos los inquilinos antes de tocar Firestore
     if (editando.alquilado && editando.inquilinos) {
-      const dniRe = /^[0-9XYZ][0-9]{7}[A-Z]$/;
       for (let i = 0; i < editando.inquilinos.length; i++) {
         const inq = editando.inquilinos[i];
-        const raw = (inq.dni || '').trim().toUpperCase();
+        const raw = normalizeDni(inq.dni || '');
         if (!raw) continue; // permite filas en blanco que el usuario aún no rellenó
-        if (!dniRe.test(raw)) {
+        if (!isValidDni(raw)) {
           alert(`❌ DNI/NIE no válido en la fila ${i + 1}: "${inq.dni}"\nFormato: 8 dígitos + letra (ej: 12345678A) o NIE (ej: X1234567A).\n\nCorrígelo antes de guardar.`);
           return;
         }

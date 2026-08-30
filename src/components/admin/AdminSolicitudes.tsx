@@ -6,6 +6,7 @@ import { useAuth } from '../../context/AuthContext';
 import { createSocioAuth } from '../../lib/adminAuth';
 import { sendWelcomeEmail, sendMembershipUpdateEmail } from '../../lib/brevoService';
 import { registrarIngreso, MetodoPago } from '../../lib/finanzas';
+import { normalizeDni, isValidDni } from '../../lib/dni';
 
 const AdminSolicitudes = () => {
   const { user } = useAuth();
@@ -72,15 +73,13 @@ const AdminSolicitudes = () => {
     setLoading(true);
     try {
       const emailClean = sol.email.trim().toLowerCase();
-      const dniUpper = (sol.dni || "").toUpperCase().trim();
-      // B7: validar formato DNI / NIE español (8 dígitos + letra, o letra inicial X/Y/Z + 7 dígitos + letra)
-      const dniRe = /^[0-9XYZ][0-9]{7}[A-Z]$/;
+      const dniUpper = normalizeDni(sol.dni || "");
       if (!dniUpper) {
         alert("Error: La solicitud de inscripción no tiene DNI");
         setLoading(false);
         return;
       }
-      if (!dniRe.test(dniUpper)) {
+      if (!isValidDni(dniUpper)) {
         alert("Error: El formato del DNI/NIE no es válido");
         setLoading(false);
         return;

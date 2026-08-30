@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { db } from '../../firebase';
-import { collection, onSnapshot, doc, setDoc, getDoc, query, where, DocumentData, deleteDoc, updateDoc, arrayUnion } from 'firebase/firestore';
+import { collection, onSnapshot, doc, getDoc, query, where, DocumentData, updateDoc, arrayUnion, runTransaction } from 'firebase/firestore';
 import { Link } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
 import { createSocioAuth } from '../../lib/adminAuth';
@@ -86,90 +86,103 @@ const AdminSolicitudes = () => {
         return;
       }
       const socioRef = doc(db, "socios", dniUpper);
-      const socioSnap = await getDoc(socioRef);
-
-      let realUid = "";
-
-      // 2. Añadir al curso (actualizar aforo y lista de alumnos)
       const cursoRef = doc(db, "cursos", sol.cursoId);
-      const cursoSnap = await getDoc(cursoRef);
-      let fechaFin = "";
-      let categoria = sol.categoria || "musica";
+      const solicitudRef = doc(db, "solicitudes_cursos", sol.id);
+      const pagoInscripcionRef = doc(db, "pagos_inscripciones", `${dniUpper}_${sol.cursoId}`);
 
-      if (cursoSnap.exists()) {
-        const cData = cursoSnap.data();
-        fechaFin = cData.fechaFin || "";
-        categoria = cData.categoria || categoria;
+      // Pre-lectura (fuera de la transacción) solo para decidir si hace falta
+      // crear la cuenta de Auth. createSocioAuth/sendWelcomeEmail no son
+      // operaciones Firestore y no deben reintentarse dentro de una
+      // transacción (duplicarían cuentas/emails en un retry).
+      const socioPreSnap = await getDoc(socioRef);
+      const socioExistiaAntes = socioPreSnap.exists();
 
-        if (!cData.alumnos?.includes(dniUpper)) {
-          await updateDoc(cursoRef, {
-            alumnos: arrayUnion(dniUpper),
-            aforo_actual: (cData.aforo_actual || 0) + 1
-          });
-        }
-      }
-
-      // 1. Si no es socio, lo creamos
-      if (!socioSnap.exists()) {
-        realUid = "manual-" + Math.random().toString(36).substring(7);
+      let realUid = socioExistiaAntes ? (socioPreSnap.data()?.uid || "") : ("manual-" + Math.random().toString(36).substring(7));
+      if (!socioExistiaAntes) {
         try {
           const authResult = await createSocioAuth(emailClean);
           if (authResult.uid) realUid = authResult.uid;
-          
+
           await sendWelcomeEmail(emailClean, sol.nombre || "Soci@s Kalian", "https://kalian.es/login");
         } catch (err) {
           console.error("Error creating auth user:", err);
         }
-
-        await setDoc(socioRef, {
-          dni: dniUpper,
-          nombre: sol.nombre,
-          email: emailClean,
-          uid: realUid,
-          membresias: fechaFin ? { [categoria]: fechaFin } : {},
-          estado: fechaFin ? 'activo' : 'inactivo',
-          cursos: [sol.cursoId],
-          verificado: true,
-          fechaAlta: new Date().toISOString()
-        });
-
-        // Trigger membership update email for new socio
-        await sendMembershipUpdateEmail(emailClean, sol.nombre, realUid, fechaFin ? { [categoria]: fechaFin } : {});
-      } else {
-        // Si ya es socio, solo añadimos el curso si no lo tiene y actualizamos expiración
-        const updateData: any = {
-          cursos: arrayUnion(sol.cursoId),
-          estado: 'activo'
-        };
-        if (fechaFin) {
-          updateData[`membresias.${categoria}`] = fechaFin;
-        }
-        await updateDoc(socioRef, updateData);
-        
-        // Trigger membership update email
-        const finalSocioSnap = await getDoc(socioRef);
-        if (finalSocioSnap.exists()) {
-          const sData = finalSocioSnap.data();
-          await sendMembershipUpdateEmail(sData.email, sData.nombre, sData.uid, sData.membresias || {});
-        }
       }
 
-      // 3. Inicializar registro de pago de inscripción (pendiente)
-      const pagoInscripcionId = `${dniUpper}_${sol.cursoId}`;
-      await setDoc(doc(db, "pagos_inscripciones", pagoInscripcionId), {
-        socioId: dniUpper,
-        cursoId: sol.cursoId,
-        pagado: false,
-        fechaCreacion: new Date().toISOString()
-      }, { merge: true });
+      // Escritura atómica de los 4 documentos que deben quedar consistentes
+      // entre sí: aforo/alumnos del curso, alta o update del socio, registro
+      // de pago de inscripción y estado de la solicitud. Si falla cualquiera,
+      // no se aplica ninguno (antes podía quedar aforo incrementado sin
+      // socio, o socio sin registro de pago).
+      let fechaFin = "";
+      let categoria = sol.categoria || "musica";
+      let socioFinalData: any = null;
 
-      // 4. Marcar solicitud como aprobada
-      await updateDoc(doc(db, "solicitudes_cursos", sol.id), {
-        estado: 'aprobado',
-        fechaAprobacion: new Date().toISOString()
+      await runTransaction(db, async (tx) => {
+        const cursoSnap = await tx.get(cursoRef);
+        const socioSnap = await tx.get(socioRef);
+
+        if (cursoSnap.exists()) {
+          const cData = cursoSnap.data();
+          fechaFin = cData.fechaFin || "";
+          categoria = cData.categoria || categoria;
+
+          if (!cData.alumnos?.includes(dniUpper)) {
+            tx.update(cursoRef, {
+              alumnos: arrayUnion(dniUpper),
+              aforo_actual: (cData.aforo_actual || 0) + 1
+            });
+          }
+        }
+
+        if (!socioSnap.exists()) {
+          socioFinalData = {
+            dni: dniUpper,
+            nombre: sol.nombre,
+            email: emailClean,
+            uid: realUid,
+            membresias: fechaFin ? { [categoria]: fechaFin } : {},
+            estado: fechaFin ? 'activo' : 'inactivo',
+            cursos: [sol.cursoId],
+            verificado: true,
+            fechaAlta: new Date().toISOString()
+          };
+          tx.set(socioRef, socioFinalData);
+        } else {
+          const sData = socioSnap.data();
+          const updateData: any = {
+            cursos: arrayUnion(sol.cursoId),
+            estado: 'activo'
+          };
+          if (fechaFin) {
+            updateData[`membresias.${categoria}`] = fechaFin;
+          }
+          tx.update(socioRef, updateData);
+          socioFinalData = {
+            ...sData,
+            estado: updateData.estado,
+            membresias: fechaFin ? { ...(sData.membresias || {}), [categoria]: fechaFin } : (sData.membresias || {})
+          };
+        }
+
+        tx.set(pagoInscripcionRef, {
+          socioId: dniUpper,
+          cursoId: sol.cursoId,
+          pagado: false,
+          fechaCreacion: new Date().toISOString()
+        }, { merge: true });
+
+        tx.update(solicitudRef, {
+          estado: 'aprobado',
+          fechaAprobacion: new Date().toISOString()
+        });
       });
 
-      // 5. Registrar en Finanzas
+      // Trigger membership update email (mismo comportamiento que antes: no
+      // bloquea la aprobación ya confirmada por la transacción si falla).
+      await sendMembershipUpdateEmail(socioFinalData.email, socioFinalData.nombre, socioFinalData.uid, socioFinalData.membresias || {});
+
+      // Registrar en Finanzas
       const monto = sol.modalidad?.precio || 0;
       if (monto > 0) {
         await registrarIngreso({

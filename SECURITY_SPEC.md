@@ -118,6 +118,13 @@ Auditoría exhaustiva de `firestore.rules`, Cloud Functions y cliente. Los halla
 | B6 | Fallback de `aforo_maximo` a 9999 en `isSafeAforoUpdate`. | 🟡 aceptado — fallback intencional para eventos sin campo `aforo_maximo`; cambiar a 0 rompería eventos existentes sin ese campo. Documentar en DOCUMENTATION.md que el campo es obligatorio al crear eventos. |
 | B7 | Cupones (`cupon`, `precioCupon`) en docs `eventos` con lectura pública. | 🟡 diseño aceptado — los cupones son códigos promocionales distribuidos activamente; moverlos a colección privada requeriría refactor del flujo `ReservaForm`. Riesgo real: usuario listo puede descubrir el cupón viendo el doc del evento en Firestore. Revisitar si se añaden cupones de uso único. |
 
+### Sprint 5 — Bugs de reglas detectados en la auditoría de BDD (agosto 2026)
+
+| # | Área | Hallazgo | Mitigación | Estado |
+|---|---|---|---|---|
+| P0-1 | Rules | `PerfilSocio.tsx:43,156` y `socioService.ts:56,59` disparaban `updateDoc` sobre el propio doc del socio (backfill de `uid`, refresco de `membresias`, sync de `estado`) que la regla `/socios/{id}` `allow update: if isAdmin()` rechazaba silenciosamente. El socio autenticado no podía autoconsolidar su perfil. | Nueva helper `isOwnSocioSelfUpdate(oldData, newData)` que permite al socio actualizar SU doc (identificado por `uid` o `email` en minúsculas), restringido a `['uid','membresias','estado']` con `hasOnly`, y validando que si escribe `uid` sea el suyo y que `estado ∈ {'activo','inactivo'}`. | ✅ cerrado |
+| P0-2 | Rules | Colección `metadata` (contador `metadata/storage.totalBytes` que `TeacherDashboard.tsx` actualiza tras subir/borrar documentos de curso) sin `match` explícito. Caía en el safety net `match /{document=**}` (solo `isMasterAdmin`), así que ningún profesor no-master podía actualizar el contador → el uso de storage quedaba siempre desincronizado. | Añadido `match /metadata/{id}` con `read: isSignedIn()`, `write: isAdmin() || isTeacher()`. | ✅ cerrado |
+
 ### Falsos positivos descartados
 
 - **UID de Firebase en QR del carnet**: no es secreto, es identificador que el usuario enseña él mismo.

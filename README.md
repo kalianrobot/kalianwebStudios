@@ -13,7 +13,7 @@ npm install
 npm run dev          # Vite dev server en :3000
 ```
 
-Crea un `.env.local` con las variables necesarias (al menos `VITE_BREVO_API_KEY`, `VITE_BREVO_NEWSLETTER_LIST_ID`). La configuración de Firebase del cliente vive en `firebase-applet-config.json`.
+Crea un `.env.local` con las variables de Firebase necesarias (ver `.env.example`). La configuración de Firebase del cliente vive en `firebase-applet-config.json`.
 
 ## Comandos
 
@@ -87,8 +87,6 @@ En `Settings → Secrets and variables → Actions`, añadir:
 | `VITE_FIREBASE_MESSAGING_SENDER_ID` | idem |
 | `VITE_FIREBASE_APP_ID` | idem |
 | `VITE_FIREBASE_MEASUREMENT_ID` | idem |
-| `VITE_BREVO_API_KEY` | De Brevo Account → SMTP & API → API keys |
-| `VITE_BREVO_NEWSLETTER_LIST_ID` | ID numérico de la lista en Brevo |
 
 ### 3. (Opcional pero recomendado) Branch protection en `main`
 

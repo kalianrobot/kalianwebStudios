@@ -64,8 +64,7 @@ Backlog ordenado por impacto/coste.
 1. **`isValidReserva` con `hasOnly`** — limitar las claves permitidas en `reservas` al crear para impedir campos extra inertes (Payload #2). Coste bajo.
 2. **`isValidNewsletter` con `hasOnly`** — mismo razonamiento sobre `newsletter_subscribers`.
 3. **Tests automatizados** — definir suite (`functions/test/rules.test.ts` con `@firebase/rules-unit-testing`) que ejecute cada payload contra el emulador. Pendiente desde la versión original de este documento.
-4. **Mover `VITE_BREVO_API_KEY` al servidor** — está expuesta en el bundle del cliente. Tracked también en [SPEC.md §12](SPEC.md).
-5. **Validar firma HMAC de webhooks Brevo** — actualmente usamos query secret porque Brevo no firma. Si Brevo añade firma, migrar.
+4. **Validar firma HMAC de webhooks Brevo** — actualmente usamos query secret porque Brevo no firma. Si Brevo añade firma, migrar.
 
 ---
 
@@ -209,7 +208,6 @@ Roles que **NO** se otorgan:
 |---|---|---|
 | `FIREBASE_SERVICE_ACCOUNT` | JSON descargado de GCP Console (paso de alta del SA) | Auth deploy |
 | `VITE_FIREBASE_*` (×7) | Firebase Console → Project settings → SDK setup | Inyectados en `npm run build` |
-| `VITE_BREVO_API_KEY`, `VITE_BREVO_NEWSLETTER_LIST_ID` | Brevo Account → API keys | Inyectados en `npm run build` (deuda técnica conocida, ver CLAUDE.md §5) |
 
 ### Invariantes operativos
 

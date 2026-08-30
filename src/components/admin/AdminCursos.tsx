@@ -632,14 +632,14 @@ const AdminCursos = () => {
         return;
       }
 
-      const acaRef = doc(db, "academias", form.categoria);
+      const acaRef = doc(db, "academias", academia.id);
       await updateDoc(acaRef, {
         subcategorias: arrayUnion(val)
       });
-      
+
       // Update local state
-      setAcademias(prev => prev.map(a => 
-        a.id === form.categoria 
+      setAcademias(prev => prev.map(a =>
+        a.id === academia.id
         ? { ...a, subcategorias: [...(a.subcategorias || []), val] }
         : a
       ));

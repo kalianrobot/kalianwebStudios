@@ -707,7 +707,7 @@ export const subscribeNewsletter = onCall(
       if (res.status === 400 && err.code === 'duplicate_parameter') {
         return { ok: true, duplicate: true };
       }
-      logger.error('subscribeNewsletter: Brevo error', { status: res.status, code: err.code });
+      logger.error('subscribeNewsletter: Brevo error', { status: res.status, code: err.code, message: err.message });
       throw new HttpsError('internal', 'No se pudo dar de alta en el servicio de email.');
     }
 

@@ -57,7 +57,28 @@ En `finanzas` cada documento tiene `categoria` ∈ `'Socio' | 'Curso' | 'Evento'
 - **Re-alta tras baja**: si el doc estaba en estado `'baja'`, el alta lo reescribe a `'pendiente_confirmacion'`. La reconciliación semanal reactiva el estado a `'activo'` si Brevo confirma y la `fecha` de re-alta es posterior a `fecha_baja` (evita revivir bajas permanentes sin nueva confirmación).
 - El email de confirmación DOI lo dispara `subscribeNewsletter` vía `POST /contacts/doubleOptinConfirmation` de Brevo (plantilla transaccional `BREVO_NEWSLETTER_DOI_TEMPLATE_ID`), no un toggle nativo de la lista — el formulario vive fuera de Brevo, así que ese toggle no aplica. El contacto solo entra en la lista de Brevo al confirmar. Tras la confirmación, la reconciliación semanal (`reconciliarNewsletterBrevo` los lunes 04:00 UTC) promueve el estado a `'activo'`.
 - Pendientes que no confirman en 14 días pasan a `'baja'` con `motivo: 'no_confirmado'`.
-- Para la campaña RGPD de reconfirmación, los atributos `RECONFIRMADO` y `FECHA_RECONFIRMACION` se gestionan en el panel de Brevo (no en código).
+
+**Migración MailPoet → Brevo y consentimiento**
+
+La lista de Brevo se creó importando la que había en MailPoet, y en esa importación no se conservó el registro de consentimiento de cada contacto. Para regularizarlo se trabaja con **dos listas**:
+
+| Lista | Contenido | Quién la usa |
+|---|---|---|
+| **A — heredada** | Los contactos importados de MailPoet, sin prueba de consentimiento. | Nadie en código. Solo es el origen de la campaña de reconfirmación; se borra al cerrarla. |
+| **B — con consentimiento** | Solo quien completa el doble opt-in del formulario público. | Es la lista a la que apunta `BREVO_NEWSLETTER_LIST_ID`: altas, reconciliación y envíos reales. |
+
+No vale una sola lista: si el contacto ya pertenece a la lista destino, Brevo rechaza el doble opt-in por duplicado y el reconfirmante ve el mensaje de éxito **sin recibir el email**. Es decir, la campaña fallaría en silencio precisamente con las personas a las que va dirigida.
+
+La señal de "hubo consentimiento" es el campo `fecha_confirmacion`: solo lo escriben la promoción DOI y el panel admin. Por eso, cuando la reconciliación semanal da de baja a un suscriptor ausente de la lista, distingue el motivo:
+
+- `'reconciliacion'` — tenía `fecha_confirmacion`, así que confirmó en su día y luego desapareció de Brevo (baja ordinaria).
+- `'migracion_sin_consentimiento'` — nunca confirmó: es un heredado de MailPoet. Al apuntar el secreto a la lista B, todos estos pasan a `'baja'` en bloque en la primera reconciliación, y vuelven a `'activo'` a medida que reconfirman.
+
+El badge de `/staff/newsletter` muestra el motivo en texto legible ("sin consentimiento", "ausente en Brevo", …); el valor crudo sigue disponible en el tooltip.
+
+El procedimiento operativo paso a paso (crear la lista, cambiar el secreto, enviar la campaña, borrar la lista A) está en [SPEC.md §12](SPEC.md).
+
+**Durante la campaña, no borres suscriptores desde el panel**: el borrado dispara `onNewsletterSubscriberDeleted`, que elimina el contacto de **toda** la cuenta de Brevo, incluida la lista B. Si esa persona ya había reconfirmado, se pierde su consentimiento recién obtenido.
 
 Para el detalle del flujo y estados ver [SPEC.md §5](SPEC.md) (esquema `newsletter_subscribers`).
 
@@ -145,7 +166,7 @@ Firestore en `europe-west1`. Se recomienda configurar **exportaciones programada
 - Política versionada en `POLITICA_VERSION` (`NewsletterForm.tsx`).
 - Registro de IP, fecha y versión aceptada al alta.
 - Conservación: 3 años tras baja, supresión total a petición en 30 días.
-- Para campaña de reconfirmación seguir el procedimiento del SPEC.md §12.
+- Para la campaña de reconfirmación seguir el procedimiento de [SPEC.md §12](SPEC.md) (modelo de dos listas, ver §2.5).
 
 ### 7.5 Mantenimiento
 

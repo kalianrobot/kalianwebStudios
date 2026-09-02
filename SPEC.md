@@ -69,14 +69,19 @@ Firebase. Tres bloques:
    - `subscribeNewsletter` — alta pública en Brevo, validada contra un doc `pendiente_confirmacion` reciente (≤5 min) en Firestore. Usa `POST /contacts/doubleOptinConfirmation` (no `POST /contacts`): dispara el email DOI vía plantilla transaccional (`BREVO_NEWSLETTER_DOI_TEMPLATE_ID`) y solo añade el contacto a la lista (`includeListIds`) cuando confirma el link.
    - `brevoWebhook` — recibe `unsubscribed/spam/hardbounce/blocked`, marca bajas en Firestore. Valida antigüedad del payload (≤5 min) contra replay.
    - `onNewsletterSubscriberDeleted` — sincroniza borrado admin → DELETE en Brevo, con reintentos (3, backoff exponencial 2s/4s).
-   - `reconciliarNewsletterBrevo` — cron semanal (lunes 04:00 UTC). Sincroniza ambas direcciones, promueve `pendiente_confirmacion → activo`, marca bajas por caducidad o ausencia en Brevo.
+   - `reconciliarNewsletterBrevo` — cron semanal (lunes 04:00 UTC). Sincroniza ambas direcciones, promueve `pendiente_confirmacion → activo`, marca bajas por caducidad o ausencia en Brevo. La baja por ausencia distingue motivo según haya `fecha_confirmacion` (`reconciliacion`) o no (`migracion_sin_consentimiento`).
 3. **Hosting**: SPA estática con CSP estricto, HSTS, X-Frame-Options DENY (`firebase.json`).
 
 ### Integración Brevo
 - **API** `https://api.brevo.com/v3/...`. Header `api-key: <BREVO_API_KEY>`.
 - **Webhooks** validados con `?secret=<BREVO_WEBHOOK_SECRET>` (Brevo no firma HMAC).
 - **Doble opt-in**: NO se activa como propiedad de la lista (el alta viene de un formulario externo, fuera de Brevo — Brevo solo ofrece el toggle nativo de lista para formularios creados dentro de su propio panel o vía workflow/automatización). En su lugar, `subscribeNewsletter` llama a `POST /contacts/doubleOptinConfirmation` pasando `templateId` (plantilla transaccional con botón tipo "Double opt-in link") y `redirectionUrl` (`/newsletter/estado?accion=confirmado`). NO usamos webhook DOI propio: la confirmación se refleja en Firestore vía la reconciliación semanal (el contacto solo aparece en la lista tras confirmar).
-- **Secretos (Firebase Secret Manager)**: `BREVO_API_KEY`, `BREVO_WEBHOOK_SECRET`, `BREVO_NEWSLETTER_LIST_ID`, `BREVO_NEWSLETTER_DOI_TEMPLATE_ID`.
+- **Modelo de dos listas (migración MailPoet)**: la lista original se creó importando la de MailPoet, sin conservar el registro de consentimiento. Se separa en dos:
+  - **Lista heredada (A)** — los contactos importados. No la referencia ningún código; existe solo como origen de la campaña de reconfirmación y se borra al cerrarla.
+  - **Lista con consentimiento (B)** — la que apunta `BREVO_NEWSLETTER_LIST_ID`. Solo entra quien completa el DOI del formulario público.
+
+  No sirve reutilizar una única lista: `POST /contacts/doubleOptinConfirmation` con un contacto que ya pertenece a `includeListIds` responde 400 `duplicate_parameter`, que `subscribeNewsletter` traduce a `{ ok: true, duplicate: true }`. Con lista única el reconfirmante vería el mensaje de éxito, no recibiría el email y no habría consentimiento — justo el colectivo objetivo de la campaña. Procedimiento operativo completo en §12.
+- **Secretos (Firebase Secret Manager)**: `BREVO_API_KEY`, `BREVO_WEBHOOK_SECRET`, `BREVO_NEWSLETTER_LIST_ID` (lista B), `BREVO_NEWSLETTER_DOI_TEMPLATE_ID`.
 
 ---
 
@@ -146,6 +151,7 @@ Convenciones:
         | 'reconciliacion'             // ausente en Brevo o blacklisted
         | 'bounce_o_baja'              // importado ya blacklisted
         | 'no_confirmado'              // sin confirmar tras 14 días
+        | 'migracion_sin_consentimiento' // heredado de MailPoet, nunca pasó por el DOI
   fecha_baja?: Timestamp
   origen?: 'brevo_import'              // importado por reconciliación
 }
@@ -385,8 +391,14 @@ CSP y cabeceras de seguridad: definidas en `firebase.json` (HSTS, X-Frame DENY, 
 ### Pendiente operativo (no código)
 - Fijar el valor del secreto `BREVO_NEWSLETTER_DOI_TEMPLATE_ID` (Firebase Secret Manager) a `14`, el ID de la plantilla DOI ya creada y activa en Brevo.
 - Probar el flujo end-to-end en producción: alta → email DOI recibido → clic → `/newsletter/estado?accion=confirmado` → contacto confirmado en Brevo → `reconciliarNewsletterBrevo` promueve a `activo`.
-- Crear atributos `RECONFIRMADO` (bool) + `FECHA_RECONFIRMACION` (date) en Brevo.
-- Lanzar campaña de reconfirmación RGPD: dos CTA ("Sigo dentro" / "Darme de baja"), eliminar al final los `RECONFIRMADO != true`.
+- **Campaña de reconfirmación RGPD con dos listas** (sustituye al plan anterior de atributo `RECONFIRMADO` sobre lista única, inviable por el `duplicate_parameter` descrito en §3):
+  1. Crear en Brevo la lista B vacía ("Newsletter — consentimiento verificado"). La lista A (importada de MailPoet) queda intacta.
+  2. Verificar con un email de prueba ya presente en A que `doubleOptinConfirmation` contra B sí envía el correo. Es el único punto del plan que depende del comportamiento exacto de la API de Brevo.
+  3. Apuntar el secreto `BREVO_NEWSLETTER_LIST_ID` a B (`firebase functions:secrets:set`) y redesplegar Functions.
+  4. Enviar la campaña desde la lista A, con enlace al formulario público. Plazo de 30 días y un recordatorio a mitad. Email sobrio, sin contenido promocional: solo re-consentimiento.
+  5. Vencido el plazo, **borrar la lista A, no sus contactos**: `DELETE /contacts/{email}` elimina el contacto de toda la cuenta, así que borrar contactos de A eliminaría también a quien ya reconfirmó en B.
+- Efecto esperado tras el paso 3: la primera reconciliación semanal marca `'baja'` con `motivo: 'migracion_sin_consentimiento'` todos los docs `activo` sin `fecha_confirmacion` (los heredados), y los va reactivando a medida que reconfirman. El contador `bajasSinConsentimiento` del log de `reconciliarNewsletterBrevo` da la magnitud.
+- Durante la campaña, evitar borrados de suscriptores desde `/staff/newsletter`: `onNewsletterSubscriberDeleted` borra el contacto de toda la cuenta Brevo, lista B incluida.
 - **Purga periódica de Artifact Registry** (cada 2-3 meses): borrar versiones antiguas de las imágenes de Cloud Functions en https://console.cloud.google.com/artifacts?project=kalianhkg-886a6 para no cruzar el tier gratuito (0.5 GB/mes). Firebase no las purga solo; cada deploy del CD deja una imagen nueva de ~100-300 MB. Mantener solo la última versión productiva de cada function. Alternativa futura: cleanup policy en Artifact Registry (keep last N versions).
 
 ### Deuda técnica conocida

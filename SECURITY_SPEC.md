@@ -125,6 +125,12 @@ Auditoría exhaustiva de `firestore.rules`, Cloud Functions y cliente. Los halla
 | P0-1 | Rules | `PerfilSocio.tsx:43,156` y `socioService.ts:56,59` disparaban `updateDoc` sobre el propio doc del socio (backfill de `uid`, refresco de `membresias`, sync de `estado`) que la regla `/socios/{id}` `allow update: if isAdmin()` rechazaba silenciosamente. El socio autenticado no podía autoconsolidar su perfil. | Nueva helper `isOwnSocioSelfUpdate(oldData, newData)` que permite al socio actualizar SU doc (identificado por `uid` o `email` en minúsculas), restringido a `['uid','membresias','estado']` con `hasOnly`, y validando que si escribe `uid` sea el suyo y que `estado ∈ {'activo','inactivo'}`. | ✅ cerrado |
 | P0-2 | Rules | Colección `metadata` (contador `metadata/storage.totalBytes` que `TeacherDashboard.tsx` actualiza tras subir/borrar documentos de curso) sin `match` explícito. Caía en el safety net `match /{document=**}` (solo `isMasterAdmin`), así que ningún profesor no-master podía actualizar el contador → el uso de storage quedaba siempre desincronizado. | Añadido `match /metadata/{id}` con `read: isSignedIn()`, `write: isAdmin() || isTeacher()`. | ✅ cerrado |
 
+### Sprint 6 — Doble opt-in de newsletter no confirmaba realmente (septiembre 2026)
+
+| # | Área | Hallazgo | Mitigación | Estado |
+|---|---|---|---|---|
+| S6-1 | Functions | `subscribeNewsletter` usaba `POST /contacts`, que añade el contacto a la lista de forma inmediata y no dispara ningún email de confirmación ni retiene la membresía de lista hasta un opt-in real. `reconciliarNewsletterBrevo` promueve a `'activo'` todo `pendiente_confirmacion` presente en la lista de Brevo — así que, en la práctica, cualquier alta pasaba a `'activo'` en la siguiente reconciliación semanal sin que el titular del email confirmara nunca nada. El estado `'pendiente_confirmacion'` (base del consentimiento RGPD para el envío de comunicaciones) era cosmético. | Migrado a `POST /contacts/doubleOptinConfirmation`: el email de confirmación se envía vía plantilla transaccional (`BREVO_NEWSLETTER_DOI_TEMPLATE_ID`) y el contacto solo se añade a `includeListIds` cuando confirma el enlace. La reconciliación semanal (sin cambios) ahora sí solo promueve a `'activo'` contactos con opt-in real. | ✅ cerrado |
+
 ### Falsos positivos descartados
 
 - **UID de Firebase en QR del carnet**: no es secreto, es identificador que el usuario enseña él mismo.

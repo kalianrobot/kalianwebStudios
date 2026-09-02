@@ -691,7 +691,11 @@ export const subscribeNewsletter = onCall(
         },
         body: JSON.stringify({
           email: emailNorm,
-          attributes: { NOMBRE: nombreNorm },
+          // FIRSTNAME (no NOMBRE): es el atributo estándar que existe en la
+          // cuenta de Brevo (Contacts > Settings > Contact attributes).
+          // NOMBRE nunca se creó, así que Brevo lo descartaba en silencio
+          // y {{ contact.NOMBRE }} en la plantilla DOI se quedaba vacío.
+          attributes: { FIRSTNAME: nombreNorm },
           includeListIds: [listId],
           templateId,
           redirectionUrl: NEWSLETTER_DOI_REDIRECT_URL,
@@ -884,14 +888,14 @@ export const reconciliarNewsletterBrevo = onSchedule(
         return;
       }
       const data = await safeJson(r) as {
-        contacts?: Array<{ email: string; emailBlacklisted?: boolean; attributes?: { NOMBRE?: string; FIRSTNAME?: string } }>
+        contacts?: Array<{ email: string; emailBlacklisted?: boolean; attributes?: { FIRSTNAME?: string } }>
       };
       const contacts = data.contacts || [];
       if (contacts.length === 0) break;
       for (const c of contacts) {
         const e = (c.email || '').toLowerCase().trim();
         if (!e) continue;
-        const nombre = c.attributes?.NOMBRE || c.attributes?.FIRSTNAME || '';
+        const nombre = c.attributes?.FIRSTNAME || '';
         contactosBrevo.set(e, { nombre, blacklisted: !!c.emailBlacklisted });
       }
       if (contacts.length < limit) break;

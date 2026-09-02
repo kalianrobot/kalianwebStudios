@@ -80,6 +80,8 @@ Firebase. Tres bloques:
   - **Lista heredada (A)** — los contactos importados. No la referencia ningún código; existe solo como origen de la campaña de reconfirmación y se borra al cerrarla.
   - **Lista con consentimiento (B)** — la que apunta `BREVO_NEWSLETTER_LIST_ID`. Solo entra quien completa el DOI del formulario público.
 
+  `subscribeNewsletter` no tiene fallback a un ID por defecto: si el secreto no contiene un entero positivo, el alta falla con `internal`. Caer a una lista concreta significaría dar de alta en la lista heredada, que es la que carece de consentimiento acreditado.
+
   No sirve reutilizar una única lista: `POST /contacts/doubleOptinConfirmation` con un contacto que ya pertenece a `includeListIds` responde 400 `duplicate_parameter`, que `subscribeNewsletter` traduce a `{ ok: true, duplicate: true }`. Con lista única el reconfirmante vería el mensaje de éxito, no recibiría el email y no habría consentimiento — justo el colectivo objetivo de la campaña. Procedimiento operativo completo en §12.
 - **Secretos (Firebase Secret Manager)**: `BREVO_API_KEY`, `BREVO_WEBHOOK_SECRET`, `BREVO_NEWSLETTER_LIST_ID` (lista B), `BREVO_NEWSLETTER_DOI_TEMPLATE_ID`.
 

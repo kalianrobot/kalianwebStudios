@@ -672,7 +672,16 @@ export const subscribeNewsletter = onCall(
       throw new HttpsError('failed-precondition', 'Alta no encontrada o expirada.');
     }
 
-    const listId = Number(BREVO_NEWSLETTER_LIST_ID.value()) || 3;
+    // Sin fallback a una lista concreta: con el modelo de dos listas
+    // (ver SPEC.md §3), caer a un ID por defecto significaría dar de alta en la
+    // lista heredada de MailPoet, que es justamente la que no tiene
+    // consentimiento acreditado. Ante un secreto mal configurado es preferible
+    // fallar el alta que escribir en la lista equivocada.
+    const listId = Number(BREVO_NEWSLETTER_LIST_ID.value().trim());
+    if (!Number.isInteger(listId) || listId <= 0) {
+      logger.error('subscribeNewsletter: BREVO_NEWSLETTER_LIST_ID no es un ID de lista válido');
+      throw new HttpsError('internal', 'No se pudo dar de alta en el servicio de email.');
+    }
     const templateId = Number(BREVO_NEWSLETTER_DOI_TEMPLATE_ID.value());
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), BREVO_TIMEOUT_MS);
@@ -861,7 +870,8 @@ export const reconciliarNewsletterBrevo = onSchedule(
   },
   async () => {
     const db = admin.firestore();
-    const listId = BREVO_NEWSLETTER_LIST_ID.value();
+    // .trim(): el valor se interpola crudo en la URL de listado de contactos.
+    const listId = BREVO_NEWSLETTER_LIST_ID.value().trim();
     const apiKey = BREVO_API_KEY.value();
 
     let offset = 0;

@@ -55,9 +55,32 @@ En `finanzas` cada documento tiene `categoria` ∈ `'Socio' | 'Curso' | 'Evento'
 
 - Alta pública con estado intermedio `'pendiente_confirmacion'`. El **doc ID es el email** (deterministic): una segunda alta del mismo email actúa como upsert, no crea duplicado.
 - **Re-alta tras baja**: si el doc estaba en estado `'baja'`, el alta lo reescribe a `'pendiente_confirmacion'`. La reconciliación semanal reactiva el estado a `'activo'` si Brevo confirma y la `fecha` de re-alta es posterior a `fecha_baja` (evita revivir bajas permanentes sin nueva confirmación).
-- El email de confirmación DOI lo dispara `subscribeNewsletter` vía `POST /contacts/doubleOptinConfirmation` de Brevo (plantilla transaccional `BREVO_NEWSLETTER_DOI_TEMPLATE_ID`), no un toggle nativo de la lista — el formulario vive fuera de Brevo, así que ese toggle no aplica. El contacto solo entra en la lista de Brevo al confirmar. Tras la confirmación, la reconciliación semanal (`reconciliarNewsletterBrevo` los lunes 04:00 UTC) promueve el estado a `'activo'`.
+- El email de confirmación DOI lo dispara `subscribeNewsletter` vía `POST /contacts/doubleOptinConfirmation` de Brevo (plantilla `BREVO_NEWSLETTER_DOI_TEMPLATE_ID`), no un toggle nativo de la lista — el formulario vive fuera de Brevo, así que ese toggle no aplica. El contacto solo entra en la lista de Brevo al confirmar. Tras la confirmación, la reconciliación semanal (`reconciliarNewsletterBrevo` los lunes 04:00 UTC) promueve el estado a `'activo'`.
 - Pendientes que no confirman en 14 días pasan a `'baja'` con `motivo: 'no_confirmado'`.
 - Para la campaña RGPD de reconfirmación, los atributos `RECONFIRMADO` y `FECHA_RECONFIRMACION` se gestionan en el panel de Brevo (no en código).
+
+**La plantilla DOI no es una plantilla transaccional normal.** Brevo solo acepta en
+`templateId` plantillas que él marca internamente como DOI (`doiTemplate: true` en
+`GET /v3/smtp/templates/{id}`). Requisitos:
+
+1. La plantilla debe estar **activa**.
+2. Debe contener un botón o enlace cuyo *Link settings* sea **"Double opt-in link"**
+   (no una URL escrita a mano). Ese enlace es lo que hace que Brevo la clasifique como DOI.
+
+Si no se cumple, la llamada falla con `400 invalid_parameter — "An active DOI template
+does not exist"` y **no se envía ningún email**: el alta queda en
+`pendiente_confirmacion` en Firestore y el usuario ve el error genérico del formulario.
+
+Para comprobar una plantilla sin tocar producción:
+
+```bash
+BREVO_API_KEY=xkeysib-... node functions/scripts/verificar-doi-template.mjs 14
+```
+
+Imprime `isActive` y `doiTemplate`; si alguno es `false`, hay que arreglarlo en el panel
+de Brevo (o crear la plantilla desde el asistente de formularios DOI de *Contactos >
+Formularios*, que ya la genera con el enlace correcto) y fijar el ID resultante en el
+secreto `BREVO_NEWSLETTER_DOI_TEMPLATE_ID`.
 
 Para el detalle del flujo y estados ver [SPEC.md §5](SPEC.md) (esquema `newsletter_subscribers`).
 

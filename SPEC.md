@@ -75,7 +75,7 @@ Firebase. Tres bloques:
 ### Integración Brevo
 - **API** `https://api.brevo.com/v3/...`. Header `api-key: <BREVO_API_KEY>`.
 - **Webhooks** validados con `?secret=<BREVO_WEBHOOK_SECRET>` (Brevo no firma HMAC).
-- **Doble opt-in**: NO se activa como propiedad de la lista (el alta viene de un formulario externo, fuera de Brevo — Brevo solo ofrece el toggle nativo de lista para formularios creados dentro de su propio panel o vía workflow/automatización). En su lugar, `subscribeNewsletter` llama a `POST /contacts/doubleOptinConfirmation` pasando `templateId` (plantilla transaccional con botón tipo "Double opt-in link") y `redirectionUrl` (`/newsletter/estado?accion=confirmado`). NO usamos webhook DOI propio: la confirmación se refleja en Firestore vía la reconciliación semanal (el contacto solo aparece en la lista tras confirmar).
+- **Doble opt-in**: NO se activa como propiedad de la lista (el alta viene de un formulario externo, fuera de Brevo — Brevo solo ofrece el toggle nativo de lista para formularios creados dentro de su propio panel o vía workflow/automatización). En su lugar, `subscribeNewsletter` llama a `POST /contacts/doubleOptinConfirmation` pasando `templateId` (plantilla que Brevo marque como DOI: activa y con botón tipo "Double opt-in link" — verificable con `functions/scripts/verificar-doi-template.mjs`; si no lo es, responde `400 "An active DOI template does not exist"` y no se envía email) y `redirectionUrl` (`/newsletter/estado?accion=confirmado`). NO usamos webhook DOI propio: la confirmación se refleja en Firestore vía la reconciliación semanal (el contacto solo aparece en la lista tras confirmar).
 - **Secretos (Firebase Secret Manager)**: `BREVO_API_KEY`, `BREVO_WEBHOOK_SECRET`, `BREVO_NEWSLETTER_LIST_ID`, `BREVO_NEWSLETTER_DOI_TEMPLATE_ID`.
 
 ---
@@ -376,14 +376,14 @@ CSP y cabeceras de seguridad: definidas en `firebase.json` (HSTS, X-Frame DENY, 
 ## 12. Estado actual y roadmap
 
 ### Hecho recientemente
-- Doble opt-in vía `POST /contacts/doubleOptinConfirmation` (no toggle de lista — inviable con formulario fuera de Brevo) + plantilla transaccional DOI (#14, "Plantilla Confirmar subscripcion a Newletter") + landing `/newsletter/estado` polivalente (PR #5).
+- Doble opt-in vía `POST /contacts/doubleOptinConfirmation` (no toggle de lista — inviable con formulario fuera de Brevo) + plantilla DOI (`BREVO_NEWSLETTER_DOI_TEMPLATE_ID`) + landing `/newsletter/estado` polivalente (PR #5). Bloqueado en producción hasta tener una plantilla DOI válida en Brevo (ver *Pendiente operativo*).
 - Reconciliación semanal ampliada: promociones, caducidad, baja por ausencia.
 - Badge "PENDIENTE" en `AdminNewsletter`.
 - Reglas Firestore: estado inicial restringido en alta pública.
 - **Auditoría de seguridad junio 2026** cerrada: Sprint 1 críticos (Brevo API key fuera del bundle, validación de origen en email confirmación, escape HTML, PII enmascarada en logs), Sprint 2 altos (timestamp en webhook, retry en delete-Brevo, `timingSafeEqual` + rate limit en puerta, precio server-side, CSP sin `unsafe-inline`, `isDev` en logs cliente), Sprint 3 medios (`hasOnly` en `isValid*`, regex emails, `isValidPagoMensual`, timeouts en Brevo, `safeJson`), Sprint 4 bajos (`ticketID` con `crypto`, `node-fetch` eliminado, limpieza de reglas). Detalle en [SECURITY_SPEC.md §4](SECURITY_SPEC.md).
 
 ### Pendiente operativo (no código)
-- Fijar el valor del secreto `BREVO_NEWSLETTER_DOI_TEMPLATE_ID` (Firebase Secret Manager) a `14`, el ID de la plantilla DOI ya creada y activa en Brevo.
+- **Plantilla DOI en Brevo**: la #14 no es una plantilla DOI válida — `doubleOptinConfirmation` responde `400 "An active DOI template does not exist"` (log de 2026-09-02). Brevo exige que la plantilla esté activa y contenga un enlace/botón de tipo *"Double opt-in link"* (`doiTemplate: true` en `GET /v3/smtp/templates/{id}`); una transaccional normal no sirve. Arreglar la plantilla en el panel (o recrearla desde *Contactos > Formularios*) y fijar su ID en el secreto `BREVO_NEWSLETTER_DOI_TEMPLATE_ID`. Comprobación: `BREVO_API_KEY=... node functions/scripts/verificar-doi-template.mjs <id>`.
 - Probar el flujo end-to-end en producción: alta → email DOI recibido → clic → `/newsletter/estado?accion=confirmado` → contacto confirmado en Brevo → `reconciliarNewsletterBrevo` promueve a `activo`.
 - Crear atributos `RECONFIRMADO` (bool) + `FECHA_RECONFIRMACION` (date) en Brevo.
 - Lanzar campaña de reconfirmación RGPD: dos CTA ("Sigo dentro" / "Darme de baja"), eliminar al final los `RECONFIRMADO != true`.

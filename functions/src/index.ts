@@ -965,6 +965,7 @@ export const reconciliarNewsletterBrevo = onSchedule(
     const cortePendiente = ahora - DIAS_MAX_PENDIENTE * 24 * 60 * 60 * 1000;
     let pendientesCaducados = 0;
     let bajasPorAusencia = 0;
+    let bajasSinConsentimiento = 0;
 
     for (const [email, { ref, data }] of docsFirestore) {
       const estadoActual = data?.estado || 'activo';
@@ -981,12 +982,29 @@ export const reconciliarNewsletterBrevo = onSchedule(
           pendientesCaducados++;
         }
       } else if (estadoActual === 'activo' && !enBrevo) {
+        // Dos causas muy distintas caen aquí, y conviene no confundirlas:
+        //
+        // a) El contacto pasó por nuestro doble opt-in (tiene `fecha_confirmacion`)
+        //    y luego desapareció de la lista de Brevo → baja normal por ausencia.
+        // b) El contacto nunca confirmó nada con nosotros: es un heredado de la
+        //    importación MailPoet → Brevo, del que no conservamos prueba de
+        //    consentimiento. Al apuntar BREVO_NEWSLETTER_LIST_ID a la lista nueva
+        //    (la que alimenta el formulario con DOI) todos estos desaparecen en
+        //    bloque en la primera reconciliación. Marcarlos como 'reconciliacion'
+        //    los mezclaría con las bajas ordinarias y borraría el rastro de por
+        //    qué se dieron de baja, que es justamente lo que hay que poder
+        //    acreditar ante la autoridad de control.
+        //
+        // `fecha_confirmacion` solo la escriben la promoción DOI de esta misma
+        // función y el panel admin, así que es la señal fiable de "hubo opt-in".
+        const sinPruebaConsentimiento = !data?.fecha_confirmacion;
         await ref.update({
           estado: 'baja',
-          motivo: 'reconciliacion',
+          motivo: sinPruebaConsentimiento ? 'migracion_sin_consentimiento' : 'reconciliacion',
           fecha_baja: admin.firestore.FieldValue.serverTimestamp(),
         });
-        bajasPorAusencia++;
+        if (sinPruebaConsentimiento) bajasSinConsentimiento++;
+        else bajasPorAusencia++;
       }
     }
 
@@ -998,6 +1016,7 @@ export const reconciliarNewsletterBrevo = onSchedule(
       promovidosActivo,
       pendientesCaducados,
       bajasPorAusencia,
+      bajasSinConsentimiento,
     });
   }
 );

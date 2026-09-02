@@ -14,6 +14,11 @@ const EU_REGION = 'europe-west1';
 const BREVO_API_KEY = defineSecret('BREVO_API_KEY');
 const BREVO_WEBHOOK_SECRET = defineSecret('BREVO_WEBHOOK_SECRET');
 const BREVO_NEWSLETTER_LIST_ID = defineSecret('BREVO_NEWSLETTER_LIST_ID');
+// ID de la plantilla transaccional de Brevo con el botón "Double opt-in link"
+// (Templates > Email > "Plantilla Confirmar subscripcion a Newletter").
+const BREVO_NEWSLETTER_DOI_TEMPLATE_ID = defineSecret('BREVO_NEWSLETTER_DOI_TEMPLATE_ID');
+// Tras confirmar el DOI, Brevo redirige aquí (landing polivalente, ver NewsletterEstadoPage).
+const NEWSLETTER_DOI_REDIRECT_URL = 'https://kalian.es/newsletter/estado?accion=confirmado';
 const SENDER = { name: 'Kalian Hiri Kultur Gunea', email: 'info@kalian.es' };
 
 // Timeout por defecto para llamadas a Brevo.
@@ -632,7 +637,7 @@ export const calcularPrecioReserva = onCall(
 // antes via reglas validadas). Esto ata la function al flow legítimo y cierra
 // el vector de envío arbitrario a Brevo desde un endpoint público.
 export const subscribeNewsletter = onCall(
-  { secrets: [BREVO_API_KEY, BREVO_NEWSLETTER_LIST_ID], region: EU_REGION },
+  { secrets: [BREVO_API_KEY, BREVO_NEWSLETTER_LIST_ID, BREVO_NEWSLETTER_DOI_TEMPLATE_ID], region: EU_REGION },
   async (request) => {
     const { nombre, email } = request.data as { nombre?: string; email?: string };
 
@@ -668,11 +673,16 @@ export const subscribeNewsletter = onCall(
     }
 
     const listId = Number(BREVO_NEWSLETTER_LIST_ID.value()) || 3;
+    const templateId = Number(BREVO_NEWSLETTER_DOI_TEMPLATE_ID.value());
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), BREVO_TIMEOUT_MS);
     let res;
     try {
-      res = await fetch('https://api.brevo.com/v3/contacts', {
+      // doubleOptinConfirmation (no /contacts): envía el email DOI vía la plantilla
+      // indicada y solo añade el contacto a `includeListIds` cuando confirma el link.
+      // Con POST /contacts (endpoint anterior) el contacto entraba directo a la lista
+      // sin pasar por ninguna confirmación, así que nunca se disparaba ningún email.
+      res = await fetch('https://api.brevo.com/v3/contacts/doubleOptinConfirmation', {
         method: 'POST',
         headers: {
           accept: 'application/json',
@@ -682,8 +692,9 @@ export const subscribeNewsletter = onCall(
         body: JSON.stringify({
           email: emailNorm,
           attributes: { NOMBRE: nombreNorm },
-          listIds: [listId],
-          updateEnabled: true,
+          includeListIds: [listId],
+          templateId,
+          redirectionUrl: NEWSLETTER_DOI_REDIRECT_URL,
         }),
         signal: controller.signal,
       });

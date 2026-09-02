@@ -673,7 +673,16 @@ export const subscribeNewsletter = onCall(
     }
 
     const listId = Number(BREVO_NEWSLETTER_LIST_ID.value()) || 3;
-    const templateId = Number(BREVO_NEWSLETTER_DOI_TEMPLATE_ID.value());
+    const templateId = Number((BREVO_NEWSLETTER_DOI_TEMPLATE_ID.value() || '').trim());
+
+    // El secreto debe ser el ID numérico de una plantilla DOI de Brevo. Si viene
+    // vacío o no numérico, `JSON.stringify` lo mandaría como `null` y Brevo
+    // respondería un 400 genérico difícil de diagnosticar.
+    if (!Number.isInteger(templateId) || templateId <= 0) {
+      logger.error('subscribeNewsletter: BREVO_NEWSLETTER_DOI_TEMPLATE_ID no es un ID numérico válido');
+      throw new HttpsError('internal', 'No se pudo dar de alta en el servicio de email.');
+    }
+
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), BREVO_TIMEOUT_MS);
     let res;
@@ -706,6 +715,20 @@ export const subscribeNewsletter = onCall(
       const err = await safeJson(res);
       if (res.status === 400 && err.code === 'duplicate_parameter') {
         return { ok: true, duplicate: true };
+      }
+      // Brevo solo acepta en `templateId` plantillas que él marca como DOI
+      // (`doiTemplate: true` en GET /v3/smtp/templates/{id}): activas y con un
+      // botón/enlace de tipo "Double opt-in link". Una plantilla transaccional
+      // normal devuelve "An active DOI template does not exist" → es config de
+      // Brevo, no del código: ver DOCUMENTATION.md § Newsletter y
+      // `functions/scripts/verificar-doi-template.mjs`.
+      if (res.status === 400 && /DOI template/i.test(String(err.message ?? ''))) {
+        logger.error(
+          'subscribeNewsletter: la plantilla configurada no es una plantilla DOI válida en Brevo ' +
+          '(debe estar activa y contener un enlace "Double opt-in link")',
+          { templateId, brevoMessage: err.message }
+        );
+        throw new HttpsError('internal', 'No se pudo dar de alta en el servicio de email.');
       }
       // `message` es clave reservada del logger estructurado de Firebase Functions
       // (la pisa con su propio stack trace), así que el texto de Brevo va aparte.

@@ -559,7 +559,7 @@ async function calcularPrecioInterno(params: {
   nAcomp: number;
   dniTitular?: string;
   cupon?: string;
-}): Promise<{ total: number; esSocio: boolean; esClave: boolean }> {
+}): Promise<{ total: number; esSocio: boolean; esClave: boolean; socioVigente: boolean }> {
   const { eventoId, esCurso, nAcomp, dniTitular, cupon } = params;
   const db = admin.firestore();
   const coleccion = esCurso ? 'cursos' : 'eventos';
@@ -601,7 +601,10 @@ async function calcularPrecioInterno(params: {
   if (esClaveValida && pClave < precioTitular) { precioTitular = pClave; aplicadoClave = true; aplicadoSocio = false; }
 
   const total = esCurso ? precioTitular : precioTitular + (nAcomp * precioBase);
-  return { total, esSocio: aplicadoSocio, esClave: aplicadoClave };
+  // `esSocio` indica si el descuento de socio llegó a aplicarse; `socioVigente`
+  // indica sólo que la membresía está en vigor (el cliente lo necesita para la
+  // apertura anticipada de socios en eventos sin precio de socio).
+  return { total, esSocio: aplicadoSocio, esClave: aplicadoClave, socioVigente: esSocio };
 }
 
 export const calcularPrecioReserva = onCall(
@@ -627,6 +630,52 @@ export const calcularPrecioReserva = onCall(
       dniTitular,
       cupon,
     });
+  }
+);
+
+// ─── comprobarReservaDuplicada ───────────────────────────────────────────────
+// Callable SIN auth: comprueba si ya existe una reserva del mismo titular para
+// el evento antes de guardarla. El cliente anónimo no puede hacer esta consulta
+// directamente (firestore.rules sólo permite `list` de `reservas` a admin/portero
+// o al propio titular autenticado) — de ahí que esto viva server-side con Admin
+// SDK. Precedencia idéntica a la que usaba el cliente: uid > DNI > email.
+// Devuelve sólo un booleano, nunca datos de la reserva ajena (evita enumeración).
+export const comprobarReservaDuplicada = onCall(
+  { region: EU_REGION },
+  async (request) => {
+    const { eventoId, dni, email } = request.data as {
+      eventoId?: string;
+      dni?: string;
+      email?: string;
+    };
+
+    if (typeof eventoId !== 'string' || eventoId.length === 0 || eventoId.length > 128) {
+      throw new HttpsError('invalid-argument', 'eventoId no válido.');
+    }
+
+    const db = admin.firestore();
+    let q = db.collection('reservas').where('eventoId', '==', eventoId);
+
+    const uid = request.auth?.uid;
+    const dniNorm = typeof dni === 'string' ? dni.trim().toUpperCase() : '';
+    // `emailTitular` se guarda tal cual lo escribe el usuario (sin lowercase,
+    // ver ReservaForm.tsx), así que sólo recortamos espacios para no romper
+    // la comparación exacta que ya hacía el cliente.
+    const emailNorm = typeof email === 'string' ? email.trim() : '';
+
+    if (uid) {
+      q = q.where('uidTitular', '==', uid);
+    } else if (dniNorm) {
+      q = q.where('dniTitular', '==', dniNorm);
+    } else if (emailNorm) {
+      q = q.where('emailTitular', '==', emailNorm);
+    } else {
+      // Sin uid, DNI ni email no hay nada que comprobar.
+      return { duplicada: false };
+    }
+
+    const snap = await q.limit(1).get();
+    return { duplicada: !snap.empty };
   }
 );
 

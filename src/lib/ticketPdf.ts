@@ -19,12 +19,10 @@ async function cargarImagenDataUrl(url: string): Promise<string | null> {
     // jsPDF.addImage revienta al intentar decodificar HTML como PNG.
     if (!res.ok || !(res.headers.get('content-type') || '').startsWith('image/')) return null;
     const blob = await res.blob();
-    return await new Promise<string>((resolve, reject) => {
-      const reader = new FileReader();
-      reader.onloadend = () => resolve(reader.result as string);
-      reader.onerror = reject;
-      reader.readAsDataURL(blob);
-    });
+    const bytes = new Uint8Array(await blob.arrayBuffer());
+    let binary = '';
+    for (let i = 0; i < bytes.length; i++) binary += String.fromCharCode(bytes[i]);
+    return `data:${blob.type || 'image/png'};base64,${btoa(binary)}`;
   } catch (e) {
     if (isDev) console.error('[ticketPdf] no se pudo cargar imagen', url, e);
     return null;

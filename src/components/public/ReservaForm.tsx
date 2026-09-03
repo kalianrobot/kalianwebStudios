@@ -456,6 +456,7 @@ const ReservaForm = ({ item, alCerrar }: ReservaFormProps) => {
         fechaActividad: item.fecha || item.fechaFin || '',
         acompanantes: resultado.acompanantes,
         language,
+        notaPago: t('reserva.pdf.footerNote'),
       });
     } catch (err) {
       if (isDev) console.error("Error al generar el PDF del ticket:", err);

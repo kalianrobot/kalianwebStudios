@@ -127,6 +127,7 @@ const eu: Record<string, string> = {
   'reserva.checkEnrollment': 'IZEN-EMATEA KONTSULTATU',
   'reserva.confirmBooking': 'ERRESERBA BERRETSI',
   'reserva.cashPayment': 'Ordainketa eskudirutan egingo da zentroan',
+  'reserva.pdf.footerNote': 'Aurkeztu kode hau sarreran. Ordainketa eskudirutan egingo da sarreran. Laguntzaileren bat bazkidea bada, bere bazkide txartela (QR) ere aurkeztu behar du deskontua aplikatzeko.',
   'reserva.memberDiscountApplied': '✓ DESKONTOA APLIKATUTA (BAZKIDEAK {cat})',
   'reserva.couponDiscountApplied': '✓ KUPOIAREN DESKONTOA APLIKATUTA',
   'reserva.memberDiscountAvail': 'DESKONTOA ESKURAGARRI {cat} BAZKIDEENTZAT',

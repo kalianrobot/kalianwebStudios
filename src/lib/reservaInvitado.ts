@@ -51,7 +51,7 @@ export const editarAcompanantesInvitado = (manageToken: string, nuevoAcompanante
 
 const callCalcularPrecio = httpsCallable<
   { eventoId: string; esCurso: boolean; numAcompañantes: number; dniTitular?: string; cupon?: string },
-  { total: number; esSocio: boolean; esClave: boolean }
+  { total: number; esSocio: boolean; esClave: boolean; socioVigente: boolean }
 >(functions, 'calcularPrecioReserva');
 
 export const calcularPrecioReserva = (params: {
@@ -61,3 +61,20 @@ export const calcularPrecioReserva = (params: {
   dniTitular?: string;
   cupon?: string;
 }) => callCalcularPrecio(params).then(r => r.data);
+
+const callComprobarDuplicada = httpsCallable<
+  { eventoId: string; dni?: string; email?: string },
+  { duplicada: boolean }
+>(functions, 'comprobarReservaDuplicada');
+
+/**
+ * Comprueba server-side si ya existe una reserva para el evento con el mismo
+ * uid/DNI/email. Necesario porque `firestore.rules` no permite a un invitado
+ * anónimo hacer `list` sobre `reservas` (sólo admin/portero/titular autenticado
+ * pueden leerlas), así que esta consulta no se puede hacer desde el cliente.
+ */
+export const comprobarReservaDuplicada = (params: {
+  eventoId: string;
+  dni?: string;
+  email?: string;
+}) => callComprobarDuplicada(params).then(r => r.data);

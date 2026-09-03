@@ -50,8 +50,9 @@ export async function generarTicketPDF(params: {
   fechaActividad?: string;
   acompanantes: number;
   language: 'es' | 'eu';
+  notaPago: string;
 }): Promise<void> {
-  const { ticketID, qrUrl, nombreTitular, eventoTitulo, fechaActividad, acompanantes, language } = params;
+  const { ticketID, qrUrl, nombreTitular, eventoTitulo, fechaActividad, acompanantes, language, notaPago } = params;
 
   const [logoDataUrl, qrDataUrl] = await Promise.all([
     cargarImagenDataUrl('/logo.png'),
@@ -141,10 +142,7 @@ export async function generarTicketPDF(params: {
   doc.setFont('helvetica', 'normal');
   doc.setFontSize(8);
   doc.setTextColor(...GRAY);
-  const nota = doc.splitTextToSize(
-    'Presenta este código en la entrada. El pago de acompañantes (si los hay) se realiza en efectivo.',
-    PAGE_W - MARGIN_X * 2
-  );
+  const nota = doc.splitTextToSize(notaPago, PAGE_W - MARGIN_X * 2);
   doc.text(nota, CENTER_X, y, { align: 'center' });
   y += nota.length * 4 + 6;
 

@@ -127,6 +127,7 @@ const es: Record<string, string> = {
   'reserva.checkEnrollment': 'CONSULTAR INSCRIPCIÓN',
   'reserva.confirmBooking': 'CONFIRMAR RESERVA',
   'reserva.cashPayment': 'El pago se realizará en efectivo en el centro',
+  'reserva.pdf.footerNote': 'Presenta este código en la entrada. El pago se realiza en efectivo en la entrada. Si algún acompañante es socio, debe presentar también su carnet de socio (QR) para aplicar el descuento.',
   'reserva.memberDiscountApplied': '✓ DESCUENTO APLICADO (SOCI@S {cat})',
   'reserva.couponDiscountApplied': '✓ DESCUENTO APLICADO POR CUPÓN',
   'reserva.memberDiscountAvail': 'DESCUENTO DISPONIBLE PARA SOCI@S {cat}',

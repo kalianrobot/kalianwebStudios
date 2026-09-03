@@ -52,6 +52,7 @@ const paramsBase = {
   fechaActividad: '2026-10-15T21:30',
   acompanantes: 2,
   language: 'es' as const,
+  notaPago: 'Presenta este código en la entrada. El pago se realiza en efectivo en la entrada. Si algún acompañante es socio, debe presentar también su carnet de socio (QR) para aplicar el descuento.',
 };
 
 describe('generarTicketPDF', () => {
@@ -141,6 +142,16 @@ describe('generarTicketPDF', () => {
     await generarTicketPDF({ ...paramsBase, language: 'eu' });
 
     expect(mockDoc.text).toHaveBeenCalledWith('15 urria 2026, 21:30', 74, expect.any(Number), { align: 'center' });
+  });
+
+  it('usa el texto de notaPago recibido por parámetro (no un texto hardcodeado)', async () => {
+    global.fetch = vi.fn(async () => respuestaImagen());
+    const notaPersonalizada = 'Nota de prueba en euskera para el pie del ticket.';
+
+    await generarTicketPDF({ ...paramsBase, notaPago: notaPersonalizada });
+
+    expect(mockDoc.splitTextToSize).toHaveBeenCalledWith(notaPersonalizada, expect.any(Number));
+    expect(mockDoc.text).toHaveBeenCalledWith([notaPersonalizada], 74, expect.any(Number), { align: 'center' });
   });
 
   it('no dibuja línea de fecha si no hay fechaActividad', async () => {

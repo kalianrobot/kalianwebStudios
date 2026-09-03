@@ -402,11 +402,13 @@ CSP y cabeceras de seguridad: definidas en `firebase.json` (HSTS, X-Frame DENY, 
   5. Vencido el plazo, **borrar la lista A, no sus contactos**: `DELETE /contacts/{email}` elimina el contacto de toda la cuenta, así que borrar contactos de A eliminaría también a quien ya reconfirmó en B.
 - Efecto esperado tras el paso 3: la primera reconciliación semanal marca `'baja'` con `motivo: 'migracion_sin_consentimiento'` todos los docs `activo` sin `fecha_confirmacion` (los heredados), y los va reactivando a medida que reconfirman. El contador `bajasSinConsentimiento` del log de `reconciliarNewsletterBrevo` da la magnitud.
 - Durante la campaña, evitar borrados de suscriptores desde `/staff/newsletter`: `onNewsletterSubscriberDeleted` borra el contacto de toda la cuenta Brevo, lista B incluida.
+- **Montar en Brevo la automation de bienvenida**: trigger "contacto añadido a la lista" sobre la lista B, espera de 10-15 min y email con enlace a `https://kalian.es/programacion`. Plantilla fija, sin contenido mensual, y bilingüe mientras el contacto no lleve atributo de idioma (ver deuda técnica). Desactivarla antes de cualquier importación CSV a la lista B. Detalle en [DOCUMENTATION.md §2.5](DOCUMENTATION.md).
 - **Purga periódica de Artifact Registry** (cada 2-3 meses): borrar versiones antiguas de las imágenes de Cloud Functions en https://console.cloud.google.com/artifacts?project=kalianhkg-886a6 para no cruzar el tier gratuito (0.5 GB/mes). Firebase no las purga solo; cada deploy del CD deja una imagen nueva de ~100-300 MB. Mantener solo la última versión productiva de cada function. Alternativa futura: cleanup policy en Artifact Registry (keep last N versions).
 
 ### Deuda técnica conocida
 - `brevoWebhook` aún no escucha confirmación DOI (se decidió delegar en la reconciliación). Reconsiderar si latencia semanal molesta.
 - `AdminNewsletter` no tiene filtro explícito por estado `pendiente_confirmacion` (solo badge visual).
+- **El contacto de Brevo no lleva idioma**: `subscribeNewsletter` envía solo `FIRSTNAME` en `attributes`, así que ni las campañas ni la automation de bienvenida pueden segmentar castellano/euskera y los envíos tienen que ir bilingües en un mismo cuerpo. Para resolverlo: propagar `language` de `LanguageContext` desde `NewsletterForm` hasta el `attributes` de `doubleOptinConfirmation`, y crear el atributo equivalente en Brevo (Contacts > Settings > Contact attributes).
 
 ---
 

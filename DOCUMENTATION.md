@@ -87,6 +87,13 @@ El procedimiento operativo paso a paso (crear la lista, cambiar el secreto, envi
 
 **Durante la campaña, no borres suscriptores desde el panel**: el borrado dispara `onNewsletterSubscriberDeleted`, que elimina el contacto de **toda** la cuenta de Brevo, incluida la lista B. Si esa persona ya había reconfirmado, se pierde su consentimiento recién obtenido.
 
+**Email de bienvenida tras confirmar**
+
+Al completar el doble opt-in el contacto entra en la lista B, y una **automation de Brevo** (trigger "contacto añadido a la lista", con espera de 10-15 min para no pisar al email de confirmación) le envía un email de bienvenida con enlace a `https://kalian.es/programacion`, para que vea la programación y pueda reservar. La plantilla es fija y no contiene la newsletter del mes, así que no hay que actualizarla en cada envío. No hay código implicado: vive entera en Brevo.
+
+- **Antes de importar contactos por CSV a la lista B, desactiva la automation.** El trigger dispara con cualquier alta en la lista, no solo con las del formulario, y la bienvenida saldría de golpe a todos los importados.
+- **Pendiente — idioma.** `subscribeNewsletter` solo envía `FIRSTNAME` a Brevo, no el idioma elegido en el formulario, así que la automation no puede distinguir castellano de euskera. Mientras siga así, el email de bienvenida debe ir **bilingüe en un mismo cuerpo**. Separarlos exige añadir un atributo de idioma en el alta (ver [SPEC.md §12](SPEC.md), deuda técnica).
+
 Para el detalle del flujo y estados ver [SPEC.md §5](SPEC.md) (esquema `newsletter_subscribers`).
 
 ---

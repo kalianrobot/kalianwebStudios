@@ -19,7 +19,7 @@ Estas afirmaciones deben ser ciertas en cualquier estado de la base de datos. Si
 3. **Capacidad mínima**: `reservas.numPersonas ≥ 1 && ≤ 20`. (`isValidReserva`.)
 4. **Aforo monotónico (alta pública)**: el alta de reserva solo puede **incrementar** `eventos.{id}.aforo_reservado`, nunca decrementar, en pasos ≤ 20, y nunca por encima de `aforo_maximo`. (`isSafeAforoUpdate`.)
 5. **Newsletter — estado inicial**: el alta pública de `newsletter_subscribers` solo admite `estado: 'pendiente_confirmacion'`. El doc ID es el email, así que la re-alta sobre un doc en `'baja'` o `'pendiente_confirmacion'` se permite (update público con `incoming().email == existing().email`) pero un doc en `'activo'` no puede degradarse desde un contexto anónimo. La promoción a `'activo'` la hacen Cloud Functions o admin. (`isValidNewsletter`.)
-6. **Ownership de reservas**: el lector de una reserva debe ser admin, portero, el `uidTitular`, o coincidir con `emailTitular` en su token. (`match /reservas/{id}` allow read.)
+6. **Ownership de reservas**: el lector de una reserva debe ser admin, portero, el `uidTitular`, o coincidir con `emailTitular` en su token. (`match /reservas/{id}` allow read.) Corolario: un invitado anónimo **no puede** hacer `list`/`query` sobre `reservas` (ni siquiera para comprobar si ya tiene una reserva propia) — cualquier comprobación de duplicados para el flujo público tiene que resolverse server-side con Admin SDK (`comprobarReservaDuplicada`), devolviendo únicamente un booleano para no permitir enumerar reservas ajenas por DNI/email.
 7. **Edición de reserva por owner**: el titular puede modificar **solo** `acompañantes`. Cualquier otro campo requiere admin/portero. (`match /reservas/{id}` allow update.)
 8. **Capability tokens**: gestionar reserva de invitado requiere el `manageToken` (16-64 chars) emitido al hacer la reserva. La verificación ocurre en la Cloud Function `gestionarReservaInvitado`.
 9. **Validación de socio**: el alta de socio (`socios`) exige `uid == request.auth.uid`. (`isValidSocioCreate`.)
@@ -51,6 +51,7 @@ Cada payload es un test conceptual. La columna **Estado** indica si el payload e
 | 10 | `users/{uid}` create | Auto-asignar email de admin en el doc | `PERMISSION_DENIED` para `role`; el master se detecta por `request.auth.token.email`, no por el campo del doc | `isMasterAdmin()` valida contra `request.auth.token.email` | ✅ cubierto |
 | 11 | `reservas` list | `query` sin filtro por UID/email | `PERMISSION_DENIED` para no-admin/portero | allow read por owner/admin/portero; list sin filtro requiere read en cada doc | ✅ cubierto |
 | 12 | `newsletter_subscribers/{id}` create | Alta directa con `estado: 'activo'` | `PERMISSION_DENIED` | `isValidNewsletter` exige `estado == 'pendiente_confirmacion'` si se informa | ✅ cubierto (PR #5) |
+| 13 | `reservas` list (anónimo) | El cliente público intentaba `query` con `where('dniTitular'/'emailTitular', '==', …)` para comprobar duplicados antes de reservar | `PERMISSION_DENIED` (regla #11), y ese error se propagaba a **toda** la reserva pública (bug reportado: cualquier visitante no logueado no podía reservar) | Movido a la Cloud Function `comprobarReservaDuplicada` (Admin SDK, sin auth); el cliente ya no hace `list` sobre `reservas` | ✅ cerrado |
 
 **Leyenda**:
 - ✅ cubierto — la regla actual rechaza el payload.

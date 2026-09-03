@@ -51,6 +51,13 @@ En `finanzas` cada documento tiene `categoria` ∈ `'Socio' | 'Curso' | 'Evento'
 - Las reglas de Firestore solo permiten incrementos acotados (`+20` máximo por update, nunca superando `aforo_maximo`) → ver `firestore.rules → isSafeAforoUpdate()`.
 - El portero (rol `portero`) puede actualizar `aforo_actual` y `aforo_reservado` desde la tablet de puerta.
 
+### 2.4bis Reserva pública (invitado, sin cuenta)
+
+- En un **evento**, el DNI es **opcional**: solo sirve para comprobar si quien reserva es socio y aplicarle el descuento/apertura anticipada correspondiente. Sin DNI, la reserva se completa igual como invitado sin descuento.
+- En un **curso**, el DNI (junto con nombre y email) es obligatorio — el alta al curso implica alta de socio.
+- Si se introduce, el DNI debe tener ≥7 caracteres (lo exige `firestore.rules`); por debajo de eso se avisa en el propio formulario antes de enviar, sin llegar a tocar el servidor.
+- Un invitado anónimo no puede leer la colección `reservas` (solo admin/portero/el propio titular logueado, ver SECURITY_SPEC.md invariante #6), así que la comprobación de "¿ya tengo una reserva para este evento?" y el cálculo del precio con descuento de socio se resuelven mediante Cloud Functions (`comprobarReservaDuplicada`, `calcularPrecioReserva`), no consultando Firestore directamente desde el navegador.
+
 ### 2.5 Newsletter y doble opt-in
 
 - Alta pública con estado intermedio `'pendiente_confirmacion'`. El **doc ID es el email** (deterministic): una segunda alta del mismo email actúa como upsert, no crea duplicado.

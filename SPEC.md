@@ -385,14 +385,15 @@ CSP y cabeceras de seguridad: definidas en `firebase.json` (HSTS, X-Frame DENY, 
 ## 12. Estado actual y roadmap
 
 ### Hecho recientemente
-- Doble opt-in vía `POST /contacts/doubleOptinConfirmation` (no toggle de lista — inviable con formulario fuera de Brevo) + plantilla transaccional DOI (#14, "Plantilla Confirmar subscripcion a Newletter") + landing `/newsletter/estado` polivalente (PR #5).
+- Doble opt-in vía `POST /contacts/doubleOptinConfirmation` (no toggle de lista — inviable con formulario fuera de Brevo) + plantilla transaccional DOI ("Email confirmacion newletter", ID 19 — sustituye a la #14, borrada por error y rehecha en septiembre 2026) + landing `/newsletter/estado` polivalente (PR #5).
 - Reconciliación semanal ampliada: promociones, caducidad, baja por ausencia.
 - Badge "PENDIENTE" en `AdminNewsletter`.
 - Reglas Firestore: estado inicial restringido en alta pública.
 - **Auditoría de seguridad junio 2026** cerrada: Sprint 1 críticos (Brevo API key fuera del bundle, validación de origen en email confirmación, escape HTML, PII enmascarada en logs), Sprint 2 altos (timestamp en webhook, retry en delete-Brevo, `timingSafeEqual` + rate limit en puerta, precio server-side, CSP sin `unsafe-inline`, `isDev` en logs cliente), Sprint 3 medios (`hasOnly` en `isValid*`, regex emails, `isValidPagoMensual`, timeouts en Brevo, `safeJson`), Sprint 4 bajos (`ticketID` con `crypto`, `node-fetch` eliminado, limpieza de reglas). Detalle en [SECURITY_SPEC.md §4](SECURITY_SPEC.md).
 
 ### Pendiente operativo (no código)
-- Fijar el valor del secreto `BREVO_NEWSLETTER_DOI_TEMPLATE_ID` (Firebase Secret Manager) a `14`, el ID de la plantilla DOI ya creada y activa en Brevo.
+- Fijar el valor del secreto `BREVO_NEWSLETTER_DOI_TEMPLATE_ID` (Firebase Secret Manager) a `19`, el ID de la plantilla DOI activa en Brevo, y **redesplegar Functions** (los secretos se enlazan en deploy).
+- **Si la plantilla DOI se rehace, el ID cambia y hay que repetir ese paso**, o el alta pública deja de enviar el email de confirmación sin más señal que un `internal` en el log. Al recrearla: tag `optin` en Advanced settings (sin él el editor no ofrece el enlace de confirmación) y botón con Link → Type → "Double opt-in link", uno por bloque de idioma.
 - Probar el flujo end-to-end en producción: alta → email DOI recibido → clic → `/newsletter/estado?accion=confirmado` → contacto confirmado en Brevo → `reconciliarNewsletterBrevo` promueve a `activo`.
 - **Campaña de reconfirmación RGPD con dos listas** (sustituye al plan anterior de atributo `RECONFIRMADO` sobre lista única, inviable por el `duplicate_parameter` descrito en §3):
   1. Crear en Brevo la lista B vacía ("Newsletter — consentimiento verificado"). La lista A (importada de MailPoet) queda intacta.

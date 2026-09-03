@@ -753,13 +753,14 @@ const ControlAcceso = ({ isPuertaMode = false }: { isPuertaMode?: boolean }) => 
         const slots = Array.isArray(r.slots) ? r.slots : [];
         const precioBase = Number(eventoSeleccionado.precio_estandar) || 0;
 
+        const precioTitular = Number(slots[0]?.precio ?? precioBase);
         const filaTitular = [
           r.nombreTitular || 'N/A',
           r.dniTitular || 'N/A',
           r.esSocio ? 'SOCIO' : 'NO SOCIO',
           String(numAcomp),
           String(totalPax),
-          `${r.montoPagado || 0}€ (${r.estado === 'validado' ? 'PAGADO' : 'PENDIENTE'})`,
+          `${precioTitular}€`,
           r.ticketID || '',
           ''
         ];
@@ -784,7 +785,7 @@ const ControlAcceso = ({ isPuertaMode = false }: { isPuertaMode?: boolean }) => 
 
       autoTable(doc, {
         startY: 60,
-        head: [['Nombre Completo', 'DNI', 'Categoría', 'Acomp.', 'Total Pax', 'Estado Pago', 'Ticket ID', 'Check Manual']],
+        head: [['Nombre Completo', 'DNI', 'Categoría', 'Acomp.', 'Total Pax', 'Importe (efectivo en puerta)', 'Ticket ID', 'Check Manual']],
         body: tableData,
         theme: 'grid',
         headStyles: { fillColor: [0, 0, 0], textColor: [212, 175, 55] },

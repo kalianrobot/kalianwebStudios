@@ -6,6 +6,7 @@ import { useAuth } from '../../context/AuthContext';
 import { useLanguage } from '../../context/LanguageContext';
 import { formatDate } from '../../i18n/dateFormat';
 import { generarManageToken, cancelarReservaInvitado, editarAcompanantesInvitado, sendReservationConfirmation, calcularPrecioReserva, comprobarReservaDuplicada } from '../../lib/reservaInvitado';
+import { generarTicketPDF } from '../../lib/ticketPdf';
 
 const isDev = import.meta.env.DEV;
 
@@ -313,7 +314,7 @@ const ReservaForm = ({ item, alCerrar }: ReservaFormProps) => {
       // 4. GUARDAR RESERVA (TRANSACCIÓN ATÓMICA)
       const tID = Array.from(crypto.getRandomValues(new Uint8Array(4)))
         .map(b => b.toString(36).padStart(2, '0')).join('').toUpperCase().slice(0, 6);
-      const qrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=KALIAN-RES-${tID}`;
+      const qrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=300x300&data=KALIAN-RES-${tID}`;
       // Token de gestión seguro (capability token) para que un invitado pueda
       // editar/cancelar su reserva sin cuenta. Distinto del ticketID visible.
       const manageToken = generarManageToken();
@@ -447,19 +448,18 @@ const ReservaForm = ({ item, alCerrar }: ReservaFormProps) => {
   const descargarTicket = async () => {
     if (!resultado) return;
     try {
-      const response = await fetch(resultado.qrUrl);
-      const blob = await response.blob();
-      const url = window.URL.createObjectURL(blob);
-      const link = document.createElement('a');
-      link.href = url;
-      link.download = `Ticket-Kalian-${resultado.ticketID}.png`;
-      document.body.appendChild(link);
-      link.click();
-      document.body.removeChild(link);
-      window.URL.revokeObjectURL(url);
+      await generarTicketPDF({
+        ticketID: resultado.ticketID,
+        qrUrl: resultado.qrUrl,
+        nombreTitular: resultado.nombre,
+        eventoTitulo: itemTitulo,
+        fechaActividad: item.fecha || item.fechaFin || '',
+        acompanantes: resultado.acompanantes,
+        language,
+      });
     } catch (err) {
-      if (isDev) console.error("Error al descargar:", err);
-      // Fallback simple si falla el fetch (CORS)
+      if (isDev) console.error("Error al generar el PDF del ticket:", err);
+      // Último recurso si jsPDF falla por completo: al menos abrir el QR.
       window.open(resultado.qrUrl, '_blank');
     }
   };

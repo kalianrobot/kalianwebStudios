@@ -1,11 +1,12 @@
 import React, { useState, useEffect } from 'react';
 import { db, auth } from '../../firebase';
-import { collection, query, where, getDocs, doc, getDoc, DocumentData, runTransaction, increment } from 'firebase/firestore';
+import { collection, doc, DocumentData, runTransaction, increment } from 'firebase/firestore';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
 import { useLanguage } from '../../context/LanguageContext';
 import { formatDate } from '../../i18n/dateFormat';
-import { generarManageToken, cancelarReservaInvitado, editarAcompanantesInvitado, sendReservationConfirmation, calcularPrecioReserva } from '../../lib/reservaInvitado';
+import { generarManageToken, cancelarReservaInvitado, editarAcompanantesInvitado, sendReservationConfirmation, calcularPrecioReserva, comprobarReservaDuplicada } from '../../lib/reservaInvitado';
+import { generarTicketPDF } from '../../lib/ticketPdf';
 
 const isDev = import.meta.env.DEV;
 
@@ -30,7 +31,7 @@ const ReservaForm = ({ item, alCerrar }: ReservaFormProps) => {
   const [gestionMsg, setGestionMsg] = useState('');
   const [claveInput, setClaveInput] = useState(cuponUrl.toUpperCase());
   const [claveValida, setClaveValida] = useState(false);
-  const [precioCalculado, setPrecioCalculado] = useState({ total: 0, esSocio: false, esClave: false });
+  const [precioCalculado, setPrecioCalculado] = useState({ total: 0, esSocio: false, esClave: false, socioVigente: false });
   const navigate = useNavigate();
   
   const [mensajeBloqueo, setMensajeBloqueo] = useState('');
@@ -53,9 +54,13 @@ const ReservaForm = ({ item, alCerrar }: ReservaFormProps) => {
 
   // Cálculo de precio en tiempo real
   useEffect(() => {
-    const calcular = async () => {
+    let cancelado = false;
+
+    // Con debounce: si el usuario está escribiendo el DNI no queremos disparar
+    // una llamada a la Cloud Function en cada pulsación.
+    const timer = setTimeout(async () => {
       let socio = false;
-      
+
       // Lógica de Descuentos Cruzados (Arquitecto):
       if (categoriaActividad === 'musica') {
         // Music Is Cool se aplica si tiene musica O local
@@ -67,27 +72,8 @@ const ReservaForm = ({ item, alCerrar }: ReservaFormProps) => {
         // Otros casos (ej. local o ninguno)
         socio = esSocioActivo(categoriaActividad);
       }
-      
-      const dniUpper = form.dni.trim().toUpperCase();
 
-      if (!socio && dniUpper && !esCurso) {
-        try {
-          const snap = await getDoc(doc(db, "socios", dniUpper));
-          if (snap.exists()) {
-            const hoy = new Date().toISOString().split('T')[0];
-            const expData = snap.data().membresias || {};
-            
-            if (categoriaActividad === 'musica') {
-              const expM = expData['musica'] || '';
-              const expL = expData['local'] || '';
-              if (expM >= hoy || expL >= hoy) socio = true;
-            } else {
-              const exp = expData[categoriaActividad] || '';
-              if (exp >= hoy) socio = true;
-            }
-          }
-        } catch (e) { if (isDev) console.error(e); }
-      }
+      const dniUpper = form.dni.trim().toUpperCase();
 
       const esClaveValida = item.cupon && claveInput.trim().toUpperCase() === item.cupon.toUpperCase();
       setClaveValida(!!esClaveValida);
@@ -111,20 +97,40 @@ const ReservaForm = ({ item, alCerrar }: ReservaFormProps) => {
         aplicadoClave = true;
         aplicadoSocio = false; // Priorizamos el mejor precio, si la clave es mejor que el de socio
       }
-      
-      let total = 0;
-      if (esCurso) {
-        total = precioTitular;
-      } else {
-        total = precioTitular + (Number(form.acompañantes) * precioBase);
+
+      let total = esCurso ? precioTitular : precioTitular + (Number(form.acompañantes) * precioBase);
+      let socioVigenteRemoto = false;
+
+      // Si no hay sesión de socio pero se ha escrito un DNI, la comprobación de
+      // membresía sólo puede hacerse server-side: `firestore.rules` no permite
+      // a un visitante anónimo leer `socios`. Reutilizamos `calcularPrecioReserva`
+      // (Admin SDK) para obtener el precio y el estado de socio autoritativos.
+      if (!socio && dniUpper && !esCurso) {
+        try {
+          const r = await calcularPrecioReserva({
+            eventoId: item.id,
+            esCurso,
+            numAcompañantes: Number(form.acompañantes),
+            dniTitular: dniUpper,
+            cupon: esClaveValida ? claveInput : undefined,
+          });
+          total = r.total;
+          aplicadoSocio = r.esSocio;
+          aplicadoClave = r.esClave;
+          socioVigenteRemoto = r.socioVigente;
+        } catch (e) {
+          if (isDev) console.error('calcularPrecioReserva (preview) falló', e);
+        }
       }
-      
-      setPrecioCalculado({ total, esSocio: aplicadoSocio, esClave: aplicadoClave });
+
+      if (cancelado) return;
+
+      setPrecioCalculado({ total, esSocio: aplicadoSocio, esClave: aplicadoClave, socioVigente: socioVigenteRemoto || !!socioData });
 
       // BLOQUEO POR FECHA (Arquitecto)
       if (!esCurso) {
         const ahora = new Date();
-        const esSocio = aplicadoSocio || !!socioData;
+        const esSocio = socioVigenteRemoto || !!socioData;
         const usaCuponApertura = item.cupon && claveInput.trim().toUpperCase() === item.cupon.toUpperCase();
 
         const fechaSocio = item.apertura_socios ? new Date(item.apertura_socios) : null;
@@ -150,9 +156,10 @@ const ReservaForm = ({ item, alCerrar }: ReservaFormProps) => {
           }
         }
       }
-    };
-    calcular();
-  }, [form.dni, form.acompañantes, claveInput, socioData, esCurso, categoriaActividad, precioBase, item.tiene_descuento, item.precio_descuento, item.cupon, item.precioCupon, item.fechaCupon, item.apertura_general]);
+    }, 400);
+
+    return () => { cancelado = true; clearTimeout(timer); };
+  }, [form.dni, form.acompañantes, claveInput, socioData, esCurso, categoriaActividad, precioBase, item.id, item.tiene_descuento, item.precio_descuento, item.cupon, item.precioCupon, item.fechaCupon, item.apertura_general]);
 
   const handleFirestoreError = (error: unknown, operationType: string, path: string | null) => {
     const errInfo = {
@@ -195,7 +202,7 @@ const ReservaForm = ({ item, alCerrar }: ReservaFormProps) => {
       // VALIDACIÓN DE FECHA DE APERTURA ESCALONADA (Arquitecto)
       if (!esCurso) {
         const ahora = new Date();
-        const esSocio = precioCalculado.esSocio || !!socioData;
+        const esSocio = precioCalculado.socioVigente || !!socioData;
         const usaCuponApertura = item.cupon && claveInput.trim().toUpperCase() === item.cupon.toUpperCase();
         
         const fechaSocio = item.apertura_socios ? new Date(item.apertura_socios) : null;
@@ -240,22 +247,25 @@ const ReservaForm = ({ item, alCerrar }: ReservaFormProps) => {
       }
 
       // 1b. VALIDACIÓN DE UNICIDAD (siempre: uid > DNI > email)
+      // `firestore.rules` no permite a un invitado anónimo hacer `list` sobre
+      // `reservas` (sólo admin/portero/titular autenticado pueden leerlas), así
+      // que esta comprobación se hace server-side. Es de cortesía, no la única
+      // barrera: si falla (red, cold start) dejamos seguir la reserva en vez de
+      // bloquear a todo el mundo por un problema de disponibilidad del check.
       {
-        let snapDuplicado;
         try {
-          const q = user
-            ? query(collection(db, "reservas"), where("eventoId", "==", item.id), where("uidTitular", "==", user.uid))
-            : dniUpper
-              ? query(collection(db, "reservas"), where("eventoId", "==", item.id), where("dniTitular", "==", dniUpper))
-              : query(collection(db, "reservas"), where("eventoId", "==", item.id), where("emailTitular", "==", form.email.trim()));
-          snapDuplicado = await getDocs(q);
+          const { duplicada } = await comprobarReservaDuplicada({
+            eventoId: item.id,
+            dni: dniUpper || undefined,
+            email: form.email.trim(),
+          });
+          if (duplicada) {
+            setMensaje(t('reserva.alreadyBooked'));
+            setCargando(false);
+            return;
+          }
         } catch (err) {
-          throw handleFirestoreError(err, 'list', 'reservas');
-        }
-        if (!snapDuplicado.empty) {
-          setMensaje(t('reserva.alreadyBooked'));
-          setCargando(false);
-          return;
+          if (isDev) console.error('comprobarReservaDuplicada falló, se continúa con la reserva', err);
         }
       }
 
@@ -304,7 +314,7 @@ const ReservaForm = ({ item, alCerrar }: ReservaFormProps) => {
       // 4. GUARDAR RESERVA (TRANSACCIÓN ATÓMICA)
       const tID = Array.from(crypto.getRandomValues(new Uint8Array(4)))
         .map(b => b.toString(36).padStart(2, '0')).join('').toUpperCase().slice(0, 6);
-      const qrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=KALIAN-RES-${tID}`;
+      const qrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=300x300&data=KALIAN-RES-${tID}`;
       // Token de gestión seguro (capability token) para que un invitado pueda
       // editar/cancelar su reserva sin cuenta. Distinto del ticketID visible.
       const manageToken = generarManageToken();
@@ -438,19 +448,19 @@ const ReservaForm = ({ item, alCerrar }: ReservaFormProps) => {
   const descargarTicket = async () => {
     if (!resultado) return;
     try {
-      const response = await fetch(resultado.qrUrl);
-      const blob = await response.blob();
-      const url = window.URL.createObjectURL(blob);
-      const link = document.createElement('a');
-      link.href = url;
-      link.download = `Ticket-Kalian-${resultado.ticketID}.png`;
-      document.body.appendChild(link);
-      link.click();
-      document.body.removeChild(link);
-      window.URL.revokeObjectURL(url);
+      await generarTicketPDF({
+        ticketID: resultado.ticketID,
+        qrUrl: resultado.qrUrl,
+        nombreTitular: resultado.nombre,
+        eventoTitulo: itemTitulo,
+        fechaActividad: item.fecha || item.fechaFin || '',
+        acompanantes: resultado.acompanantes,
+        language,
+        notaPago: t('reserva.pdf.footerNote'),
+      });
     } catch (err) {
-      if (isDev) console.error("Error al descargar:", err);
-      // Fallback simple si falla el fetch (CORS)
+      if (isDev) console.error("Error al generar el PDF del ticket:", err);
+      // Último recurso si jsPDF falla por completo: al menos abrir el QR.
       window.open(resultado.qrUrl, '_blank');
     }
   };

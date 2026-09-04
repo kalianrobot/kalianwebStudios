@@ -175,6 +175,23 @@ service cloud.firestore {
           && data.nombre is string && data.nombre.size() > 0 && data.nombre.size() <= 200
           && data.email is string && data.email.size() <= 100;
     }
+    // Sprint 5 (P0): el socio autenticado puede autoactualizar SU propio doc,
+    // restringido a los campos que la app le exige mantener (backfill de uid
+    // en primer login, refresco de vigencias, sincronización de estado).
+    // El doc se identifica como suyo por uid coincidente O por email (el
+    // backfill inicial ocurre precisamente cuando el uid del doc aún no
+    // coincide).
+    function isOwnSocioSelfUpdate(oldData, newData) {
+      return (
+              oldData.uid == request.auth.uid
+              || oldData.get('email', '').lower() == request.auth.token.get('email', '').lower()
+            )
+          && newData.diff(oldData).affectedKeys().hasOnly(['uid', 'membresias', 'estado'])
+          && (!newData.diff(oldData).affectedKeys().hasAny(['uid'])
+                || newData.uid == request.auth.uid)
+          && (!newData.diff(oldData).affectedKeys().hasAny(['estado'])
+                || newData.estado in ['activo', 'inactivo']);
+    }
     match /socios/{id} {
       // Allow querying by uid OR email (PerfilSocio uses both as fallback).
       // Sprint 3: comparación de email en minúsculas, consistente con reservas.
@@ -185,7 +202,9 @@ service cloud.firestore {
         isTeacher()
       );
       allow create: if isAdmin() || (isSignedIn() && isValidSocioCreate(incoming()));
-      allow update, delete: if isAdmin();
+      allow update: if isAdmin()
+                    || (isSignedIn() && isOwnSocioSelfUpdate(existing(), incoming()));
+      allow delete: if isAdmin();
     }
 
     // --- OTROS PÚBLICOS ---
@@ -216,7 +235,7 @@ service cloud.firestore {
       return data.keys().hasOnly([
               'nombre', 'email', 'mensaje', 'telefono', 'dni',
               'cursoId', 'cursoTitulo', 'categoria', 'subcategoria',
-              'modalidad', 'tipo', 'fechaSolicitud', 'estado'
+              'modalidad', 'tipo', 'fechaSolicitud', 'estado', 'aceptoTerminos'
           ])
           && data.keys().hasAll(['nombre', 'email'])
           && data.nombre is string && data.nombre.size() > 0 && data.nombre.size() <= 200
@@ -226,7 +245,8 @@ service cloud.firestore {
           && (!data.keys().hasAny(['dni']) || (data.dni is string && data.dni.size() <= 20))
           && (!data.keys().hasAny(['cursoId']) || (data.cursoId is string && data.cursoId.size() <= 128))
           && (!data.keys().hasAny(['cursoTitulo']) || (data.cursoTitulo is string && data.cursoTitulo.size() <= 200))
-          && (!data.keys().hasAny(['estado']) || data.estado == 'pendiente');
+          && (!data.keys().hasAny(['estado']) || data.estado == 'pendiente')
+          && (!data.keys().hasAny(['aceptoTerminos']) || data.aceptoTerminos is bool);
     }
     match /solicitudes_cursos/{id} {
       allow create: if isValidSolicitud(incoming());
@@ -271,6 +291,10 @@ service cloud.firestore {
           && (!data.keys().hasAny(['bloqueado']) || data.bloqueado is bool)
           && (!data.keys().hasAny(['monto']) || data.monto is number);
     }
+    // Sprint 5 (P0): contador de bytes de storage que TeacherDashboard
+    // actualiza tras subir/borrar documentos de curso. Sin esta regla caía
+    // en el safety net (solo master admin) y el contador nunca se refrescaba.
+    match /metadata/{id}              { allow read: if isSignedIn(); allow write: if isAdmin() || isTeacher(); }
     match /finanzas/{id}              { allow read: if isAdmin(); allow write: if isAdmin() || isPortero(); }
     match /pagos_mensuales/{id} {
       allow read: if isAdmin() || isSignedIn();

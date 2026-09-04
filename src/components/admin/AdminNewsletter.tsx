@@ -4,6 +4,21 @@ import { collection, getDocs, query, orderBy, doc, deleteDoc, DocumentData } fro
 import { Link } from 'react-router-dom';
 import { Trash2, Download, Mail } from 'lucide-react';
 
+// Etiquetas cortas para el badge de baja: el valor crudo de `motivo` que
+// escriben las Cloud Functions es legible en un log, no en una píldora de 9px.
+// Cualquier motivo no listado cae al valor crudo (el `title` siempre lo muestra).
+const MOTIVO_LABEL: Record<string, string> = {
+  unsubscribed: 'baja voluntaria',
+  spam: 'spam',
+  hardbounce: 'rebote',
+  hard_bounce: 'rebote',
+  blocked: 'bloqueado',
+  reconciliacion: 'ausente en Brevo',
+  bounce_o_baja: 'rebote/baja previa',
+  no_confirmado: 'sin confirmar',
+  migracion_sin_consentimiento: 'sin consentimiento',
+};
+
 const AdminNewsletter = () => {
   const [subs, setSubs] = useState<DocumentData[]>([]);
   const [loading, setLoading] = useState(true);
@@ -132,7 +147,7 @@ const AdminNewsletter = () => {
                     <p className="text-lg kalian-poster-text text-kalian-cream group-hover:text-kalian-gold transition-colors">{s.nombre || 'Sin nombre'}</p>
                     {esBaja && (
                       <span className="px-2 py-0.5 bg-red-500/20 text-red-400 border border-red-500/30 rounded text-[9px] font-black uppercase tracking-widest" title={s.motivo || 'baja'}>
-                        BAJA{s.motivo ? ` · ${s.motivo}` : ''}
+                        BAJA{s.motivo ? ` · ${MOTIVO_LABEL[s.motivo] || s.motivo}` : ''}
                       </span>
                     )}
                     {esPendiente && (

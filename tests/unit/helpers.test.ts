@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from 'vitest';
-import { escapeHtml, maskEmail, withRetry, safeJson } from '../../functions/src/helpers';
+import { escapeHtml, maskEmail, withRetry, safeJson, formatFechaLarga } from '../../functions/src/helpers';
 
 describe('escapeHtml', () => {
   it('escapa las cinco entidades HTML peligrosas', () => {
@@ -125,5 +125,22 @@ describe('safeJson', () => {
       text: async () => '{"x":1}',
     } as unknown as Response;
     expect(await safeJson(res)).toEqual({});
+  });
+});
+
+describe('formatFechaLarga', () => {
+  it('formatea una fecha ISO corta en castellano', () => {
+    expect(formatFechaLarga('2026-06-04')).toBe('4 de junio de 2026');
+  });
+
+  it('añade la hora cuando viene en formato datetime-local', () => {
+    expect(formatFechaLarga('2026-06-04T22:00')).toBe('4 de junio de 2026 · 22:00h');
+  });
+
+  it('devuelve cadena vacía con formatos no soportados', () => {
+    expect(formatFechaLarga('04/06/2026')).toBe('');
+    expect(formatFechaLarga('')).toBe('');
+    expect(formatFechaLarga(undefined)).toBe('');
+    expect(formatFechaLarga('2026-13-04')).toBe('');
   });
 });

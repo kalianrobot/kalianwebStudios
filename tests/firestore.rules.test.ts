@@ -5,7 +5,7 @@ import {
   RulesTestEnvironment,
 } from '@firebase/rules-unit-testing';
 import { readFileSync } from 'fs';
-import { doc, getDoc, setDoc, updateDoc, deleteDoc, collection, addDoc } from 'firebase/firestore';
+import { doc, getDoc, getDocs, setDoc, updateDoc, deleteDoc, collection, addDoc, query, where } from 'firebase/firestore';
 import { describe, it, beforeAll, afterAll, afterEach, expect } from 'vitest';
 
 const PROJECT_ID = 'demo-kalian';
@@ -219,6 +219,27 @@ describe('reservas', () => {
       });
     });
     await assertSucceeds(deleteDoc(doc(db(adminCtx()), 'reservas', 'res-admin-del')));
+  });
+
+  // Regresión: un visitante anónimo NO puede comprobar duplicados leyendo
+  // `reservas` directamente (el bug reportado — la app intentaba hacer esto
+  // en el cliente y fallaba con permission-denied para cualquier invitado).
+  // Por eso la comprobación de unicidad se hizo server-side (Cloud Function
+  // `comprobarReservaDuplicada`, con Admin SDK) en vez de arreglarse aquí.
+  it('anónimo NO puede listar reservas para comprobar duplicados', async () => {
+    await assertFails(getDocs(query(
+      collection(db(anonCtx()), 'reservas'),
+      where('eventoId', '==', 'evt-1'),
+      where('emailTitular', '==', 'jose@test.es'),
+    )));
+  });
+
+  it('anónimo puede crear reserva sin DNI (es opcional en eventos)', async () => {
+    await assertSucceeds(addDoc(collection(db(anonCtx()), 'reservas'), {
+      ...reservaValida,
+      uidTitular: 'invitado',
+      dniTitular: '',
+    }));
   });
 });
 

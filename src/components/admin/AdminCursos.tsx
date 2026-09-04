@@ -955,7 +955,7 @@ const AdminCursos = () => {
 
     const dniUpper = normalizeDni(dni);
     if (!isValidDni(dniUpper)) {
-      alert(`❌ DNI/NIE no válido: "${dniUpper}"\nFormato: 8 dígitos + letra (ej: 12345678A) o NIE (ej: X1234567A)`);
+      alert(`❌ DNI/NIE no válido: "${dniUpper}"\nLa letra se calcula a partir de los números, no es libre. Formato: 8 dígitos + letra (ej: 12345678Z) o NIE (ej: X1234567L)`);
       return;
     }
 

@@ -221,7 +221,7 @@ const AdminLocales = () => {
         const raw = normalizeDni(inq.dni || '');
         if (!raw) continue; // permite filas en blanco que el usuario aún no rellenó
         if (!isValidDni(raw)) {
-          alert(`❌ DNI/NIE no válido en la fila ${i + 1}: "${inq.dni}"\nFormato: 8 dígitos + letra (ej: 12345678A) o NIE (ej: X1234567A).\n\nCorrígelo antes de guardar.`);
+          alert(`❌ DNI/NIE no válido en la fila ${i + 1}: "${inq.dni}"\nLa letra se calcula a partir de los números, no es libre. Formato: 8 dígitos + letra (ej: 12345678Z) o NIE (ej: X1234567L).\n\nCorrígelo antes de guardar.`);
           return;
         }
         // Normalizar a la versión limpia (trim + upper) para que doc-id y dni queden coherentes

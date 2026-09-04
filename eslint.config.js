@@ -32,6 +32,18 @@ export default tseslint.config(
       // Catch common bugs
       'no-console': ['warn', { allow: ['warn', 'error'] }],
       'eqeqeq': ['error', 'always'],
+
+      // Los emails de auth por defecto de Firebase salen desde firebaseapp.com
+      // (mala reputación, van a spam) y Google los va a deprecar. Todos los
+      // envíos de auth pasan por Cloud Function → Brevo → info@kalian.es
+      // (ver `requestPasswordReset` en `functions/src/index.ts`).
+      'no-restricted-imports': ['error', {
+        paths: [{
+          name: 'firebase/auth',
+          importNames: ['sendPasswordResetEmail', 'sendEmailVerification', 'sendSignInLinkToEmail'],
+          message: 'No uses el envío de emails por defecto de Firebase Auth (van desde firebaseapp.com, spam). Usa la Cloud Function callable `requestPasswordReset` (Brevo). Para verificación de email, añade una Cloud Function análoga con `generateEmailVerificationLink`.',
+        }],
+      }],
     },
   }
 );

@@ -4,6 +4,7 @@ import { collection, query, where, getDocs, doc, updateDoc, DocumentData, getDoc
 import { useNavigate } from 'react-router-dom';
 import { QRCodeSVG } from 'qrcode.react';
 import { useLanguage } from '../../context/LanguageContext';
+import { enviarCarnetDigital } from '../../lib/brevoService';
 
 const PerfilSocio = () => {
   const { t, tField } = useLanguage();
@@ -46,6 +47,15 @@ const PerfilSocio = () => {
 
         if (sData) {
           setUsuario(sData);
+
+          // Primer acceso del socio: la function manda el carnet digital una
+          // sola vez (marca `carnetEnviadoAt`) y marca la cuenta como activada.
+          // No bloquea el render del perfil ni importa si falla.
+          if (!sData.carnetEnviadoAt) {
+            enviarCarnetDigital().catch(e =>
+              console.warn("No se pudo enviar el carnet digital:", e)
+            );
+          }
           
           // Cargar pago mensual (opcional — no aborta el perfil si falla)
           try {

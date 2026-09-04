@@ -5,6 +5,7 @@ import { Link, useSearchParams } from 'react-router-dom';
 import { Trash2 } from 'lucide-react';
 import { syncMultipleSocios, syncSocioStatus } from '../../lib/socioService';
 import { normalizeToSlug } from '../../lib/slug';
+import { normalizeDni, isValidDni } from '../../lib/dni';
 import { registrarIngreso, MetodoPago } from '../../lib/finanzas';
 
 import { createSocioAuth } from '../../lib/adminAuth';
@@ -632,14 +633,14 @@ const AdminCursos = () => {
         return;
       }
 
-      const acaRef = doc(db, "academias", form.categoria);
+      const acaRef = doc(db, "academias", academia.id);
       await updateDoc(acaRef, {
         subcategorias: arrayUnion(val)
       });
-      
+
       // Update local state
-      setAcademias(prev => prev.map(a => 
-        a.id === form.categoria 
+      setAcademias(prev => prev.map(a =>
+        a.id === academia.id
         ? { ...a, subcategorias: [...(a.subcategorias || []), val] }
         : a
       ));
@@ -952,10 +953,9 @@ const AdminCursos = () => {
       return;
     }
 
-    const dniUpper = dni.toUpperCase();
-    const dniRe = /^[0-9XYZ][0-9]{7}[A-Z]$/;
-    if (!dniRe.test(dniUpper)) {
-      alert(`❌ DNI/NIE no válido: "${dniUpper}"\nFormato: 8 dígitos + letra (ej: 12345678A) o NIE (ej: X1234567A)`);
+    const dniUpper = normalizeDni(dni);
+    if (!isValidDni(dniUpper)) {
+      alert(`❌ DNI/NIE no válido: "${dniUpper}"\nLa letra se calcula a partir de los números, no es libre. Formato: 8 dígitos + letra (ej: 12345678Z) o NIE (ej: X1234567L)`);
       return;
     }
 
@@ -975,7 +975,7 @@ const AdminCursos = () => {
             // Send welcome email via Brevo
             // Note: Since we can't get the link string from client SDK, we inform the user
             // that they will receive a separate email from Firebase for activation.
-            await sendWelcomeEmail(email, nombre || "Soci@s Kalian", "https://kalian.es/login"); 
+            await sendWelcomeEmail(email, nombre || "Soci@s Kalian"); 
             // We use the login link as a fallback, explaining in the email that they need to check their inbox for the activation link.
           } catch (err) {
             console.error("Error creating auth user or sending email:", err);

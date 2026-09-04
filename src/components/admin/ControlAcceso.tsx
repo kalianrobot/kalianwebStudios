@@ -1,12 +1,13 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { db, auth as firebaseAuth } from '../../firebase';
 import { signOut } from 'firebase/auth';
-import { collection, query, where, getDocs, doc, updateDoc, increment, onSnapshot, getDoc, addDoc, setDoc, serverTimestamp, runTransaction } from 'firebase/firestore';
+import { collection, query, where, getDocs, doc, updateDoc, increment, onSnapshot, getDoc, addDoc, setDoc, serverTimestamp, runTransaction, orderBy } from 'firebase/firestore';
 import { useAuth } from '../../context/AuthContext';
 import { useNavigate } from 'react-router-dom';
 import { Html5Qrcode } from 'html5-qrcode';
 import { Camera, X, Users, Ticket, UserPlus, LogOut, CreditCard, Banknote, Landmark, Calculator, FileDown } from 'lucide-react';
 import { registrarIngreso, MetodoPago } from '../../lib/finanzas';
+import { normalizeDni } from '../../lib/dni';
 import { jsPDF } from 'jspdf';
 import autoTable from 'jspdf-autotable';
 
@@ -15,6 +16,14 @@ const ControlAcceso = ({ isPuertaMode = false }: { isPuertaMode?: boolean }) => 
   const navigate = useNavigate();
   
   const [eventos, setEventos] = useState<any[]>([]);
+  // Eventos añadidos a mano desde el buscador (fuera de la ventana hoy/en curso).
+  // Solo viven en memoria: no se escribe nada en Firestore, así que no hace
+  // falta "deshacer" nada — desaparecen solos al recargar o cerrar sesión.
+  const [eventosManual, setEventosManual] = useState<any[]>([]);
+  const [buscadorEventoAbierto, setBuscadorEventoAbierto] = useState(false);
+  const [busquedaEventoTexto, setBusquedaEventoTexto] = useState('');
+  const [todosEventosCache, setTodosEventosCache] = useState<any[] | null>(null);
+  const [cargandoBuscadorEventos, setCargandoBuscadorEventos] = useState(false);
   const [eventoSeleccionado, setEventoSeleccionado] = useState<any>(null);
   const [busqueda, setBusqueda] = useState('');
   const [reservaEncontrada, setReservaEncontrada] = useState<any>(null);
@@ -213,7 +222,7 @@ const ControlAcceso = ({ isPuertaMode = false }: { isPuertaMode?: boolean }) => 
         const snapTicket = await getDocs(qTicket);
         if (!snapTicket.empty) {
           const encontrada = { id: snapTicket.docs[0].id, ...snapTicket.docs[0].data() } as any;
-          const eventoDeReserva = eventos.find(e => e.id === encontrada.eventoId);
+          const eventoDeReserva = eventosVisibles.find(e => e.id === encontrada.eventoId);
           if (!eventoDeReserva) {
             setMsg(`❌ Esta reserva es para "${encontrada.eventoTitulo}" el ${encontrada.fechaActividad}, no para hoy.`);
             setCargando(false);
@@ -360,7 +369,7 @@ const ControlAcceso = ({ isPuertaMode = false }: { isPuertaMode?: boolean }) => 
   // identifier puede ser DNI (doc id de socios) o UID (campo `uid`).
   const verificarSlotComoSocio = async (slotIdx: number, identifier: string) => {
     if (!reservaEncontrada || !eventoSeleccionado) return;
-    const term = identifier.trim().toUpperCase();
+    const term = normalizeDni(identifier);
     if (!term) return;
 
     setCargando(true);
@@ -531,7 +540,7 @@ const ControlAcceso = ({ isPuertaMode = false }: { isPuertaMode?: boolean }) => 
 
   const verificarWalkInSocio = async (identifier: string) => {
     if (!eventoSeleccionado) return;
-    const term = identifier.trim().toUpperCase();
+    const term = normalizeDni(identifier);
     if (!term) return;
 
     setCargando(true);
@@ -642,6 +651,37 @@ const ControlAcceso = ({ isPuertaMode = false }: { isPuertaMode?: boolean }) => 
     window.location.reload();
   };
 
+  // Buscador de "otro evento" (pruebas, eventos multi-día, adelantar preparación):
+  // trae TODOS los eventos una vez y filtra en memoria, sin tocar la fecha real
+  // del evento ni la ventana automática de hoy/en curso.
+  const abrirBuscadorEventos = async () => {
+    setBuscadorEventoAbierto(true);
+    if (todosEventosCache) return;
+    setCargandoBuscadorEventos(true);
+    try {
+      const snap = await getDocs(query(collection(db, "eventos"), orderBy("fecha", "desc")));
+      setTodosEventosCache(snap.docs.map(d => ({ id: d.id, ...(d.data() as any) })));
+    } catch (e) {
+      console.error(e);
+      setMsg("❌ No se pudo cargar la lista de eventos.");
+    }
+    setCargandoBuscadorEventos(false);
+  };
+
+  const seleccionarEventoManual = (ev: any) => {
+    setEventosManual(prev => (prev.some(e => e.id === ev.id) ? prev : [...prev, ev]));
+    setEventoSeleccionado(ev);
+    setBuscadorEventoAbierto(false);
+    setBusquedaEventoTexto('');
+  };
+
+  const resultadosBuscadorEventos = (todosEventosCache || []).filter(ev => {
+    const t = busquedaEventoTexto.trim().toLowerCase();
+    return !t || (ev.titulo || '').toLowerCase().includes(t);
+  }).slice(0, 15);
+
+  const eventosVisibles = [...eventos, ...eventosManual.filter(em => !eventos.some(e => e.id === em.id))];
+
   const verResumenHoy = async () => {
     setCargando(true);
     try {
@@ -714,13 +754,14 @@ const ControlAcceso = ({ isPuertaMode = false }: { isPuertaMode?: boolean }) => 
         const slots = Array.isArray(r.slots) ? r.slots : [];
         const precioBase = Number(eventoSeleccionado.precio_estandar) || 0;
 
+        const precioTitular = Number(slots[0]?.precio ?? precioBase);
         const filaTitular = [
           r.nombreTitular || 'N/A',
           r.dniTitular || 'N/A',
           r.esSocio ? 'SOCIO' : 'NO SOCIO',
           String(numAcomp),
           String(totalPax),
-          `${r.montoPagado || 0}€ (${r.estado === 'validado' ? 'PAGADO' : 'PENDIENTE'})`,
+          `${precioTitular}€`,
           r.ticketID || '',
           ''
         ];
@@ -745,7 +786,7 @@ const ControlAcceso = ({ isPuertaMode = false }: { isPuertaMode?: boolean }) => 
 
       autoTable(doc, {
         startY: 60,
-        head: [['Nombre Completo', 'DNI', 'Categoría', 'Acomp.', 'Total Pax', 'Estado Pago', 'Ticket ID', 'Check Manual']],
+        head: [['Nombre Completo', 'DNI', 'Categoría', 'Acomp.', 'Total Pax', 'Importe (efectivo en puerta)', 'Ticket ID', 'Check Manual']],
         body: tableData,
         theme: 'grid',
         headStyles: { fillColor: [0, 0, 0], textColor: [212, 175, 55] },
@@ -810,17 +851,69 @@ const ControlAcceso = ({ isPuertaMode = false }: { isPuertaMode?: boolean }) => 
         {/* SELECCIÓN DE EVENTO */}
         <section className="bg-black/40 border border-kalian-gold/20 rounded-[2rem] p-6 mb-8">
           <label className="block text-[10px] font-black uppercase tracking-widest text-kalian-gold/60 mb-4">Seleccionar Evento Activo</label>
-          <div className="flex flex-wrap gap-3">
-            {eventos.map(ev => (
-              <button
-                key={ev.id}
-                onClick={() => setEventoSeleccionado(ev)}
-                className={`px-5 py-3 rounded-xl kalian-poster-text text-lg transition-all border ${eventoSeleccionado?.id === ev.id ? 'bg-kalian-gold text-black border-kalian-gold shadow-2xl shadow-kalian-gold/20' : 'bg-white/5 text-kalian-cream border-white/10 hover:border-kalian-gold/40'}`}
-              >
-                {ev.titulo}
-              </button>
-            ))}
+          <div className="flex flex-wrap gap-3 items-center">
+            {eventosVisibles.map(ev => {
+              const esManual = !eventos.some(e => e.id === ev.id);
+              return (
+                <button
+                  key={ev.id}
+                  onClick={() => setEventoSeleccionado(ev)}
+                  className={`px-5 py-3 rounded-xl kalian-poster-text text-lg transition-all border flex items-center gap-2 ${eventoSeleccionado?.id === ev.id ? 'bg-kalian-gold text-black border-kalian-gold shadow-2xl shadow-kalian-gold/20' : 'bg-white/5 text-kalian-cream border-white/10 hover:border-kalian-gold/40'}`}
+                >
+                  {ev.titulo}
+                  {esManual && (
+                    <span className="text-[9px] font-sans font-black uppercase tracking-widest opacity-60">· vista previa</span>
+                  )}
+                </button>
+              );
+            })}
+            <button
+              onClick={abrirBuscadorEventos}
+              className="px-5 py-3 rounded-xl text-[10px] font-black uppercase tracking-widest border border-dashed border-kalian-gold/30 text-kalian-gold/60 hover:text-kalian-gold hover:border-kalian-gold transition-all"
+            >
+              + Buscar otro evento
+            </button>
           </div>
+
+          {buscadorEventoAbierto && (
+            <div className="mt-4 bg-black/40 border border-kalian-gold/10 rounded-2xl p-4">
+              <input
+                type="text"
+                autoFocus
+                value={busquedaEventoTexto}
+                onChange={e => setBusquedaEventoTexto(e.target.value)}
+                placeholder="Escribe el nombre del evento…"
+                className="w-full p-3 bg-white/5 rounded-xl border border-white/10 text-sm text-kalian-cream outline-none focus:border-kalian-gold transition-all mb-3"
+              />
+              <p className="text-[9px] font-bold uppercase tracking-widest text-kalian-gold/40 mb-3">
+                Solo para tener el evento a mano en esta pantalla — los check-ins que hagas siguen siendo reales (aforo y asistencia de verdad).
+              </p>
+              {cargandoBuscadorEventos ? (
+                <p className="text-xs text-kalian-cream/50">Cargando eventos…</p>
+              ) : (
+                <div className="flex flex-col gap-1 max-h-64 overflow-y-auto">
+                  {resultadosBuscadorEventos.length === 0 ? (
+                    <p className="text-xs text-kalian-cream/50">Sin resultados.</p>
+                  ) : resultadosBuscadorEventos.map(ev => (
+                    <button
+                      key={ev.id}
+                      onClick={() => seleccionarEventoManual(ev)}
+                      className="text-left px-4 py-2 rounded-xl hover:bg-kalian-gold/10 transition-all flex justify-between items-center gap-4"
+                    >
+                      <span className="text-sm font-bold text-kalian-cream">{ev.titulo}</span>
+                      <span className="text-[10px] text-kalian-gold/50 font-black uppercase shrink-0">{(ev.fecha || '').replace('T', ' ')}</span>
+                    </button>
+                  ))}
+                </div>
+              )}
+              <button
+                onClick={() => { setBuscadorEventoAbierto(false); setBusquedaEventoTexto(''); }}
+                className="mt-3 text-[10px] font-black uppercase tracking-widest text-kalian-cream/40 hover:text-kalian-cream transition-all"
+              >
+                Cerrar
+              </button>
+            </div>
+          )}
         </section>
 
         {eventoSeleccionado ? (

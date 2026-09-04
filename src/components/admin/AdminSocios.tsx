@@ -9,6 +9,7 @@ import { updateDoc, increment } from 'firebase/firestore';
 import { registrarIngreso, MetodoPago } from '../../lib/finanzas';
 import { fetchConfig } from '../../lib/configService';
 import { syncSocioStatus } from '../../lib/socioService';
+import { normalizeDni } from '../../lib/dni';
 
 import { motion, AnimatePresence } from 'motion/react';
 
@@ -253,7 +254,7 @@ const AdminSocios = () => {
     setLoading(true);
     try {
       const emailClean = form.email.trim().toLowerCase();
-      const dniUpper = form.dni.toUpperCase();
+      const dniUpper = normalizeDni(form.dni);
       const socioRef = doc(db, "socios", dniUpper);
       const socioSnap = await getDoc(socioRef);
 
@@ -270,7 +271,7 @@ const AdminSocios = () => {
         if (authResult.uid) realUid = authResult.uid;
         
         // Send welcome email via Brevo
-        await sendWelcomeEmail(emailClean, form.nombre || "Socio Kalian", "https://kalian.es/login");
+        await sendWelcomeEmail(emailClean, form.nombre || "Socio Kalian");
       } catch (err) {
         console.error("Error creating auth user or sending email:", err);
       }

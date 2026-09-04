@@ -4,6 +4,7 @@ import { collection, query, where, getDocs, doc, updateDoc, DocumentData, getDoc
 import { Link } from 'react-router-dom';
 import { Html5Qrcode } from 'html5-qrcode';
 import { Camera, X } from 'lucide-react';
+import { normalizeDni } from '../../lib/dni';
 
 const AdminCheckIn = () => {
   const [eventos, setEventos] = useState<DocumentData[]>([]);
@@ -96,10 +97,15 @@ const AdminCheckIn = () => {
     setSocioEncontrado(null);
 
     const term = busqueda.trim().toUpperCase();
+    // El QR del ticket codifica "KALIAN-RES-XXXXXX" (ver ReservaForm.tsx), no
+    // sólo el ticketID; si viene con ese prefijo hay que extraerlo antes de
+    // buscar (mismo patrón que ControlAcceso.tsx).
+    const ticketMatch = term.match(/^KALIAN-RES-([A-Z0-9]+)$/);
+    const ticketID = ticketMatch ? ticketMatch[1] : term;
 
     try {
       // 1. Buscar por Ticket ID
-      const qReserva = query(collection(db, "reservas"), where("ticketID", "==", term));
+      const qReserva = query(collection(db, "reservas"), where("ticketID", "==", ticketID));
       const snapReserva = await getDocs(qReserva);
       
       if (!snapReserva.empty) {
@@ -194,7 +200,7 @@ const AdminCheckIn = () => {
       let precio = evento?.precio_estandar || 0;
 
       if (dni) {
-        const socioSnap = await getDoc(doc(db, "socios", dni.toUpperCase()));
+        const socioSnap = await getDoc(doc(db, "socios", normalizeDni(dni)));
         if (socioSnap.exists()) {
           const sData = socioSnap.data();
           nombre = sData.nombre;
@@ -296,7 +302,7 @@ const AdminCheckIn = () => {
     if (!dni) return;
 
     try {
-      const socioRef = doc(db, "socios", dni.toUpperCase());
+      const socioRef = doc(db, "socios", normalizeDni(dni));
       const socioSnap = await getDoc(socioRef);
       
       if (socioSnap.exists()) {

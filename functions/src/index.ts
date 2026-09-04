@@ -3,17 +3,24 @@ import { onDocumentDeleted } from 'firebase-functions/v2/firestore';
 import { onSchedule } from 'firebase-functions/v2/scheduler';
 import { defineSecret } from 'firebase-functions/params';
 import { logger } from 'firebase-functions';
-import * as admin from 'firebase-admin';
+import { initializeApp } from 'firebase-admin/app';
+import { getFirestore, FieldValue, DocumentReference } from 'firebase-admin/firestore';
+import { getAuth } from 'firebase-admin/auth';
 import { timingSafeEqual } from 'crypto';
-import { safeJson, escapeHtml, maskEmail, withRetry } from './helpers';
+import { safeJson, escapeHtml, maskEmail, withRetry, formatFechaLarga } from './helpers';
 
-admin.initializeApp();
+initializeApp();
 
 const EU_REGION = 'europe-west1';
 
 const BREVO_API_KEY = defineSecret('BREVO_API_KEY');
 const BREVO_WEBHOOK_SECRET = defineSecret('BREVO_WEBHOOK_SECRET');
 const BREVO_NEWSLETTER_LIST_ID = defineSecret('BREVO_NEWSLETTER_LIST_ID');
+// ID de la plantilla transaccional de Brevo con el botón "Double opt-in link"
+// (Templates > Email > "Plantilla Confirmar subscripcion a Newletter").
+const BREVO_NEWSLETTER_DOI_TEMPLATE_ID = defineSecret('BREVO_NEWSLETTER_DOI_TEMPLATE_ID');
+// Tras confirmar el DOI, Brevo redirige aquí (landing polivalente, ver NewsletterEstadoPage).
+const NEWSLETTER_DOI_REDIRECT_URL = 'https://kalian.es/newsletter/estado?accion=confirmado';
 const SENDER = { name: 'Kalian Hiri Kultur Gunea', email: 'info@kalian.es' };
 
 // Timeout por defecto para llamadas a Brevo.
@@ -40,6 +47,24 @@ async function callBrevo(apiKey: string, payload: object) {
     return safeJson(res);
   } finally {
     clearTimeout(timeoutId);
+  }
+}
+
+// Email del administrador maestro (mismo valor que en firestore.rules y
+// src/lib/constants.ts). Se compara siempre en minúsculas.
+const MASTER_EMAIL = 'kalianrobot@gmail.com';
+
+// Comprueba server-side que el llamante es staff (master admin, admin o profesor),
+// replicando isAdmin()/isTeacher() de firestore.rules. Las callables corren con
+// Admin SDK y bypassan las reglas, así que el rol hay que verificarlo aquí.
+async function assertStaff(auth: { uid: string; token?: Record<string, unknown> }) {
+  const email = String(auth.token?.email || '').toLowerCase();
+  if (email === MASTER_EMAIL) return;
+
+  const userSnap = await getFirestore().collection('users').doc(auth.uid).get();
+  const role = userSnap.exists ? String(userSnap.data()?.role || '') : '';
+  if (!['admin', 'teacher', 'profesor', 'teacher_admin'].includes(role)) {
+    throw new HttpsError('permission-denied', 'Solo staff puede realizar esta acción.');
   }
 }
 
@@ -71,7 +96,7 @@ export const validatePuertaAccess = onCall(
       throw new HttpsError('resource-exhausted', 'Demasiados intentos. Espera un momento.');
     }
 
-    const db = admin.firestore();
+    const db = getFirestore();
     const configSnap = await db.doc('configuracion/seguridad').get();
     if (!configSnap.exists) {
       throw new HttpsError('internal', 'Clave de puerta no configurada.');
@@ -98,20 +123,105 @@ export const validatePuertaAccess = onCall(
       await userRef.set({ uid: PUERTA_UID, role: 'portero', nombre: 'Puerta Service' });
     }
 
-    const customToken = await admin.auth().createCustomToken(PUERTA_UID, { role: 'portero' });
+    const customToken = await getAuth().createCustomToken(PUERTA_UID, { role: 'portero' });
     return { token: customToken };
   }
 );
 
+// ─── requestPasswordReset ────────────────────────────────────────────────────
+// Sin auth: quien la llama por definición no tiene sesión (o, en el caso de
+// createSocioAuth, opera contra una sesión secundaria). Genera el link con
+// el Admin SDK y lo envía por Brevo desde info@kalian.es en vez del email por
+// defecto de Firebase Auth (dominio firebaseapp.com, mala reputación/entrega).
+const _resetAttempts = new Map<string, number[]>();
+
+export const requestPasswordReset = onCall(
+  { secrets: [BREVO_API_KEY], region: EU_REGION },
+  async (request) => {
+    const { email } = request.data as { email?: string };
+
+    if (typeof email !== 'string' || email.length < 3 || email.length > 254 || !email.includes('@')) {
+      throw new HttpsError('invalid-argument', 'Email no válido.');
+    }
+
+    // Rate limit: máx 5 intentos por IP en 60 s (mismo criterio que validatePuertaAccess)
+    const ip = (request.rawRequest as any)?.ip || 'unknown';
+    const ahora = Date.now();
+    const ventanaMs = 60_000;
+    const maxIntentos = 5;
+    const intentosPrevios = (_resetAttempts.get(ip) || []).filter(t => ahora - t < ventanaMs);
+    if (intentosPrevios.length >= maxIntentos) {
+      throw new HttpsError('resource-exhausted', 'Demasiados intentos. Espera un momento.');
+    }
+    intentosPrevios.push(ahora);
+    _resetAttempts.set(ip, intentosPrevios);
+
+    let link: string;
+    try {
+      link = await getAuth().generatePasswordResetLink(email);
+    } catch (err: any) {
+      // No revelar si el email existe o no (anti-enumeración, igual que la
+      // invariante de newsletter): responder éxito igualmente sin enviar nada.
+      logger.info('requestPasswordReset: sin envío', { email: maskEmail(email), code: err?.code });
+      return { ok: true };
+    }
+
+    const linkSafe = escapeHtml(link);
+
+    await callBrevo(BREVO_API_KEY.value(), {
+      sender: SENDER,
+      to: [{ email }],
+      subject: 'Restablece tu contraseña de Kalian',
+      htmlContent: `<!DOCTYPE html><html><head>
+        <style>
+          body{margin:0;padding:0;background:#0A0A0A;font-family:Inter,sans-serif;color:#F5F5F0}
+          .c{max-width:600px;margin:0 auto;background:#0A0A0A;border:1px solid #D4AF3733}
+          .h{padding:60px 40px;text-align:center;border-bottom:1px solid #D4AF3733}
+          .b{padding:40px;text-align:center}
+          .f{padding:30px;text-align:center;background:#000;border-top:1px solid #D4AF3733;font-size:10px;color:#666}
+          h1{color:#D4AF37;font-size:40px;font-weight:900;text-transform:uppercase;letter-spacing:-2px;margin:0;line-height:.9;font-style:italic}
+          p{font-size:16px;line-height:1.6;color:#F5F5F0CC;margin-bottom:25px}
+          .btn{display:inline-block;background:#D4AF37;color:#000;padding:20px 40px;text-decoration:none;font-weight:900;text-transform:uppercase;letter-spacing:2px;font-size:14px}
+          .div{height:2px;width:40px;background:#D4AF37;margin:30px auto}
+        </style></head><body>
+        <div class="c">
+          <div class="h"><h1>RESTABLECER</h1><h1>CONTRASEÑA</h1></div>
+          <div class="b">
+            <p>Has solicitado restablecer tu contraseña de Kalian.</p>
+            <div class="div"></div>
+            <div style="margin:40px 0"><a href="${linkSafe}" class="btn">RESTABLECER CONTRASEÑA</a></div>
+            <p style="font-size:12px;color:#666">Si no has sido tú, ignora este email: tu contraseña no cambiará.</p>
+          </div>
+          <div class="f"><p>KALIAN HIRI KULTUR GUNEA</p><p>Responsable: Kalian. Finalidad: Gestión de soci@s. Derechos: Acceso y supresión.</p></div>
+        </div></body></html>`,
+    });
+
+    return { ok: true };
+  }
+);
+
 // ─── sendWelcomeEmail ────────────────────────────────────────────────────────
+// El botón lleva el enlace REAL de Firebase Auth para crear la contraseña,
+// generado aquí (el cliente no puede fabricarlo ni recibirlo). Antes el cliente
+// pasaba un `activationLink` hardcodeado a /login, que no activaba nada y
+// obligaba a mandar un segundo email de reset por separado.
 export const sendWelcomeEmail = onCall(
   { secrets: [BREVO_API_KEY], region: EU_REGION },
   async (request) => {
     if (!request.auth) throw new HttpsError('unauthenticated', 'Auth required');
+    await assertStaff(request.auth);
 
-    const { email, nombre, activationLink } = request.data as {
-      email: string; nombre: string; activationLink: string;
-    };
+    const { email, nombre } = request.data as { email: string; nombre: string };
+
+    let activationLink: string;
+    try {
+      activationLink = await getAuth().generatePasswordResetLink(email);
+    } catch (err: any) {
+      logger.error('sendWelcomeEmail: no se pudo generar el enlace de activación', {
+        email: maskEmail(email), code: err?.code,
+      });
+      throw new HttpsError('failed-precondition', 'La cuenta no existe en Auth; no se puede activar.');
+    }
 
     const nombreSafe = escapeHtml(nombre);
     const linkSafe = escapeHtml(activationLink);
@@ -119,7 +229,7 @@ export const sendWelcomeEmail = onCall(
     return callBrevo(BREVO_API_KEY.value(), {
       sender: SENDER,
       to: [{ email, name: nombre }],
-      subject: '¡Bienvenido/a a Kalian! Activa tu cuenta',
+      subject: '¡Bienvenido/a a Kalian! Crea tu contraseña',
       htmlContent: `<!DOCTYPE html><html><head>
         <style>
           body{margin:0;padding:0;background:#0A0A0A;font-family:Inter,sans-serif;color:#F5F5F0}
@@ -139,9 +249,9 @@ export const sendWelcomeEmail = onCall(
             <p>Hola <span class="acc">${nombreSafe}</span>,</p>
             <p>Estamos encantados de tenerte como nuevo soci@s de nuestra comunidad cultural.</p>
             <div class="div"></div>
-            <p>Para acceder a todas las ventajas, activa tu cuenta y define tu contraseña.</p>
-            <div style="margin:40px 0"><a href="${linkSafe}" class="btn">ACTIVAR MI CUENTA</a></div>
-            <p style="font-size:12px;color:#666">Recibirás un segundo email de seguridad para completar el proceso.</p>
+            <p>Para acceder a todas las ventajas, crea tu contraseña con este botón:</p>
+            <div style="margin:40px 0"><a href="${linkSafe}" class="btn">CREAR MI CONTRASEÑA</a></div>
+            <p style="font-size:12px;color:#666">El enlace es personal y caduca en unas horas. Si expira, usa "He olvidado mi contraseña" en la pantalla de acceso.</p>
           </div>
           <div class="f"><p>KALIAN HIRI KULTUR GUNEA</p><p>Responsable: Kalian. Finalidad: Gestión de soci@s. Derechos: Acceso y supresión.</p></div>
         </div></body></html>`,
@@ -149,60 +259,247 @@ export const sendWelcomeEmail = onCall(
   }
 );
 
+// Construye el email del carnet digital (QR + membresías vigentes). Compartido
+// por sendMembershipUpdateEmail (lo dispara staff al cambiar la membresía) y
+// enviarCarnetDigital (lo dispara el propio socio en su primer acceso).
+function emailCarnet(nombre: string, uid: string, membresias: Record<string, string>) {
+  const hoy = new Date().toISOString().split('T')[0];
+  const qrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${encodeURIComponent(uid)}`;
+
+  const membresiasHtml = Object.entries(membresias || {})
+    .filter(([, fecha]) => fecha >= hoy)
+    .map(([cat, fecha]) => {
+      const cat_nombre = cat === 'musica' ? 'Music Is Cool' : cat === 'danza' ? 'Club de Baile' : cat === 'local' ? 'Locales' : cat;
+      return `<div style="background:#1A1A1A;border:1px solid #D4AF3733;padding:15px;margin-bottom:10px;border-radius:12px;text-align:left">
+        <p style="margin:0;color:#D4AF37;font-weight:900;text-transform:uppercase;font-size:12px">${escapeHtml(cat_nombre)}</p>
+        <p style="margin:5px 0 0;font-size:10px;color:#F5F5F066;font-weight:700">VÁLIDO HASTA: ${escapeHtml(fecha)}</p>
+      </div>`;
+    }).join('') || '<p style="color:#666;font-size:12px;font-style:italic">No tienes membresías activas.</p>';
+
+  const nombreSafe = escapeHtml(nombre);
+  const uidSafe = escapeHtml(uid);
+  const qrUrlSafe = escapeHtml(qrUrl);
+
+  return `<!DOCTYPE html><html><head>
+    <style>
+      body{margin:0;padding:0;background:#0A0A0A;font-family:Inter,sans-serif;color:#F5F5F0}
+      .c{max-width:600px;margin:0 auto;background:#0A0A0A;border:1px solid #D4AF3733}
+      .h{padding:40px;text-align:center;border-bottom:1px solid #D4AF3733}
+      .b{padding:40px;text-align:center}
+      .f{padding:30px;text-align:center;background:#000;border-top:1px solid #D4AF3733;font-size:10px;color:#666}
+      h1{color:#D4AF37;font-size:32px;font-weight:900;text-transform:uppercase;margin:0;font-style:italic}
+      .qr{background:#FFF;padding:20px;display:inline-block;border-radius:24px;margin:30px 0}
+      .acc{color:#D4AF37;font-weight:700}
+    </style></head><body>
+    <div class="c">
+      <div class="h"><h1>CARNET DIGITAL</h1></div>
+      <div class="b">
+        <p>Hola <span class="acc">${nombreSafe}</span>,</p>
+        <p>Este es tu carnet de soci@ de Kalian. Presenta este QR en el centro:</p>
+        <div class="qr"><img src="${qrUrlSafe}" width="200" height="200" style="display:block"></div>
+        <p style="font-size:10px;color:#666;text-transform:uppercase;letter-spacing:2px;margin-bottom:40px">UID: ${uidSafe}</p>
+        <div style="max-width:400px;margin:0 auto;padding-top:20px">
+          <p style="font-size:12px;font-weight:900;text-transform:uppercase;color:#D4AF37;margin-bottom:15px;text-align:left">Tus Membresías Activas:</p>
+          ${membresiasHtml}
+        </div>
+      </div>
+      <div class="f"><p>KALIAN HIRI KULTUR GUNEA</p><p>Este carnet es personal e intransferible.</p></div>
+    </div></body></html>`;
+}
+
 export const sendMembershipUpdateEmail = onCall(
   { secrets: [BREVO_API_KEY], region: EU_REGION },
   async (request) => {
     if (!request.auth) throw new HttpsError('unauthenticated', 'Auth required');
+    await assertStaff(request.auth);
 
     const { email, nombre, uid, membresias } = request.data as {
       email: string; nombre: string; uid: string; membresias: Record<string, string>;
     };
 
-    const hoy = new Date().toISOString().split('T')[0];
-    const qrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${uid}`;
-
-    const membresiasHtml = Object.entries(membresias)
-      .filter(([, fecha]) => fecha >= hoy)
-      .map(([cat, fecha]) => {
-        const cat_nombre = cat === 'musica' ? 'Music Is Cool' : cat === 'danza' ? 'Club de Baile' : cat === 'local' ? 'Locales' : cat;
-        return `<div style="background:#1A1A1A;border:1px solid #D4AF3733;padding:15px;margin-bottom:10px;border-radius:12px;text-align:left">
-          <p style="margin:0;color:#D4AF37;font-weight:900;text-transform:uppercase;font-size:12px">${escapeHtml(cat_nombre)}</p>
-          <p style="margin:5px 0 0;font-size:10px;color:#F5F5F066;font-weight:700">VÁLIDO HASTA: ${escapeHtml(fecha)}</p>
-        </div>`;
-      }).join('') || '<p style="color:#666;font-size:12px;font-style:italic">No tienes membresías activas.</p>';
-
-    const nombreSafe = escapeHtml(nombre);
-    const uidSafe = escapeHtml(uid);
-    const qrUrlSafe = escapeHtml(qrUrl);
-
     return callBrevo(BREVO_API_KEY.value(), {
       sender: SENDER,
       to: [{ email, name: nombre }],
       subject: 'Tu Carnet Digital Kalian ha sido actualizado',
+      htmlContent: emailCarnet(nombre, uid, membresias),
+    });
+  }
+);
+
+// ─── enviarCarnetDigital ────────────────────────────────────────────────────
+// La llama el PROPIO socio al entrar en su área por primera vez. Antes el carnet
+// se mandaba en el momento del alta, cuando la cuenta aún no tenía contraseña y
+// el QR apuntaba a un uid inutilizable. Es idempotente: marca `carnetEnviadoAt`
+// en el doc del socio y no vuelve a enviar. El socio se localiza por su uid o
+// por el email del token, nunca por datos del request.
+export const enviarCarnetDigital = onCall(
+  { secrets: [BREVO_API_KEY], region: EU_REGION },
+  async (request) => {
+    if (!request.auth) throw new HttpsError('unauthenticated', 'Auth required');
+
+    const uid = request.auth.uid;
+    const emailToken = String(request.auth.token?.email || '').toLowerCase();
+
+    const db = getFirestore();
+    let snap = await db.collection('socios').where('uid', '==', uid).limit(1).get();
+    if (snap.empty && emailToken) {
+      snap = await db.collection('socios').where('email', '==', emailToken).limit(1).get();
+    }
+    if (snap.empty) return { enviado: false, motivo: 'sin_socio' };
+
+    const socioRef = snap.docs[0].ref;
+    const socio = snap.docs[0].data() as any;
+
+    // Ya activada y con carnet enviado: nada que hacer (idempotencia).
+    if (socio.carnetEnviadoAt) return { enviado: false, motivo: 'ya_enviado' };
+
+    const email = String(socio.email || '').toLowerCase().trim();
+    if (!email) return { enviado: false, motivo: 'sin_email' };
+
+    await callBrevo(BREVO_API_KEY.value(), {
+      sender: SENDER,
+      to: [{ email, name: String(socio.nombre || '') }],
+      subject: 'Tu Carnet Digital Kalian',
+      htmlContent: emailCarnet(String(socio.nombre || ''), uid, socio.membresias || {}),
+    });
+
+    await socioRef.update({
+      carnetEnviadoAt: new Date().toISOString(),
+      cuentaActivada: true,
+    });
+
+    logger.info('enviarCarnetDigital: enviado', { email: maskEmail(email) });
+    return { enviado: true };
+  }
+);
+
+// ─── sendCourseApprovalEmail ────────────────────────────────────────────────
+// Email de "solicitud de inscripción aceptada". A diferencia de sendWelcomeEmail /
+// sendMembershipUpdateEmail, aquí el cliente solo pasa el `solicitudId`: el
+// destinatario y todo el contenido se leen del doc autoritativo en
+// `solicitudes_cursos` (mismo criterio que sendReservationConfirmation), y el rol
+// del llamante se comprueba server-side. Solo se envía si la solicitud ya está
+// en estado 'aprobado', lo que ata la function al flujo legítimo de AdminSolicitudes.
+export const sendCourseApprovalEmail = onCall(
+  { secrets: [BREVO_API_KEY], region: EU_REGION },
+  async (request) => {
+    if (!request.auth) throw new HttpsError('unauthenticated', 'Auth required');
+    await assertStaff(request.auth);
+
+    const { solicitudId } = request.data as { solicitudId?: string };
+    if (typeof solicitudId !== 'string' || solicitudId.length === 0 || solicitudId.length > 128) {
+      throw new HttpsError('invalid-argument', 'Solicitud no válida.');
+    }
+
+    const db = getFirestore();
+    const solSnap = await db.collection('solicitudes_cursos').doc(solicitudId).get();
+    if (!solSnap.exists) throw new HttpsError('not-found', 'Solicitud no encontrada.');
+
+    const sol = solSnap.data() as any;
+    if (sol.estado !== 'aprobado') {
+      throw new HttpsError('failed-precondition', 'La solicitud no está aprobada.');
+    }
+
+    const email = String(sol.email || '').toLowerCase().trim();
+    const nombre = String(sol.nombre || '');
+    const cursoTitulo = String(sol.cursoTitulo || '');
+    if (!email) throw new HttpsError('failed-precondition', 'La solicitud no tiene email.');
+
+    // Datos del curso: también del doc autoritativo, no del request.
+    let horario = '';
+    let fechaInicio = '';
+    let profesorNombre = '';
+    let sala = '';
+    if (sol.cursoId) {
+      const cursoSnap = await db.collection('cursos').doc(String(sol.cursoId)).get();
+      if (cursoSnap.exists) {
+        const curso = cursoSnap.data() as any;
+        horario = String(curso.horario || '');
+        fechaInicio = formatFechaLarga(curso.fechaInicio);
+        profesorNombre = String(curso.profesorNombre || curso.profesor || '');
+        sala = String(curso.sala || '');
+      }
+    }
+
+    const precio = Number(sol.modalidad?.precio) || 0;
+    const modalidad = String(sol.modalidad?.tipo || '');
+
+    // Si el socio se acaba de crear y todavía no tiene contraseña, este mismo
+    // email lleva el enlace de activación: así el alta se resuelve en un solo
+    // correo en vez de tres (aceptación + bienvenida + carnet) a la vez.
+    let activacionHtml = '';
+    const dni = String(sol.dni || '').toUpperCase().trim();
+    if (dni) {
+      const socioSnap = await db.collection('socios').doc(dni).get();
+      if (socioSnap.exists && socioSnap.data()?.cuentaActivada === false) {
+        try {
+          const link = await getAuth().generatePasswordResetLink(email);
+          activacionHtml = `<div class="div"></div>
+            <p>Te hemos creado una cuenta de soci@. Crea tu contraseña para acceder:</p>
+            <div style="margin:30px 0"><a href="${escapeHtml(link)}" class="btn">CREAR MI CONTRASEÑA</a></div>
+            <p style="font-size:12px;color:#666">El enlace es personal y caduca en unas horas. Si expira, usa "He olvidado mi contraseña" en la pantalla de acceso. Al entrar recibirás tu carnet digital con el QR.</p>`;
+        } catch (err: any) {
+          logger.warn('sendCourseApprovalEmail: sin enlace de activación', {
+            email: maskEmail(email), code: err?.code,
+          });
+        }
+      }
+    }
+
+    const fila = (etiqueta: string, valor: string) => valor
+      ? `<tr>
+          <td style="padding:8px 0;font-size:11px;font-weight:900;text-transform:uppercase;letter-spacing:2px;color:#D4AF37;white-space:nowrap">${escapeHtml(etiqueta)}</td>
+          <td style="padding:8px 0 8px 20px;font-size:14px;color:#F5F5F0CC">${escapeHtml(valor)}</td>
+        </tr>`
+      : '';
+
+    const detalles = [
+      fila('Curso', cursoTitulo),
+      fila('Modalidad', modalidad),
+      fila('Inicio', fechaInicio),
+      fila('Horario', horario),
+      fila('Profesor/a', profesorNombre),
+      fila('Sala', sala),
+      fila('Importe', precio > 0 ? `${precio} €` : ''),
+    ].join('');
+
+    const nombreSafe = escapeHtml(nombre);
+    const tituloSafe = escapeHtml(cursoTitulo);
+
+    logger.info('sendCourseApprovalEmail: enviando', { solicitudId, email: maskEmail(email) });
+
+    return callBrevo(BREVO_API_KEY.value(), {
+      sender: SENDER,
+      to: [{ email, name: nombre }],
+      subject: `Inscripción aceptada: ${cursoTitulo}`,
       htmlContent: `<!DOCTYPE html><html><head>
         <style>
           body{margin:0;padding:0;background:#0A0A0A;font-family:Inter,sans-serif;color:#F5F5F0}
           .c{max-width:600px;margin:0 auto;background:#0A0A0A;border:1px solid #D4AF3733}
-          .h{padding:40px;text-align:center;border-bottom:1px solid #D4AF3733}
+          .h{padding:50px 40px;text-align:center;border-bottom:1px solid #D4AF3733}
           .b{padding:40px;text-align:center}
           .f{padding:30px;text-align:center;background:#000;border-top:1px solid #D4AF3733;font-size:10px;color:#666}
-          h1{color:#D4AF37;font-size:32px;font-weight:900;text-transform:uppercase;margin:0;font-style:italic}
-          .qr{background:#FFF;padding:20px;display:inline-block;border-radius:24px;margin:30px 0}
+          h1{color:#D4AF37;font-size:40px;font-weight:900;text-transform:uppercase;letter-spacing:-2px;margin:0;line-height:.9;font-style:italic}
+          p{font-size:16px;line-height:1.6;color:#F5F5F0CC;margin-bottom:20px}
           .acc{color:#D4AF37;font-weight:700}
+          .div{height:2px;width:40px;background:#D4AF37;margin:30px auto}
+          .btn{display:inline-block;background:#D4AF37;color:#000;padding:18px 36px;text-decoration:none;font-weight:900;text-transform:uppercase;letter-spacing:2px;font-size:13px;border-radius:8px}
+          .box{background:#1A1A1A;border:1px solid #D4AF3733;border-radius:16px;padding:24px;margin:30px 0;text-align:left}
         </style></head><body>
         <div class="c">
-          <div class="h"><h1>CARNET DIGITAL</h1></div>
+          <div class="h"><h1>INSCRIPCIÓN</h1><h1>ACEPTADA</h1></div>
           <div class="b">
             <p>Hola <span class="acc">${nombreSafe}</span>,</p>
-            <p>Tu membresía en Kalian ha sido actualizada. Presenta este QR en el centro:</p>
-            <div class="qr"><img src="${qrUrlSafe}" width="200" height="200" style="display:block"></div>
-            <p style="font-size:10px;color:#666;text-transform:uppercase;letter-spacing:2px;margin-bottom:40px">UID: ${uidSafe}</p>
-            <div style="max-width:400px;margin:0 auto;padding-top:20px">
-              <p style="font-size:12px;font-weight:900;text-transform:uppercase;color:#D4AF37;margin-bottom:15px;text-align:left">Tus Membresías Activas:</p>
-              ${membresiasHtml}
-            </div>
+            <p>Tu solicitud de inscripción en <span class="acc">${tituloSafe}</span> ha sido aceptada. Ya tienes plaza reservada.</p>
+            <div class="box"><table style="width:100%;border-collapse:collapse">${detalles}</table></div>
+            ${precio > 0
+              ? '<p style="font-size:13px;color:#F5F5F099">El pago de la inscripción queda pendiente de confirmar en el centro. Te indicaremos la forma de pago acordada.</p>'
+              : ''}
+            ${activacionHtml || `<div class="div"></div>
+            <p>Consulta tu carnet digital y tus cursos desde tu área de soci@:</p>
+            <div style="margin:30px 0"><a href="https://kalian.es/login" class="btn">ENTRAR EN MI ÁREA</a></div>`}
           </div>
-          <div class="f"><p>KALIAN HIRI KULTUR GUNEA</p><p>Este carnet es personal e intransferible.</p></div>
+          <div class="f"><p>KALIAN HIRI KULTUR GUNEA</p><p>Responsable: Kalian. Finalidad: Gestión de soci@s y cursos. Derechos: Acceso y supresión.</p></div>
         </div></body></html>`,
     });
   }
@@ -223,7 +520,7 @@ export const sendReservationConfirmation = onCall(
       throw new HttpsError('invalid-argument', 'Token no válido.');
     }
 
-    const db = admin.firestore();
+    const db = getFirestore();
     const snap = await db.collection('reservas')
       .where('manageToken', '==', manageToken)
       .limit(1)
@@ -329,7 +626,7 @@ export const gestionarReservaInvitado = onCall(
       throw new HttpsError('invalid-argument', 'Acción no válida.');
     }
 
-    const db = admin.firestore();
+    const db = getFirestore();
 
     // Localizar la reserva por su manageToken. Error genérico si no existe
     // (no revelamos si el token es real o no).
@@ -394,7 +691,7 @@ export const gestionarReservaInvitado = onCall(
           const actDoc = await tx.get(actRef);
           if (actDoc.exists) {
             tx.update(actRef, {
-              aforo_reservado: admin.firestore.FieldValue.increment(-pendientes),
+              aforo_reservado: FieldValue.increment(-pendientes),
             });
           }
         }
@@ -449,7 +746,7 @@ export const gestionarReservaInvitado = onCall(
             `Sin aforo suficiente. Plazas libres: ${Math.max(0, aforoMax - aforoRes)}.`);
         }
         tx.update(actRef, {
-          aforo_reservado: admin.firestore.FieldValue.increment(diferencia),
+          aforo_reservado: FieldValue.increment(diferencia),
         });
 
         // Recalcular totalPagar: el componente del titular ya tiene cualquier
@@ -482,9 +779,9 @@ async function calcularPrecioInterno(params: {
   nAcomp: number;
   dniTitular?: string;
   cupon?: string;
-}): Promise<{ total: number; esSocio: boolean; esClave: boolean }> {
+}): Promise<{ total: number; esSocio: boolean; esClave: boolean; socioVigente: boolean }> {
   const { eventoId, esCurso, nAcomp, dniTitular, cupon } = params;
-  const db = admin.firestore();
+  const db = getFirestore();
   const coleccion = esCurso ? 'cursos' : 'eventos';
 
   const eventoSnap = await db.doc(`${coleccion}/${eventoId}`).get();
@@ -524,7 +821,10 @@ async function calcularPrecioInterno(params: {
   if (esClaveValida && pClave < precioTitular) { precioTitular = pClave; aplicadoClave = true; aplicadoSocio = false; }
 
   const total = esCurso ? precioTitular : precioTitular + (nAcomp * precioBase);
-  return { total, esSocio: aplicadoSocio, esClave: aplicadoClave };
+  // `esSocio` indica si el descuento de socio llegó a aplicarse; `socioVigente`
+  // indica sólo que la membresía está en vigor (el cliente lo necesita para la
+  // apertura anticipada de socios en eventos sin precio de socio).
+  return { total, esSocio: aplicadoSocio, esClave: aplicadoClave, socioVigente: esSocio };
 }
 
 export const calcularPrecioReserva = onCall(
@@ -553,6 +853,52 @@ export const calcularPrecioReserva = onCall(
   }
 );
 
+// ─── comprobarReservaDuplicada ───────────────────────────────────────────────
+// Callable SIN auth: comprueba si ya existe una reserva del mismo titular para
+// el evento antes de guardarla. El cliente anónimo no puede hacer esta consulta
+// directamente (firestore.rules sólo permite `list` de `reservas` a admin/portero
+// o al propio titular autenticado) — de ahí que esto viva server-side con Admin
+// SDK. Precedencia idéntica a la que usaba el cliente: uid > DNI > email.
+// Devuelve sólo un booleano, nunca datos de la reserva ajena (evita enumeración).
+export const comprobarReservaDuplicada = onCall(
+  { region: EU_REGION },
+  async (request) => {
+    const { eventoId, dni, email } = request.data as {
+      eventoId?: string;
+      dni?: string;
+      email?: string;
+    };
+
+    if (typeof eventoId !== 'string' || eventoId.length === 0 || eventoId.length > 128) {
+      throw new HttpsError('invalid-argument', 'eventoId no válido.');
+    }
+
+    const db = getFirestore();
+    let q = db.collection('reservas').where('eventoId', '==', eventoId);
+
+    const uid = request.auth?.uid;
+    const dniNorm = typeof dni === 'string' ? dni.trim().toUpperCase() : '';
+    // `emailTitular` se guarda tal cual lo escribe el usuario (sin lowercase,
+    // ver ReservaForm.tsx), así que sólo recortamos espacios para no romper
+    // la comparación exacta que ya hacía el cliente.
+    const emailNorm = typeof email === 'string' ? email.trim() : '';
+
+    if (uid) {
+      q = q.where('uidTitular', '==', uid);
+    } else if (dniNorm) {
+      q = q.where('dniTitular', '==', dniNorm);
+    } else if (emailNorm) {
+      q = q.where('emailTitular', '==', emailNorm);
+    } else {
+      // Sin uid, DNI ni email no hay nada que comprobar.
+      return { duplicada: false };
+    }
+
+    const snap = await q.limit(1).get();
+    return { duplicada: !snap.empty };
+  }
+);
+
 // ─── subscribeNewsletter ────────────────────────────────────────────────────
 // Callable SIN auth (alta pública). Validación de origen: el doc en
 // `newsletter_subscribers` con este email y `estado: 'pendiente_confirmacion'`
@@ -560,7 +906,7 @@ export const calcularPrecioReserva = onCall(
 // antes via reglas validadas). Esto ata la function al flow legítimo y cierra
 // el vector de envío arbitrario a Brevo desde un endpoint público.
 export const subscribeNewsletter = onCall(
-  { secrets: [BREVO_API_KEY, BREVO_NEWSLETTER_LIST_ID], region: EU_REGION },
+  { secrets: [BREVO_API_KEY, BREVO_NEWSLETTER_LIST_ID, BREVO_NEWSLETTER_DOI_TEMPLATE_ID], region: EU_REGION },
   async (request) => {
     const { nombre, email } = request.data as { nombre?: string; email?: string };
 
@@ -575,7 +921,7 @@ export const subscribeNewsletter = onCall(
     const nombreNorm = nombre.trim();
 
     // Verificación de origen: alta reciente pendiente en Firestore
-    const db = admin.firestore();
+    const db = getFirestore();
     const snap = await db.collection('newsletter_subscribers')
       .where('email', '==', emailNorm)
       .limit(5)
@@ -595,12 +941,26 @@ export const subscribeNewsletter = onCall(
       throw new HttpsError('failed-precondition', 'Alta no encontrada o expirada.');
     }
 
-    const listId = Number(BREVO_NEWSLETTER_LIST_ID.value()) || 3;
+    // Sin fallback a una lista concreta: con el modelo de dos listas
+    // (ver SPEC.md §3), caer a un ID por defecto significaría dar de alta en la
+    // lista heredada de MailPoet, que es justamente la que no tiene
+    // consentimiento acreditado. Ante un secreto mal configurado es preferible
+    // fallar el alta que escribir en la lista equivocada.
+    const listId = Number(BREVO_NEWSLETTER_LIST_ID.value().trim());
+    if (!Number.isInteger(listId) || listId <= 0) {
+      logger.error('subscribeNewsletter: BREVO_NEWSLETTER_LIST_ID no es un ID de lista válido');
+      throw new HttpsError('internal', 'No se pudo dar de alta en el servicio de email.');
+    }
+    const templateId = Number(BREVO_NEWSLETTER_DOI_TEMPLATE_ID.value());
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), BREVO_TIMEOUT_MS);
     let res;
     try {
-      res = await fetch('https://api.brevo.com/v3/contacts', {
+      // doubleOptinConfirmation (no /contacts): envía el email DOI vía la plantilla
+      // indicada y solo añade el contacto a `includeListIds` cuando confirma el link.
+      // Con POST /contacts (endpoint anterior) el contacto entraba directo a la lista
+      // sin pasar por ninguna confirmación, así que nunca se disparaba ningún email.
+      res = await fetch('https://api.brevo.com/v3/contacts/doubleOptinConfirmation', {
         method: 'POST',
         headers: {
           accept: 'application/json',
@@ -609,9 +969,14 @@ export const subscribeNewsletter = onCall(
         },
         body: JSON.stringify({
           email: emailNorm,
-          attributes: { NOMBRE: nombreNorm },
-          listIds: [listId],
-          updateEnabled: true,
+          // FIRSTNAME (no NOMBRE): es el atributo estándar que existe en la
+          // cuenta de Brevo (Contacts > Settings > Contact attributes).
+          // NOMBRE nunca se creó, así que Brevo lo descartaba en silencio
+          // y {{ contact.NOMBRE }} en la plantilla DOI se quedaba vacío.
+          attributes: { FIRSTNAME: nombreNorm },
+          includeListIds: [listId],
+          templateId,
+          redirectionUrl: NEWSLETTER_DOI_REDIRECT_URL,
         }),
         signal: controller.signal,
       });
@@ -624,7 +989,9 @@ export const subscribeNewsletter = onCall(
       if (res.status === 400 && err.code === 'duplicate_parameter') {
         return { ok: true, duplicate: true };
       }
-      logger.error('subscribeNewsletter: Brevo error', { status: res.status, code: err.code });
+      // `message` es clave reservada del logger estructurado de Firebase Functions
+      // (la pisa con su propio stack trace), así que el texto de Brevo va aparte.
+      logger.error('subscribeNewsletter: Brevo error', { status: res.status, code: err.code, brevoMessage: err.message });
       throw new HttpsError('internal', 'No se pudo dar de alta en el servicio de email.');
     }
 
@@ -681,7 +1048,7 @@ export const brevoWebhook = onRequest(
     }
 
     try {
-      const db = admin.firestore();
+      const db = getFirestore();
       const snap = await db.collection('newsletter_subscribers')
         .where('email', '==', email)
         .limit(1)
@@ -696,7 +1063,7 @@ export const brevoWebhook = onRequest(
       await snap.docs[0].ref.update({
         estado: 'baja',
         motivo: event,
-        fecha_baja: admin.firestore.FieldValue.serverTimestamp(),
+        fecha_baja: FieldValue.serverTimestamp(),
       });
       logger.info('brevoWebhook: suscriptor marcado como baja', { email: maskEmail(email), event });
     } catch (err: any) {
@@ -771,8 +1138,9 @@ export const reconciliarNewsletterBrevo = onSchedule(
     timeoutSeconds: 540,
   },
   async () => {
-    const db = admin.firestore();
-    const listId = BREVO_NEWSLETTER_LIST_ID.value();
+    const db = getFirestore();
+    // .trim(): el valor se interpola crudo en la URL de listado de contactos.
+    const listId = BREVO_NEWSLETTER_LIST_ID.value().trim();
     const apiKey = BREVO_API_KEY.value();
 
     let offset = 0;
@@ -799,14 +1167,14 @@ export const reconciliarNewsletterBrevo = onSchedule(
         return;
       }
       const data = await safeJson(r) as {
-        contacts?: Array<{ email: string; emailBlacklisted?: boolean; attributes?: { NOMBRE?: string; FIRSTNAME?: string } }>
+        contacts?: Array<{ email: string; emailBlacklisted?: boolean; attributes?: { FIRSTNAME?: string } }>
       };
       const contacts = data.contacts || [];
       if (contacts.length === 0) break;
       for (const c of contacts) {
         const e = (c.email || '').toLowerCase().trim();
         if (!e) continue;
-        const nombre = c.attributes?.NOMBRE || c.attributes?.FIRSTNAME || '';
+        const nombre = c.attributes?.FIRSTNAME || '';
         contactosBrevo.set(e, { nombre, blacklisted: !!c.emailBlacklisted });
       }
       if (contacts.length < limit) break;
@@ -815,7 +1183,7 @@ export const reconciliarNewsletterBrevo = onSchedule(
 
     // Construir índice de emails ya en Firestore (con ref + datos cacheados)
     const snap = await db.collection('newsletter_subscribers').get();
-    const docsFirestore = new Map<string, { ref: admin.firestore.DocumentReference; data: any }>();
+    const docsFirestore = new Map<string, { ref: DocumentReference; data: any }>();
     for (const docu of snap.docs) {
       const d = docu.data() as any;
       const e = (d.email || '').toLowerCase().trim();
@@ -834,13 +1202,13 @@ export const reconciliarNewsletterBrevo = onSchedule(
           await existente.ref.update({
             estado: 'baja',
             motivo: 'reconciliacion',
-            fecha_baja: admin.firestore.FieldValue.serverTimestamp(),
+            fecha_baja: FieldValue.serverTimestamp(),
           });
           marcadosBaja++;
         } else if (!blacklisted && estadoActual === 'pendiente_confirmacion') {
           await existente.ref.update({
             estado: 'activo',
-            fecha_confirmacion: admin.firestore.FieldValue.serverTimestamp(),
+            fecha_confirmacion: FieldValue.serverTimestamp(),
           });
           promovidosActivo++;
         } else if (!blacklisted && estadoActual === 'baja') {
@@ -850,8 +1218,8 @@ export const reconciliarNewsletterBrevo = onSchedule(
           if (fechaAlta > fechaBaja) {
             await existente.ref.update({
               estado: 'activo',
-              fecha_confirmacion: admin.firestore.FieldValue.serverTimestamp(),
-              motivo: admin.firestore.FieldValue.delete(),
+              fecha_confirmacion: FieldValue.serverTimestamp(),
+              motivo: FieldValue.delete(),
             });
             promovidosActivo++;
           }
@@ -862,8 +1230,8 @@ export const reconciliarNewsletterBrevo = onSchedule(
           email,
           nombre: nombre || email.split('@')[0],
           estado: blacklisted ? 'baja' : 'activo',
-          ...(blacklisted ? { motivo: 'bounce_o_baja', fecha_baja: admin.firestore.FieldValue.serverTimestamp() } : {}),
-          fecha: admin.firestore.FieldValue.serverTimestamp(),
+          ...(blacklisted ? { motivo: 'bounce_o_baja', fecha_baja: FieldValue.serverTimestamp() } : {}),
+          fecha: FieldValue.serverTimestamp(),
           origen: 'brevo_import',
           acepto_terminos: true,
         });
@@ -876,6 +1244,7 @@ export const reconciliarNewsletterBrevo = onSchedule(
     const cortePendiente = ahora - DIAS_MAX_PENDIENTE * 24 * 60 * 60 * 1000;
     let pendientesCaducados = 0;
     let bajasPorAusencia = 0;
+    let bajasSinConsentimiento = 0;
 
     for (const [email, { ref, data }] of docsFirestore) {
       const estadoActual = data?.estado || 'activo';
@@ -887,17 +1256,34 @@ export const reconciliarNewsletterBrevo = onSchedule(
           await ref.update({
             estado: 'baja',
             motivo: 'no_confirmado',
-            fecha_baja: admin.firestore.FieldValue.serverTimestamp(),
+            fecha_baja: FieldValue.serverTimestamp(),
           });
           pendientesCaducados++;
         }
       } else if (estadoActual === 'activo' && !enBrevo) {
+        // Dos causas muy distintas caen aquí, y conviene no confundirlas:
+        //
+        // a) El contacto pasó por nuestro doble opt-in (tiene `fecha_confirmacion`)
+        //    y luego desapareció de la lista de Brevo → baja normal por ausencia.
+        // b) El contacto nunca confirmó nada con nosotros: es un heredado de la
+        //    importación MailPoet → Brevo, del que no conservamos prueba de
+        //    consentimiento. Al apuntar BREVO_NEWSLETTER_LIST_ID a la lista nueva
+        //    (la que alimenta el formulario con DOI) todos estos desaparecen en
+        //    bloque en la primera reconciliación. Marcarlos como 'reconciliacion'
+        //    los mezclaría con las bajas ordinarias y borraría el rastro de por
+        //    qué se dieron de baja, que es justamente lo que hay que poder
+        //    acreditar ante la autoridad de control.
+        //
+        // `fecha_confirmacion` solo la escriben la promoción DOI de esta misma
+        // función y el panel admin, así que es la señal fiable de "hubo opt-in".
+        const sinPruebaConsentimiento = !data?.fecha_confirmacion;
         await ref.update({
           estado: 'baja',
-          motivo: 'reconciliacion',
-          fecha_baja: admin.firestore.FieldValue.serverTimestamp(),
+          motivo: sinPruebaConsentimiento ? 'migracion_sin_consentimiento' : 'reconciliacion',
+          fecha_baja: FieldValue.serverTimestamp(),
         });
-        bajasPorAusencia++;
+        if (sinPruebaConsentimiento) bajasSinConsentimiento++;
+        else bajasPorAusencia++;
       }
     }
 
@@ -909,6 +1295,7 @@ export const reconciliarNewsletterBrevo = onSchedule(
       promovidosActivo,
       pendientesCaducados,
       bajasPorAusencia,
+      bajasSinConsentimiento,
     });
   }
 );

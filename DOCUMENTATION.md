@@ -89,6 +89,23 @@ El procedimiento operativo paso a paso (crear la lista, cambiar el secreto, envi
 
 Para el detalle del flujo y estados ver [SPEC.md §5](SPEC.md) (esquema `newsletter_subscribers`).
 
+### 2.6 Aprobación de una solicitud de inscripción a curso
+
+La solicitud llega desde la programación pública (`solicitudes_cursos`, estado `'pendiente'`) y se aprueba desde `/staff/solicitudes`. Al pulsar APROBAR, en este orden:
+
+1. Se valida el DNI/NIE (formato español). Sin DNI válido no se aprueba nada.
+2. Se añade al alumno al curso (`alumnos` + `aforo_actual`).
+3. Si no existe el socio, se crea: cuenta en Auth + doc en `socios`, y se le envían el **email de restablecimiento de contraseña** y el de **bienvenida**.
+4. Se envía el **carnet digital** (`sendMembershipUpdateEmail`), tanto a socios nuevos como existentes.
+5. Se crea el registro de pago de inscripción como pendiente (`pagos_inscripciones`).
+6. Se marca la solicitud como `'aprobado'`.
+7. Se envía el **email de inscripción aceptada** (`sendCourseApprovalEmail`) con el curso, la modalidad, la fecha de inicio, el horario, el profesor, la sala y el importe.
+8. Si la modalidad tiene precio, se registra el ingreso en contabilidad con el método de pago elegido en la ficha.
+
+**Ningún email aborta la aprobación**: si Brevo falla, el socio y el curso ya están actualizados, así que la solicitud queda aprobada igualmente y el panel muestra un aviso naranja con la lista de emails que no salieron ("⚠️ Solicitud aprobada, pero fallaron estos emails: …"). Si ves ese aviso, revisa los logs de la function en Firebase antes de reenviar nada a mano.
+
+El email de aceptación se envía **después** de marcar la solicitud como aprobada, porque la Cloud Function comprueba ese estado antes de enviar: es lo que impide que nadie dispare emails de inscripción con datos inventados.
+
 ---
 
 ## 3. Manual de Staff (admin)
@@ -106,7 +123,7 @@ Acceso vía `/staff/login` con email/contraseña. Solo `role == 'admin'` o maste
 | Academias | `/staff/academias` | Catálogo de academias externas asociadas. |
 | Staff | `/staff/staff` | Gestión de cuentas con rol `admin`/`teacher`. |
 | Newsletter | `/staff/newsletter` | Lista de suscriptores. Badge "PENDIENTE" para no confirmados. Export CSV de activos. |
-| Solicitudes | `/staff/solicitudes` | Bandeja de solicitudes de inscripción pública. |
+| Solicitudes | `/staff/solicitudes` | Bandeja de solicitudes de inscripción pública. Al aprobar se dispara el email de inscripción aceptada (ver 2.6). |
 | Contabilidad | `/staff/contabilidad` | Filtros por mes/año, drilldown por socio, purga de residuos. |
 | Reservas | `/staff/reservas` | Vista de reservas (socios + invitados). |
 | Galería | `/staff/galeria` | Gestión de exposiciones. |

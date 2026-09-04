@@ -4,7 +4,7 @@ import { collection, onSnapshot, doc, setDoc, getDoc, query, where, DocumentData
 import { Link } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
 import { createSocioAuth } from '../../lib/adminAuth';
-import { sendWelcomeEmail, sendMembershipUpdateEmail } from '../../lib/brevoService';
+import { sendMembershipUpdateEmail, sendCourseApprovalEmail } from '../../lib/brevoService';
 import { registrarIngreso, MetodoPago } from '../../lib/finanzas';
 
 const AdminSolicitudes = () => {
@@ -70,6 +70,10 @@ const AdminSolicitudes = () => {
     if (!window.confirm(`¿Aprobar solicitud de ${sol.nombre} para el curso ${sol.cursoTitulo}?`)) return;
     
     setLoading(true);
+    // Ningún email debe abortar la aprobación: si Brevo falla a mitad, el socio
+    // ya está creado y el curso actualizado, así que la solicitud tiene que
+    // quedar aprobada igualmente. Los fallos se acumulan aquí y se avisan al final.
+    const fallosEmail: string[] = [];
     try {
       const emailClean = sol.email.trim().toLowerCase();
       const dniUpper = (sol.dni || "").toUpperCase().trim();
@@ -115,10 +119,9 @@ const AdminSolicitudes = () => {
         try {
           const authResult = await createSocioAuth(emailClean);
           if (authResult.uid) realUid = authResult.uid;
-          
-          await sendWelcomeEmail(emailClean, sol.nombre || "Soci@s Kalian", "https://kalian.es/login");
         } catch (err) {
           console.error("Error creating auth user:", err);
+          fallosEmail.push("alta de la cuenta");
         }
 
         await setDoc(socioRef, {
@@ -130,11 +133,12 @@ const AdminSolicitudes = () => {
           estado: fechaFin ? 'activo' : 'inactivo',
           cursos: [sol.cursoId],
           verificado: true,
+          // Marca el alta como pendiente de activar: el email de aceptación
+          // incluirá el enlace para crear la contraseña, y el carnet digital se
+          // manda solo cuando el socio entre por primera vez (enviarCarnetDigital).
+          cuentaActivada: false,
           fechaAlta: new Date().toISOString()
         });
-
-        // Trigger membership update email for new socio
-        await sendMembershipUpdateEmail(emailClean, sol.nombre, realUid, fechaFin ? { [categoria]: fechaFin } : {});
       } else {
         // Si ya es socio, solo añadimos el curso si no lo tiene y actualizamos expiración
         const updateData: any = {
@@ -145,12 +149,20 @@ const AdminSolicitudes = () => {
           updateData[`membresias.${categoria}`] = fechaFin;
         }
         await updateDoc(socioRef, updateData);
-        
-        // Trigger membership update email
-        const finalSocioSnap = await getDoc(socioRef);
-        if (finalSocioSnap.exists()) {
+
+        // Carnet actualizado: solo si el curso aporta membresía nueva y el socio
+        // ya tiene cuenta activa. Si no, el email de aceptación es suficiente.
+        if (fechaFin) {
+          const finalSocioSnap = await getDoc(socioRef);
           const sData = finalSocioSnap.data();
-          await sendMembershipUpdateEmail(sData.email, sData.nombre, sData.uid, sData.membresias || {});
+          if (sData?.carnetEnviadoAt || sData?.cuentaActivada !== false) {
+            try {
+              await sendMembershipUpdateEmail(sData!.email, sData!.nombre, sData!.uid, sData!.membresias || {});
+            } catch (err) {
+              console.error("Error enviando el carnet digital:", err);
+              fallosEmail.push("carnet digital");
+            }
+          }
         }
       }
 
@@ -169,7 +181,16 @@ const AdminSolicitudes = () => {
         fechaAprobacion: new Date().toISOString()
       });
 
-      // 5. Registrar en Finanzas
+      // 5. Email de aceptación de la inscripción. Va después de marcar 'aprobado'
+      // porque la Cloud Function exige ese estado antes de enviar nada.
+      try {
+        await sendCourseApprovalEmail(sol.id);
+      } catch (err) {
+        console.error("Error enviando el email de aceptación:", err);
+        fallosEmail.push("aceptación de la inscripción");
+      }
+
+      // 6. Registrar en Finanzas
       const monto = sol.modalidad?.precio || 0;
       if (monto > 0) {
         await registrarIngreso({
@@ -181,8 +202,13 @@ const AdminSolicitudes = () => {
         });
       }
 
-      setMsg("✅ Solicitud aprobada con éxito");
-      setTimeout(() => setMsg(''), 3000);
+      if (fallosEmail.length) {
+        setMsg(`⚠️ Solicitud aprobada, pero fallaron estos emails: ${fallosEmail.join(', ')}`);
+        setTimeout(() => setMsg(''), 10000);
+      } else {
+        setMsg("✅ Solicitud aprobada y email de aceptación enviado");
+        setTimeout(() => setMsg(''), 3000);
+      }
       fetchSolicitudes();
     } catch (err) {
       console.error(err);

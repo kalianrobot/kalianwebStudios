@@ -632,14 +632,14 @@ const AdminCursos = () => {
         return;
       }
 
-      const acaRef = doc(db, "academias", form.categoria);
+      const acaRef = doc(db, "academias", academia.id);
       await updateDoc(acaRef, {
         subcategorias: arrayUnion(val)
       });
-      
+
       // Update local state
-      setAcademias(prev => prev.map(a => 
-        a.id === form.categoria 
+      setAcademias(prev => prev.map(a =>
+        a.id === academia.id
         ? { ...a, subcategorias: [...(a.subcategorias || []), val] }
         : a
       ));
@@ -975,7 +975,7 @@ const AdminCursos = () => {
             // Send welcome email via Brevo
             // Note: Since we can't get the link string from client SDK, we inform the user
             // that they will receive a separate email from Firebase for activation.
-            await sendWelcomeEmail(email, nombre || "Soci@s Kalian", "https://kalian.es/login"); 
+            await sendWelcomeEmail(email, nombre || "Soci@s Kalian"); 
             // We use the login link as a fallback, explaining in the email that they need to check their inbox for the activation link.
           } catch (err) {
             console.error("Error creating auth user or sending email:", err);

@@ -61,24 +61,34 @@ Firebase. Tres bloques:
 1. **Firestore + reglas** (`firestore.rules`): única fuente de verdad para todos los datos del dominio. Reglas server-side estrictas por colección.
 2. **Cloud Functions** (`functions/src/index.ts`, region `europe-west1`, Node 22 con `fetch` nativo):
    - `validatePuertaAccess` — auth de tablet de puerta por contraseña compartida → custom token rol `portero`. Compara con `timingSafeEqual` + rate limit 5 intentos/min por IP.
-   - `sendWelcomeEmail`, `sendMembershipUpdateEmail`, `sendReservationConfirmation`, `requestPasswordReset` — emails transaccionales vía Brevo. Todas las plantillas escapan HTML en interpolaciones.
+   - `sendWelcomeEmail`, `sendMembershipUpdateEmail`, `enviarCarnetDigital`, `sendCourseApprovalEmail`, `sendReservationConfirmation`, `requestPasswordReset` — emails transaccionales vía Brevo. Ninguno usa plantillas de Brevo: el HTML se construye en la function (la única plantilla de Brevo es la del DOI de newsletter). Todas escapan HTML en interpolaciones.
    - `requestPasswordReset` — genera el link de reset con `admin.auth().generatePasswordResetLink` y lo envía por Brevo desde `info@kalian.es` (en vez del email por defecto de Firebase Auth, que sale desde `firebaseapp.com` con peor entrega y que Google va a deprecar). Sin auth, rate limit 5/min/IP, no revela si el email existe.
-
-**Emails de auth — regla de oro**: ningún flujo del cliente puede invocar `sendPasswordResetEmail`/`sendEmailVerification`/`sendSignInLinkToEmail` de `firebase/auth`. La regla ESLint `no-restricted-imports` en `eslint.config.js` bloquea esos imports con mensaje explicativo. Todo email de auth pasa por Cloud Function → Brevo → `info@kalian.es`.
+   - **Emails de auth — regla de oro**: ningún flujo del cliente puede invocar `sendPasswordResetEmail`/`sendEmailVerification`/`sendSignInLinkToEmail` de `firebase/auth`. La regla ESLint `no-restricted-imports` en `eslint.config.js` bloquea esos imports con mensaje explicativo. Todo email de auth pasa por Cloud Function → Brevo → `info@kalian.es`.
+   - `sendWelcomeEmail` — genera el enlace de activación con `generatePasswordResetLink` **dentro de la function**; el cliente ya no pasa `activationLink` (antes iba hardcodeado a `/login` y no activaba nada, lo que obligaba a mandar un email de reset aparte). Exige rol staff.
+   - `enviarCarnetDigital` — la llama el propio socio en su primer acceso a `/perfil`. Localiza su doc por `uid` o por el email del token, manda el carnet una sola vez (marca `carnetEnviadoAt`) y pone `cuentaActivada: true`. Idempotente.
+   - `sendCourseApprovalEmail` — email de "inscripción aceptada" al aprobar una solicitud de curso. Si el socio se acaba de crear (`cuentaActivada === false`), incluye además el botón para crear la contraseña, de modo que el alta se resuelve en **un solo correo**. El cliente solo pasa `solicitudId`: destinatario, curso, horario, profesor y precio se leen de `solicitudes_cursos/{id}` + `cursos/{id}`. Exige rol staff server-side (`assertStaff`) y estado `'aprobado'` en la solicitud, así que solo puede dispararse desde el flujo real de AdminSolicitudes.
    - `sendReservationConfirmation` lee la reserva del doc autoritativo por `manageToken`; el cliente no controla destinatario.
    - `gestionarReservaInvitado` — gestión de reserva sin login (capability token `manageToken`).
-   - `calcularPrecioReserva` — precio autoritativo server-side; el cliente lo llama al enviar el formulario para que `totalPagar` no sea manipulable.
-   - `subscribeNewsletter` — alta pública en Brevo, validada contra un doc `pendiente_confirmacion` reciente (≤5 min) en Firestore.
+   - `calcularPrecioReserva` — precio autoritativo server-side; el cliente lo llama al enviar el formulario (y, con debounce, para el preview en tiempo real) para que `totalPagar` no sea manipulable. Devuelve también `socioVigente` (membresía en vigor, independiente de si hubo descuento) para que el cliente pueda evaluar la apertura anticipada de socios sin haber iniciado sesión.
+   - `comprobarReservaDuplicada` — sin auth; comprueba si ya existe una reserva del mismo uid/DNI/email para un evento antes de guardarla. Necesaria porque `firestore.rules` no permite a un invitado anónimo hacer `list` sobre `reservas` (solo admin/portero/titular autenticado pueden leerlas); devuelve únicamente `{ duplicada: boolean }`, nunca datos de la reserva ajena.
+   - `subscribeNewsletter` — alta pública en Brevo, validada contra un doc `pendiente_confirmacion` reciente (≤5 min) en Firestore. Usa `POST /contacts/doubleOptinConfirmation` (no `POST /contacts`): dispara el email DOI vía plantilla transaccional (`BREVO_NEWSLETTER_DOI_TEMPLATE_ID`) y solo añade el contacto a la lista (`includeListIds`) cuando confirma el link.
    - `brevoWebhook` — recibe `unsubscribed/spam/hardbounce/blocked`, marca bajas en Firestore. Valida antigüedad del payload (≤5 min) contra replay.
    - `onNewsletterSubscriberDeleted` — sincroniza borrado admin → DELETE en Brevo, con reintentos (3, backoff exponencial 2s/4s).
-   - `reconciliarNewsletterBrevo` — cron semanal (lunes 04:00 UTC). Sincroniza ambas direcciones, promueve `pendiente_confirmacion → activo`, marca bajas por caducidad o ausencia en Brevo.
+   - `reconciliarNewsletterBrevo` — cron semanal (lunes 04:00 UTC). Sincroniza ambas direcciones, promueve `pendiente_confirmacion → activo`, marca bajas por caducidad o ausencia en Brevo. La baja por ausencia distingue motivo según haya `fecha_confirmacion` (`reconciliacion`) o no (`migracion_sin_consentimiento`).
 3. **Hosting**: SPA estática con CSP estricto, HSTS, X-Frame-Options DENY (`firebase.json`).
 
 ### Integración Brevo
 - **API** `https://api.brevo.com/v3/...`. Header `api-key: <BREVO_API_KEY>`.
 - **Webhooks** validados con `?secret=<BREVO_WEBHOOK_SECRET>` (Brevo no firma HMAC).
-- **Doble opt-in** activado nativamente en la lista de newsletter. NO usamos webhook DOI propio: la confirmación se refleja en Firestore vía la reconciliación semanal.
-- **Secretos (Firebase Secret Manager)**: `BREVO_API_KEY`, `BREVO_WEBHOOK_SECRET`, `BREVO_NEWSLETTER_LIST_ID`.
+- **Doble opt-in**: NO se activa como propiedad de la lista (el alta viene de un formulario externo, fuera de Brevo — Brevo solo ofrece el toggle nativo de lista para formularios creados dentro de su propio panel o vía workflow/automatización). En su lugar, `subscribeNewsletter` llama a `POST /contacts/doubleOptinConfirmation` pasando `templateId` (plantilla transaccional con botón tipo "Double opt-in link") y `redirectionUrl` (`/newsletter/estado?accion=confirmado`). NO usamos webhook DOI propio: la confirmación se refleja en Firestore vía la reconciliación semanal (el contacto solo aparece en la lista tras confirmar).
+- **Modelo de dos listas (migración MailPoet)**: la lista original se creó importando la de MailPoet, sin conservar el registro de consentimiento. Se separa en dos:
+  - **Lista heredada (A)** — los contactos importados. No la referencia ningún código; existe solo como origen de la campaña de reconfirmación y se borra al cerrarla.
+  - **Lista con consentimiento (B)** — la que apunta `BREVO_NEWSLETTER_LIST_ID`. Solo entra quien completa el DOI del formulario público.
+
+  `subscribeNewsletter` no tiene fallback a un ID por defecto: si el secreto no contiene un entero positivo, el alta falla con `internal`. Caer a una lista concreta significaría dar de alta en la lista heredada, que es la que carece de consentimiento acreditado.
+
+  No sirve reutilizar una única lista: `POST /contacts/doubleOptinConfirmation` con un contacto que ya pertenece a `includeListIds` responde 400 `duplicate_parameter`, que `subscribeNewsletter` traduce a `{ ok: true, duplicate: true }`. Con lista única el reconfirmante vería el mensaje de éxito, no recibiría el email y no habría consentimiento — justo el colectivo objetivo de la campaña. Procedimiento operativo completo en §12.
+- **Secretos (Firebase Secret Manager)**: `BREVO_API_KEY`, `BREVO_WEBHOOK_SECRET`, `BREVO_NEWSLETTER_LIST_ID` (lista B), `BREVO_NEWSLETTER_DOI_TEMPLATE_ID`.
 
 ---
 
@@ -148,6 +158,7 @@ Convenciones:
         | 'reconciliacion'             // ausente en Brevo o blacklisted
         | 'bounce_o_baja'              // importado ya blacklisted
         | 'no_confirmado'              // sin confirmar tras 14 días
+        | 'migracion_sin_consentimiento' // heredado de MailPoet, nunca pasó por el DOI
   fecha_baja?: Timestamp
   origen?: 'brevo_import'              // importado por reconciliación
 }
@@ -247,6 +258,8 @@ Clase utilitaria global: `kalian-poster-text` para títulos grandes.
 ### Cloud Functions
 - Region `europe-west1` siempre.
 - Secretos vía `defineSecret(...)`, nunca env vars planas para Brevo.
+- Las callables corren con Admin SDK y **bypassan `firestore.rules`**: si una function solo debe usarla staff, comprobar el rol con `assertStaff(request.auth)` (replica `isAdmin()`/`isTeacher()` leyendo `users/{uid}.role`), no basta con `request.auth`.
+- En emails transaccionales, leer destinatario y contenido del doc autoritativo en Firestore; el cliente pasa solo un identificador.
 - Webhook entrante: validar secret antes de procesar.
 - Devolver 200 incluso en eventos ignorados (evita reintentos innecesarios).
 
@@ -378,7 +391,7 @@ CSP y cabeceras de seguridad: definidas en `firebase.json` (HSTS, X-Frame DENY, 
 ## 12. Estado actual y roadmap
 
 ### Hecho recientemente
-- Doble opt-in nativo Brevo + landing `/newsletter/estado` polivalente (PR #5).
+- Doble opt-in vía `POST /contacts/doubleOptinConfirmation` (no toggle de lista — inviable con formulario fuera de Brevo) + plantilla transaccional DOI (#14, "Plantilla Confirmar subscripcion a Newletter") + landing `/newsletter/estado` polivalente (PR #5).
 - Reconciliación semanal ampliada: promociones, caducidad, baja por ausencia.
 - Badge "PENDIENTE" en `AdminNewsletter`.
 - Reglas Firestore: estado inicial restringido en alta pública.
@@ -387,9 +400,16 @@ CSP y cabeceras de seguridad: definidas en `firebase.json` (HSTS, X-Frame DENY, 
 ### Pendiente operativo (no código)
 - **Firebase Auth: desactivar templates por defecto**. En Firebase Console → Authentication → Templates → "Password reset" (y "Email verification" si se activase alguna vez): dejarlos desactivados o apuntando a un dominio custom. El envío desde `noreply@<project>.firebaseapp.com` está deprecado por Google y va a spam. Todos nuestros emails de auth ya salen desde `info@kalian.es` vía Brevo (`requestPasswordReset`).
 - **Custom action URL** (medio plazo): configurar `https://kalian.es/auth/action` como Authorized domain + action URL en Firebase Auth, añadir ruta en `App.tsx` con `verifyPasswordResetCode`/`confirmPasswordReset` para que el reset se complete bajo nuestro dominio en lugar de `firebaseapp.com`. Requiere pantalla nueva de "nueva contraseña".
-- Activar doble opt-in en la lista Brevo + plantilla DOI con URL final `/newsletter/estado?accion=confirmado`.
-- Crear atributos `RECONFIRMADO` (bool) + `FECHA_RECONFIRMACION` (date) en Brevo.
-- Lanzar campaña de reconfirmación RGPD: dos CTA ("Sigo dentro" / "Darme de baja"), eliminar al final los `RECONFIRMADO != true`.
+- Fijar el valor del secreto `BREVO_NEWSLETTER_DOI_TEMPLATE_ID` (Firebase Secret Manager) a `14`, el ID de la plantilla DOI ya creada y activa en Brevo.
+- Probar el flujo end-to-end en producción: alta → email DOI recibido → clic → `/newsletter/estado?accion=confirmado` → contacto confirmado en Brevo → `reconciliarNewsletterBrevo` promueve a `activo`.
+- **Campaña de reconfirmación RGPD con dos listas** (sustituye al plan anterior de atributo `RECONFIRMADO` sobre lista única, inviable por el `duplicate_parameter` descrito en §3):
+  1. Crear en Brevo la lista B vacía ("Newsletter — consentimiento verificado"). La lista A (importada de MailPoet) queda intacta.
+  2. Verificar con un email de prueba ya presente en A que `doubleOptinConfirmation` contra B sí envía el correo. Es el único punto del plan que depende del comportamiento exacto de la API de Brevo.
+  3. Apuntar el secreto `BREVO_NEWSLETTER_LIST_ID` a B (`firebase functions:secrets:set`) y redesplegar Functions.
+  4. Enviar la campaña desde la lista A, con enlace al formulario público. Plazo de 30 días y un recordatorio a mitad. Email sobrio, sin contenido promocional: solo re-consentimiento.
+  5. Vencido el plazo, **borrar la lista A, no sus contactos**: `DELETE /contacts/{email}` elimina el contacto de toda la cuenta, así que borrar contactos de A eliminaría también a quien ya reconfirmó en B.
+- Efecto esperado tras el paso 3: la primera reconciliación semanal marca `'baja'` con `motivo: 'migracion_sin_consentimiento'` todos los docs `activo` sin `fecha_confirmacion` (los heredados), y los va reactivando a medida que reconfirman. El contador `bajasSinConsentimiento` del log de `reconciliarNewsletterBrevo` da la magnitud.
+- Durante la campaña, evitar borrados de suscriptores desde `/staff/newsletter`: `onNewsletterSubscriberDeleted` borra el contacto de toda la cuenta Brevo, lista B incluida.
 - **Purga periódica de Artifact Registry** (cada 2-3 meses): borrar versiones antiguas de las imágenes de Cloud Functions en https://console.cloud.google.com/artifacts?project=kalianhkg-886a6 para no cruzar el tier gratuito (0.5 GB/mes). Firebase no las purga solo; cada deploy del CD deja una imagen nueva de ~100-300 MB. Mantener solo la última versión productiva de cada function. Alternativa futura: cleanup policy en Artifact Registry (keep last N versions).
 
 ### Deuda técnica conocida

@@ -19,7 +19,7 @@ Estas afirmaciones deben ser ciertas en cualquier estado de la base de datos. Si
 3. **Capacidad mínima**: `reservas.numPersonas ≥ 1 && ≤ 20`. (`isValidReserva`.)
 4. **Aforo monotónico (alta pública)**: el alta de reserva solo puede **incrementar** `eventos.{id}.aforo_reservado`, nunca decrementar, en pasos ≤ 20, y nunca por encima de `aforo_maximo`. (`isSafeAforoUpdate`.)
 5. **Newsletter — estado inicial**: el alta pública de `newsletter_subscribers` solo admite `estado: 'pendiente_confirmacion'`. El doc ID es el email, así que la re-alta sobre un doc en `'baja'` o `'pendiente_confirmacion'` se permite (update público con `incoming().email == existing().email`) pero un doc en `'activo'` no puede degradarse desde un contexto anónimo. La promoción a `'activo'` la hacen Cloud Functions o admin. (`isValidNewsletter`.)
-6. **Ownership de reservas**: el lector de una reserva debe ser admin, portero, el `uidTitular`, o coincidir con `emailTitular` en su token. (`match /reservas/{id}` allow read.)
+6. **Ownership de reservas**: el lector de una reserva debe ser admin, portero, el `uidTitular`, o coincidir con `emailTitular` en su token. (`match /reservas/{id}` allow read.) Corolario: un invitado anónimo **no puede** hacer `list`/`query` sobre `reservas` (ni siquiera para comprobar si ya tiene una reserva propia) — cualquier comprobación de duplicados para el flujo público tiene que resolverse server-side con Admin SDK (`comprobarReservaDuplicada`), devolviendo únicamente un booleano para no permitir enumerar reservas ajenas por DNI/email.
 7. **Edición de reserva por owner**: el titular puede modificar **solo** `acompañantes`. Cualquier otro campo requiere admin/portero. (`match /reservas/{id}` allow update.)
 8. **Capability tokens**: gestionar reserva de invitado requiere el `manageToken` (16-64 chars) emitido al hacer la reserva. La verificación ocurre en la Cloud Function `gestionarReservaInvitado`.
 9. **Validación de socio**: el alta de socio (`socios`) exige `uid == request.auth.uid`. (`isValidSocioCreate`.)
@@ -28,6 +28,12 @@ Estas afirmaciones deben ser ciertas en cualquier estado de la base de datos. Si
 12. **Portero acotado**: el custom token de `portero` solo permite actualizar `aforo_actual`/`aforo_reservado` en eventos. Nada más. (`isPorteroAforoUpdate`.)
 13. **Reset de contraseña no enumera emails y no usa el canal por defecto de Firebase**: `requestPasswordReset` responde siempre `{ ok: true }`, exista o no el email en Firebase Auth (mismo criterio que la invariante #10 de newsletter). Protegido por rate limit 5 intentos/60s por IP, igual que `validatePuertaAccess`. Ningún fichero del cliente puede importar `sendPasswordResetEmail`/`sendEmailVerification`/`sendSignInLinkToEmail` de `firebase/auth` — la regla ESLint `no-restricted-imports` en `eslint.config.js` lo bloquea. Todo email de auth va por Cloud Function → Brevo → `info@kalian.es`. (`functions/src/index.ts` → `requestPasswordReset`; `eslint.config.js` → `no-restricted-imports`.)
 14. **Allowlist de `solicitudes_cursos` sincronizada con el formulario**: `isValidSolicitud.hasOnly` debe incluir todo campo que el cliente escriba en `addDoc`, o el alta se rechaza con `permission-denied` (regresión detectada: `HomeSocio.tsx` mandaba `aceptoTerminos` sin que la regla lo permitiera). `aceptoTerminos` se añadió a la allowlist como `bool` opcional; el campo `especialidad` (nunca poblado por ningún input) se eliminó del cliente en vez de añadirse a la regla.
+15. **Prueba de consentimiento de newsletter**: un doc de `newsletter_subscribers` en `'activo'` **sin** `fecha_confirmacion` no acredita consentimiento — procede de la importación MailPoet → Brevo, no del doble opt-in. Ese campo solo lo escriben la promoción DOI de `reconciliarNewsletterBrevo` y el panel admin. Por eso la baja por ausencia en Brevo se registra con `motivo: 'migracion_sin_consentimiento'` (no `'reconciliacion'`) cuando falta: el motivo es lo que permite justificar ante la autoridad de control por qué se dejó de enviar a ese contacto. Corolario operativo: la lista que apunta `BREVO_NEWSLETTER_LIST_ID` solo debe contener contactos con opt-in verificado; la lista heredada vive aparte y no la referencia ningún código (ver SPEC.md §3 y §12). (`functions/src/index.ts` → `reconciliarNewsletterBrevo`.)
+16. **Emails de curso no falsificables**: `sendCourseApprovalEmail` no acepta destinatario ni datos del request — solo un `solicitudId`. Antes de enviar exige (a) llamante autenticado **con rol staff verificado server-side** (`assertStaff`: master email, o `users/{uid}.role` en `admin`/`teacher`/`profesor`/`teacher_admin`), y (b) que la solicitud esté ya en estado `'aprobado'`. Destinatario, curso, horario y precio se leen de `solicitudes_cursos/{id}` y `cursos/{id}`. Mismo criterio que la invariante de `sendReservationConfirmation` (hallazgo C2): las callables corren con Admin SDK y **bypassan `firestore.rules`**, así que el rol hay que comprobarlo dentro de la function. (`functions/src/index.ts` → `sendCourseApprovalEmail`.)
+17. **Emails de socio solo por staff**: `sendWelcomeEmail` y `sendMembershipUpdateEmail` exigen `assertStaff`. Antes bastaba con `request.auth`, así que cualquier socio autenticado podía disparar correos con el remitente verificado `info@kalian.es` hacia direcciones arbitrarias (vector de spam/phishing con la reputación del dominio de Kalian).
+18. **Enlaces de activación nunca viajan al cliente**: el enlace de `generatePasswordResetLink` se genera dentro de la function y se inyecta directamente en el email. Ninguna callable lo devuelve en su respuesta ni lo acepta como parámetro. Un enlace de reset es equivalente a una credencial: quien lo tiene se apodera de la cuenta. (`sendWelcomeEmail`, `sendCourseApprovalEmail`.)
+19. **Carnet digital atado al token**: `enviarCarnetDigital` no acepta ningún dato del request. Localiza el doc del socio por `request.auth.uid` o por el email del token, y el QR se genera con el `uid` del token, no con el del documento. Es idempotente vía `carnetEnviadoAt`, así que no se puede usar para bombardear a un socio con correos. (`functions/src/index.ts` → `enviarCarnetDigital`.)
+
 
 ---
 
@@ -49,6 +55,7 @@ Cada payload es un test conceptual. La columna **Estado** indica si el payload e
 | 10 | `users/{uid}` create | Auto-asignar email de admin en el doc | `PERMISSION_DENIED` para `role`; el master se detecta por `request.auth.token.email`, no por el campo del doc | `isMasterAdmin()` valida contra `request.auth.token.email` | ✅ cubierto |
 | 11 | `reservas` list | `query` sin filtro por UID/email | `PERMISSION_DENIED` para no-admin/portero | allow read por owner/admin/portero; list sin filtro requiere read en cada doc | ✅ cubierto |
 | 12 | `newsletter_subscribers/{id}` create | Alta directa con `estado: 'activo'` | `PERMISSION_DENIED` | `isValidNewsletter` exige `estado == 'pendiente_confirmacion'` si se informa | ✅ cubierto (PR #5) |
+| 13 | `reservas` list (anónimo) | El cliente público intentaba `query` con `where('dniTitular'/'emailTitular', '==', …)` para comprobar duplicados antes de reservar | `PERMISSION_DENIED` (regla #11), y ese error se propagaba a **toda** la reserva pública (bug reportado: cualquier visitante no logueado no podía reservar) | Movido a la Cloud Function `comprobarReservaDuplicada` (Admin SDK, sin auth); el cliente ya no hace `list` sobre `reservas` | ✅ cerrado |
 
 **Leyenda**:
 - ✅ cubierto — la regla actual rechaza el payload.
@@ -64,8 +71,7 @@ Backlog ordenado por impacto/coste.
 1. **`isValidReserva` con `hasOnly`** — limitar las claves permitidas en `reservas` al crear para impedir campos extra inertes (Payload #2). Coste bajo.
 2. **`isValidNewsletter` con `hasOnly`** — mismo razonamiento sobre `newsletter_subscribers`.
 3. **Tests automatizados** — definir suite (`functions/test/rules.test.ts` con `@firebase/rules-unit-testing`) que ejecute cada payload contra el emulador. Pendiente desde la versión original de este documento.
-4. **Mover `VITE_BREVO_API_KEY` al servidor** — está expuesta en el bundle del cliente. Tracked también en [SPEC.md §12](SPEC.md).
-5. **Validar firma HMAC de webhooks Brevo** — actualmente usamos query secret porque Brevo no firma. Si Brevo añade firma, migrar.
+4. **Validar firma HMAC de webhooks Brevo** — actualmente usamos query secret porque Brevo no firma. Si Brevo añade firma, migrar.
 
 ---
 
@@ -118,6 +124,19 @@ Auditoría exhaustiva de `firestore.rules`, Cloud Functions y cliente. Los halla
 | B5 | Comentarios en `firestore.rules` que revelan vectores corregidos (C1/C2/C3/A4/A5…). | ✅ cerrado — comentarios de código de vulnerabilidad eliminados; la historia vive en `SECURITY_SPEC.md` y en los commits. |
 | B6 | Fallback de `aforo_maximo` a 9999 en `isSafeAforoUpdate`. | 🟡 aceptado — fallback intencional para eventos sin campo `aforo_maximo`; cambiar a 0 rompería eventos existentes sin ese campo. Documentar en DOCUMENTATION.md que el campo es obligatorio al crear eventos. |
 | B7 | Cupones (`cupon`, `precioCupon`) en docs `eventos` con lectura pública. | 🟡 diseño aceptado — los cupones son códigos promocionales distribuidos activamente; moverlos a colección privada requeriría refactor del flujo `ReservaForm`. Riesgo real: usuario listo puede descubrir el cupón viendo el doc del evento en Firestore. Revisitar si se añaden cupones de uso único. |
+
+### Sprint 5 — Bugs de reglas detectados en la auditoría de BDD (agosto 2026)
+
+| # | Área | Hallazgo | Mitigación | Estado |
+|---|---|---|---|---|
+| P0-1 | Rules | `PerfilSocio.tsx:43,156` y `socioService.ts:56,59` disparaban `updateDoc` sobre el propio doc del socio (backfill de `uid`, refresco de `membresias`, sync de `estado`) que la regla `/socios/{id}` `allow update: if isAdmin()` rechazaba silenciosamente. El socio autenticado no podía autoconsolidar su perfil. | Nueva helper `isOwnSocioSelfUpdate(oldData, newData)` que permite al socio actualizar SU doc (identificado por `uid` o `email` en minúsculas), restringido a `['uid','membresias','estado']` con `hasOnly`, y validando que si escribe `uid` sea el suyo y que `estado ∈ {'activo','inactivo'}`. | ✅ cerrado |
+| P0-2 | Rules | Colección `metadata` (contador `metadata/storage.totalBytes` que `TeacherDashboard.tsx` actualiza tras subir/borrar documentos de curso) sin `match` explícito. Caía en el safety net `match /{document=**}` (solo `isMasterAdmin`), así que ningún profesor no-master podía actualizar el contador → el uso de storage quedaba siempre desincronizado. | Añadido `match /metadata/{id}` con `read: isSignedIn()`, `write: isAdmin() || isTeacher()`. | ✅ cerrado |
+
+### Sprint 6 — Doble opt-in de newsletter no confirmaba realmente (septiembre 2026)
+
+| # | Área | Hallazgo | Mitigación | Estado |
+|---|---|---|---|---|
+| S6-1 | Functions | `subscribeNewsletter` usaba `POST /contacts`, que añade el contacto a la lista de forma inmediata y no dispara ningún email de confirmación ni retiene la membresía de lista hasta un opt-in real. `reconciliarNewsletterBrevo` promueve a `'activo'` todo `pendiente_confirmacion` presente en la lista de Brevo — así que, en la práctica, cualquier alta pasaba a `'activo'` en la siguiente reconciliación semanal sin que el titular del email confirmara nunca nada. El estado `'pendiente_confirmacion'` (base del consentimiento RGPD para el envío de comunicaciones) era cosmético. | Migrado a `POST /contacts/doubleOptinConfirmation`: el email de confirmación se envía vía plantilla transaccional (`BREVO_NEWSLETTER_DOI_TEMPLATE_ID`) y el contacto solo se añade a `includeListIds` cuando confirma el enlace. La reconciliación semanal (sin cambios) ahora sí solo promueve a `'activo'` contactos con opt-in real. | ✅ cerrado |
 
 ### Falsos positivos descartados
 
@@ -209,7 +228,6 @@ Roles que **NO** se otorgan:
 |---|---|---|
 | `FIREBASE_SERVICE_ACCOUNT` | JSON descargado de GCP Console (paso de alta del SA) | Auth deploy |
 | `VITE_FIREBASE_*` (×7) | Firebase Console → Project settings → SDK setup | Inyectados en `npm run build` |
-| `VITE_BREVO_API_KEY`, `VITE_BREVO_NEWSLETTER_LIST_ID` | Brevo Account → API keys | Inyectados en `npm run build` (deuda técnica conocida, ver CLAUDE.md §5) |
 
 ### Invariantes operativos
 

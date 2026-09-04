@@ -41,3 +41,19 @@ export async function withRetry<T>(fn: () => Promise<T>, maxAttempts = 3, baseDe
   }
   throw lastErr;
 }
+
+// Formatea una fecha 'YYYY-MM-DD' (con hora opcional 'THH:MM') como texto largo
+// en castellano: "4 de junio de 2026 · 22:00h". Devuelve '' si el formato no encaja.
+const MESES = ['enero', 'febrero', 'marzo', 'abril', 'mayo', 'junio',
+               'julio', 'agosto', 'septiembre', 'octubre', 'noviembre', 'diciembre'];
+
+export function formatFechaLarga(fecha: unknown): string {
+  if (typeof fecha !== 'string') return '';
+  const [dia, hora] = fecha.split('T');
+  const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(dia || '');
+  if (!m) return '';
+  const mesNombre = MESES[Number(m[2]) - 1];
+  if (!mesNombre) return '';
+  const base = `${Number(m[3])} de ${mesNombre} de ${m[1]}`;
+  return hora && /^\d{2}:\d{2}/.test(hora) ? `${base} · ${hora.substring(0, 5)}h` : base;
+}

@@ -18,6 +18,11 @@ const callMembership = httpsCallable<
   unknown
 >(functions, 'sendMembershipUpdateEmail');
 
+const callCourseApproval = httpsCallable<
+  { solicitudId: string },
+  unknown
+>(functions, 'sendCourseApprovalEmail');
+
 const callSubscribeNewsletter = httpsCallable<
   { nombre: string; email: string },
   { ok: boolean; duplicate?: boolean }
@@ -39,6 +44,15 @@ export const sendMembershipUpdateEmail = async (
   membresias: Record<string, string>,
 ) => {
   await callMembership({ email, nombre, uid, membresias });
+};
+
+/**
+ * Email de "solicitud de inscripción aceptada". Solo recibe el id de la
+ * solicitud: la Cloud Function lee destinatario y datos del curso del doc
+ * autoritativo en Firestore y exige que ya esté en estado 'aprobado'.
+ */
+export const sendCourseApprovalEmail = async (solicitudId: string) => {
+  await callCourseApproval({ solicitudId });
 };
 
 export const subscribeNewsletter = async (nombre: string, email: string) => {

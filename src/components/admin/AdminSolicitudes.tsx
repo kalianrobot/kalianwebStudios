@@ -4,7 +4,7 @@ import { collection, onSnapshot, doc, setDoc, getDoc, query, where, DocumentData
 import { Link } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
 import { createSocioAuth } from '../../lib/adminAuth';
-import { sendWelcomeEmail, sendMembershipUpdateEmail } from '../../lib/brevoService';
+import { sendWelcomeEmail, sendMembershipUpdateEmail, sendCourseApprovalEmail } from '../../lib/brevoService';
 import { registrarIngreso, MetodoPago } from '../../lib/finanzas';
 
 const AdminSolicitudes = () => {
@@ -70,6 +70,10 @@ const AdminSolicitudes = () => {
     if (!window.confirm(`¿Aprobar solicitud de ${sol.nombre} para el curso ${sol.cursoTitulo}?`)) return;
     
     setLoading(true);
+    // Ningún email debe abortar la aprobación: si Brevo falla a mitad, el socio
+    // ya está creado y el curso actualizado, así que la solicitud tiene que
+    // quedar aprobada igualmente. Los fallos se acumulan aquí y se avisan al final.
+    const fallosEmail: string[] = [];
     try {
       const emailClean = sol.email.trim().toLowerCase();
       const dniUpper = (sol.dni || "").toUpperCase().trim();
@@ -115,10 +119,16 @@ const AdminSolicitudes = () => {
         try {
           const authResult = await createSocioAuth(emailClean);
           if (authResult.uid) realUid = authResult.uid;
-          
-          await sendWelcomeEmail(emailClean, sol.nombre || "Soci@s Kalian", "https://kalian.es/login");
         } catch (err) {
           console.error("Error creating auth user:", err);
+          fallosEmail.push("activación de cuenta");
+        }
+
+        try {
+          await sendWelcomeEmail(emailClean, sol.nombre || "Soci@s Kalian", "https://kalian.es/login");
+        } catch (err) {
+          console.error("Error enviando email de bienvenida:", err);
+          fallosEmail.push("bienvenida");
         }
 
         await setDoc(socioRef, {
@@ -134,7 +144,12 @@ const AdminSolicitudes = () => {
         });
 
         // Trigger membership update email for new socio
-        await sendMembershipUpdateEmail(emailClean, sol.nombre, realUid, fechaFin ? { [categoria]: fechaFin } : {});
+        try {
+          await sendMembershipUpdateEmail(emailClean, sol.nombre, realUid, fechaFin ? { [categoria]: fechaFin } : {});
+        } catch (err) {
+          console.error("Error enviando el carnet digital:", err);
+          fallosEmail.push("carnet digital");
+        }
       } else {
         // Si ya es socio, solo añadimos el curso si no lo tiene y actualizamos expiración
         const updateData: any = {
@@ -150,7 +165,12 @@ const AdminSolicitudes = () => {
         const finalSocioSnap = await getDoc(socioRef);
         if (finalSocioSnap.exists()) {
           const sData = finalSocioSnap.data();
-          await sendMembershipUpdateEmail(sData.email, sData.nombre, sData.uid, sData.membresias || {});
+          try {
+            await sendMembershipUpdateEmail(sData.email, sData.nombre, sData.uid, sData.membresias || {});
+          } catch (err) {
+            console.error("Error enviando el carnet digital:", err);
+            fallosEmail.push("carnet digital");
+          }
         }
       }
 
@@ -169,7 +189,16 @@ const AdminSolicitudes = () => {
         fechaAprobacion: new Date().toISOString()
       });
 
-      // 5. Registrar en Finanzas
+      // 5. Email de aceptación de la inscripción. Va después de marcar 'aprobado'
+      // porque la Cloud Function exige ese estado antes de enviar nada.
+      try {
+        await sendCourseApprovalEmail(sol.id);
+      } catch (err) {
+        console.error("Error enviando el email de aceptación:", err);
+        fallosEmail.push("aceptación de la inscripción");
+      }
+
+      // 6. Registrar en Finanzas
       const monto = sol.modalidad?.precio || 0;
       if (monto > 0) {
         await registrarIngreso({
@@ -181,8 +210,13 @@ const AdminSolicitudes = () => {
         });
       }
 
-      setMsg("✅ Solicitud aprobada con éxito");
-      setTimeout(() => setMsg(''), 3000);
+      if (fallosEmail.length) {
+        setMsg(`⚠️ Solicitud aprobada, pero fallaron estos emails: ${fallosEmail.join(', ')}`);
+        setTimeout(() => setMsg(''), 10000);
+      } else {
+        setMsg("✅ Solicitud aprobada y email de aceptación enviado");
+        setTimeout(() => setMsg(''), 3000);
+      }
       fetchSolicitudes();
     } catch (err) {
       console.error(err);

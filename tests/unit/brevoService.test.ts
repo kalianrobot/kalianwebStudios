@@ -7,7 +7,7 @@ vi.mock('firebase/functions', () => ({
   httpsCallable: vi.fn(() => mockCallable),
 }));
 
-import { sendWelcomeEmail, sendMembershipUpdateEmail, subscribeNewsletter } from '../../src/lib/brevoService';
+import { sendWelcomeEmail, sendMembershipUpdateEmail, sendCourseApprovalEmail, subscribeNewsletter } from '../../src/lib/brevoService';
 
 describe('brevoService', () => {
   beforeEach(() => { vi.clearAllMocks(); });
@@ -22,6 +22,11 @@ describe('brevoService', () => {
     expect(mockCallable).toHaveBeenCalledWith({
       email: 'a@b.es', nombre: 'Ana', uid: 'uid1', membresias: { curso: '2026-12-31' },
     });
+  });
+
+  it('sendCourseApprovalEmail solo manda el id de la solicitud', async () => {
+    await sendCourseApprovalEmail('sol123');
+    expect(mockCallable).toHaveBeenCalledWith({ solicitudId: 'sol123' });
   });
 
   it('subscribeNewsletter devuelve el data de la CF', async () => {

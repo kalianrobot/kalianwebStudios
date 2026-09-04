@@ -5,7 +5,7 @@ import { defineSecret } from 'firebase-functions/params';
 import { logger } from 'firebase-functions';
 import * as admin from 'firebase-admin';
 import { timingSafeEqual } from 'crypto';
-import { safeJson, escapeHtml, maskEmail, withRetry } from './helpers';
+import { safeJson, escapeHtml, maskEmail, withRetry, formatFechaLarga } from './helpers';
 
 admin.initializeApp();
 
@@ -45,6 +45,24 @@ async function callBrevo(apiKey: string, payload: object) {
     return safeJson(res);
   } finally {
     clearTimeout(timeoutId);
+  }
+}
+
+// Email del administrador maestro (mismo valor que en firestore.rules y
+// src/lib/constants.ts). Se compara siempre en minúsculas.
+const MASTER_EMAIL = 'kalianrobot@gmail.com';
+
+// Comprueba server-side que el llamante es staff (master admin, admin o profesor),
+// replicando isAdmin()/isTeacher() de firestore.rules. Las callables corren con
+// Admin SDK y bypassan las reglas, así que el rol hay que verificarlo aquí.
+async function assertStaff(auth: { uid: string; token?: Record<string, unknown> }) {
+  const email = String(auth.token?.email || '').toLowerCase();
+  if (email === MASTER_EMAIL) return;
+
+  const userSnap = await admin.firestore().collection('users').doc(auth.uid).get();
+  const role = userSnap.exists ? String(userSnap.data()?.role || '') : '';
+  if (!['admin', 'teacher', 'profesor', 'teacher_admin'].includes(role)) {
+    throw new HttpsError('permission-denied', 'Solo staff puede realizar esta acción.');
   }
 }
 
@@ -280,6 +298,117 @@ export const sendMembershipUpdateEmail = onCall(
             </div>
           </div>
           <div class="f"><p>KALIAN HIRI KULTUR GUNEA</p><p>Este carnet es personal e intransferible.</p></div>
+        </div></body></html>`,
+    });
+  }
+);
+
+// ─── sendCourseApprovalEmail ────────────────────────────────────────────────
+// Email de "solicitud de inscripción aceptada". A diferencia de sendWelcomeEmail /
+// sendMembershipUpdateEmail, aquí el cliente solo pasa el `solicitudId`: el
+// destinatario y todo el contenido se leen del doc autoritativo en
+// `solicitudes_cursos` (mismo criterio que sendReservationConfirmation), y el rol
+// del llamante se comprueba server-side. Solo se envía si la solicitud ya está
+// en estado 'aprobado', lo que ata la function al flujo legítimo de AdminSolicitudes.
+export const sendCourseApprovalEmail = onCall(
+  { secrets: [BREVO_API_KEY], region: EU_REGION },
+  async (request) => {
+    if (!request.auth) throw new HttpsError('unauthenticated', 'Auth required');
+    await assertStaff(request.auth);
+
+    const { solicitudId } = request.data as { solicitudId?: string };
+    if (typeof solicitudId !== 'string' || solicitudId.length === 0 || solicitudId.length > 128) {
+      throw new HttpsError('invalid-argument', 'Solicitud no válida.');
+    }
+
+    const db = admin.firestore();
+    const solSnap = await db.collection('solicitudes_cursos').doc(solicitudId).get();
+    if (!solSnap.exists) throw new HttpsError('not-found', 'Solicitud no encontrada.');
+
+    const sol = solSnap.data() as any;
+    if (sol.estado !== 'aprobado') {
+      throw new HttpsError('failed-precondition', 'La solicitud no está aprobada.');
+    }
+
+    const email = String(sol.email || '').toLowerCase().trim();
+    const nombre = String(sol.nombre || '');
+    const cursoTitulo = String(sol.cursoTitulo || '');
+    if (!email) throw new HttpsError('failed-precondition', 'La solicitud no tiene email.');
+
+    // Datos del curso: también del doc autoritativo, no del request.
+    let horario = '';
+    let fechaInicio = '';
+    let profesorNombre = '';
+    let sala = '';
+    if (sol.cursoId) {
+      const cursoSnap = await db.collection('cursos').doc(String(sol.cursoId)).get();
+      if (cursoSnap.exists) {
+        const curso = cursoSnap.data() as any;
+        horario = String(curso.horario || '');
+        fechaInicio = formatFechaLarga(curso.fechaInicio);
+        profesorNombre = String(curso.profesorNombre || curso.profesor || '');
+        sala = String(curso.sala || '');
+      }
+    }
+
+    const precio = Number(sol.modalidad?.precio) || 0;
+    const modalidad = String(sol.modalidad?.tipo || '');
+
+    const fila = (etiqueta: string, valor: string) => valor
+      ? `<tr>
+          <td style="padding:8px 0;font-size:11px;font-weight:900;text-transform:uppercase;letter-spacing:2px;color:#D4AF37;white-space:nowrap">${escapeHtml(etiqueta)}</td>
+          <td style="padding:8px 0 8px 20px;font-size:14px;color:#F5F5F0CC">${escapeHtml(valor)}</td>
+        </tr>`
+      : '';
+
+    const detalles = [
+      fila('Curso', cursoTitulo),
+      fila('Modalidad', modalidad),
+      fila('Inicio', fechaInicio),
+      fila('Horario', horario),
+      fila('Profesor/a', profesorNombre),
+      fila('Sala', sala),
+      fila('Importe', precio > 0 ? `${precio} €` : ''),
+    ].join('');
+
+    const nombreSafe = escapeHtml(nombre);
+    const tituloSafe = escapeHtml(cursoTitulo);
+
+    logger.info('sendCourseApprovalEmail: enviando', { solicitudId, email: maskEmail(email) });
+
+    return callBrevo(BREVO_API_KEY.value(), {
+      sender: SENDER,
+      to: [{ email, name: nombre }],
+      subject: `Inscripción aceptada: ${cursoTitulo}`,
+      htmlContent: `<!DOCTYPE html><html><head>
+        <style>
+          body{margin:0;padding:0;background:#0A0A0A;font-family:Inter,sans-serif;color:#F5F5F0}
+          .c{max-width:600px;margin:0 auto;background:#0A0A0A;border:1px solid #D4AF3733}
+          .h{padding:50px 40px;text-align:center;border-bottom:1px solid #D4AF3733}
+          .b{padding:40px;text-align:center}
+          .f{padding:30px;text-align:center;background:#000;border-top:1px solid #D4AF3733;font-size:10px;color:#666}
+          h1{color:#D4AF37;font-size:40px;font-weight:900;text-transform:uppercase;letter-spacing:-2px;margin:0;line-height:.9;font-style:italic}
+          p{font-size:16px;line-height:1.6;color:#F5F5F0CC;margin-bottom:20px}
+          .acc{color:#D4AF37;font-weight:700}
+          .div{height:2px;width:40px;background:#D4AF37;margin:30px auto}
+          .btn{display:inline-block;background:#D4AF37;color:#000;padding:18px 36px;text-decoration:none;font-weight:900;text-transform:uppercase;letter-spacing:2px;font-size:13px;border-radius:8px}
+          .box{background:#1A1A1A;border:1px solid #D4AF3733;border-radius:16px;padding:24px;margin:30px 0;text-align:left}
+        </style></head><body>
+        <div class="c">
+          <div class="h"><h1>INSCRIPCIÓN</h1><h1>ACEPTADA</h1></div>
+          <div class="b">
+            <p>Hola <span class="acc">${nombreSafe}</span>,</p>
+            <p>Tu solicitud de inscripción en <span class="acc">${tituloSafe}</span> ha sido aceptada. Ya tienes plaza reservada.</p>
+            <div class="box"><table style="width:100%;border-collapse:collapse">${detalles}</table></div>
+            ${precio > 0
+              ? '<p style="font-size:13px;color:#F5F5F099">El pago de la inscripción queda pendiente de confirmar en el centro. Te indicaremos la forma de pago acordada.</p>'
+              : ''}
+            <div class="div"></div>
+            <p>Consulta tu carnet digital y tus cursos desde tu área de soci@:</p>
+            <div style="margin:30px 0"><a href="https://kalian.es/login" class="btn">ENTRAR EN MI ÁREA</a></div>
+            <p style="font-size:12px;color:#666">Si es tu primer curso con nosotros, recibirás también un email para activar tu cuenta y definir tu contraseña.</p>
+          </div>
+          <div class="f"><p>KALIAN HIRI KULTUR GUNEA</p><p>Responsable: Kalian. Finalidad: Gestión de soci@s y cursos. Derechos: Acceso y supresión.</p></div>
         </div></body></html>`,
     });
   }

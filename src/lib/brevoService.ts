@@ -9,7 +9,7 @@ import { functions } from '../firebase';
  */
 
 const callWelcome = httpsCallable<
-  { email: string; nombre: string; activationLink: string },
+  { email: string; nombre: string },
   unknown
 >(functions, 'sendWelcomeEmail');
 
@@ -17,6 +17,11 @@ const callMembership = httpsCallable<
   { email: string; nombre: string; uid: string; membresias: Record<string, string> },
   unknown
 >(functions, 'sendMembershipUpdateEmail');
+
+const callCarnet = httpsCallable<
+  Record<string, never>,
+  { enviado: boolean; motivo?: string }
+>(functions, 'enviarCarnetDigital');
 
 const callCourseApproval = httpsCallable<
   { solicitudId: string },
@@ -33,8 +38,21 @@ const callPasswordReset = httpsCallable<
   { ok: boolean }
 >(functions, 'requestPasswordReset');
 
-export const sendWelcomeEmail = async (email: string, nombre: string, activationLink: string) => {
-  await callWelcome({ email, nombre, activationLink });
+/**
+ * Email de bienvenida. El enlace para crear la contraseña lo genera la Cloud
+ * Function con `generatePasswordResetLink`; el cliente no lo construye ni lo ve.
+ */
+export const sendWelcomeEmail = async (email: string, nombre: string) => {
+  await callWelcome({ email, nombre });
+};
+
+/**
+ * Manda el carnet digital al socio autenticado si aún no lo tiene. Idempotente
+ * server-side: la function marca `carnetEnviadoAt` y no reenvía.
+ */
+export const enviarCarnetDigital = async () => {
+  const res = await callCarnet({});
+  return res.data;
 };
 
 export const sendMembershipUpdateEmail = async (

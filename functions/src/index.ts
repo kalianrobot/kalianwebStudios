@@ -199,14 +199,27 @@ export const requestPasswordReset = onCall(
 );
 
 // ─── sendWelcomeEmail ────────────────────────────────────────────────────────
+// El botón lleva el enlace REAL de Firebase Auth para crear la contraseña,
+// generado aquí (el cliente no puede fabricarlo ni recibirlo). Antes el cliente
+// pasaba un `activationLink` hardcodeado a /login, que no activaba nada y
+// obligaba a mandar un segundo email de reset por separado.
 export const sendWelcomeEmail = onCall(
   { secrets: [BREVO_API_KEY], region: EU_REGION },
   async (request) => {
     if (!request.auth) throw new HttpsError('unauthenticated', 'Auth required');
+    await assertStaff(request.auth);
 
-    const { email, nombre, activationLink } = request.data as {
-      email: string; nombre: string; activationLink: string;
-    };
+    const { email, nombre } = request.data as { email: string; nombre: string };
+
+    let activationLink: string;
+    try {
+      activationLink = await admin.auth().generatePasswordResetLink(email);
+    } catch (err: any) {
+      logger.error('sendWelcomeEmail: no se pudo generar el enlace de activación', {
+        email: maskEmail(email), code: err?.code,
+      });
+      throw new HttpsError('failed-precondition', 'La cuenta no existe en Auth; no se puede activar.');
+    }
 
     const nombreSafe = escapeHtml(nombre);
     const linkSafe = escapeHtml(activationLink);
@@ -214,7 +227,7 @@ export const sendWelcomeEmail = onCall(
     return callBrevo(BREVO_API_KEY.value(), {
       sender: SENDER,
       to: [{ email, name: nombre }],
-      subject: '¡Bienvenido/a a Kalian! Activa tu cuenta',
+      subject: '¡Bienvenido/a a Kalian! Crea tu contraseña',
       htmlContent: `<!DOCTYPE html><html><head>
         <style>
           body{margin:0;padding:0;background:#0A0A0A;font-family:Inter,sans-serif;color:#F5F5F0}
@@ -234,9 +247,9 @@ export const sendWelcomeEmail = onCall(
             <p>Hola <span class="acc">${nombreSafe}</span>,</p>
             <p>Estamos encantados de tenerte como nuevo soci@s de nuestra comunidad cultural.</p>
             <div class="div"></div>
-            <p>Para acceder a todas las ventajas, activa tu cuenta y define tu contraseña.</p>
-            <div style="margin:40px 0"><a href="${linkSafe}" class="btn">ACTIVAR MI CUENTA</a></div>
-            <p style="font-size:12px;color:#666">Recibirás un segundo email de seguridad para completar el proceso.</p>
+            <p>Para acceder a todas las ventajas, crea tu contraseña con este botón:</p>
+            <div style="margin:40px 0"><a href="${linkSafe}" class="btn">CREAR MI CONTRASEÑA</a></div>
+            <p style="font-size:12px;color:#666">El enlace es personal y caduca en unas horas. Si expira, usa "He olvidado mi contraseña" en la pantalla de acceso.</p>
           </div>
           <div class="f"><p>KALIAN HIRI KULTUR GUNEA</p><p>Responsable: Kalian. Finalidad: Gestión de soci@s. Derechos: Acceso y supresión.</p></div>
         </div></body></html>`,
@@ -244,62 +257,117 @@ export const sendWelcomeEmail = onCall(
   }
 );
 
+// Construye el email del carnet digital (QR + membresías vigentes). Compartido
+// por sendMembershipUpdateEmail (lo dispara staff al cambiar la membresía) y
+// enviarCarnetDigital (lo dispara el propio socio en su primer acceso).
+function emailCarnet(nombre: string, uid: string, membresias: Record<string, string>) {
+  const hoy = new Date().toISOString().split('T')[0];
+  const qrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${encodeURIComponent(uid)}`;
+
+  const membresiasHtml = Object.entries(membresias || {})
+    .filter(([, fecha]) => fecha >= hoy)
+    .map(([cat, fecha]) => {
+      const cat_nombre = cat === 'musica' ? 'Music Is Cool' : cat === 'danza' ? 'Club de Baile' : cat === 'local' ? 'Locales' : cat;
+      return `<div style="background:#1A1A1A;border:1px solid #D4AF3733;padding:15px;margin-bottom:10px;border-radius:12px;text-align:left">
+        <p style="margin:0;color:#D4AF37;font-weight:900;text-transform:uppercase;font-size:12px">${escapeHtml(cat_nombre)}</p>
+        <p style="margin:5px 0 0;font-size:10px;color:#F5F5F066;font-weight:700">VÁLIDO HASTA: ${escapeHtml(fecha)}</p>
+      </div>`;
+    }).join('') || '<p style="color:#666;font-size:12px;font-style:italic">No tienes membresías activas.</p>';
+
+  const nombreSafe = escapeHtml(nombre);
+  const uidSafe = escapeHtml(uid);
+  const qrUrlSafe = escapeHtml(qrUrl);
+
+  return `<!DOCTYPE html><html><head>
+    <style>
+      body{margin:0;padding:0;background:#0A0A0A;font-family:Inter,sans-serif;color:#F5F5F0}
+      .c{max-width:600px;margin:0 auto;background:#0A0A0A;border:1px solid #D4AF3733}
+      .h{padding:40px;text-align:center;border-bottom:1px solid #D4AF3733}
+      .b{padding:40px;text-align:center}
+      .f{padding:30px;text-align:center;background:#000;border-top:1px solid #D4AF3733;font-size:10px;color:#666}
+      h1{color:#D4AF37;font-size:32px;font-weight:900;text-transform:uppercase;margin:0;font-style:italic}
+      .qr{background:#FFF;padding:20px;display:inline-block;border-radius:24px;margin:30px 0}
+      .acc{color:#D4AF37;font-weight:700}
+    </style></head><body>
+    <div class="c">
+      <div class="h"><h1>CARNET DIGITAL</h1></div>
+      <div class="b">
+        <p>Hola <span class="acc">${nombreSafe}</span>,</p>
+        <p>Este es tu carnet de soci@ de Kalian. Presenta este QR en el centro:</p>
+        <div class="qr"><img src="${qrUrlSafe}" width="200" height="200" style="display:block"></div>
+        <p style="font-size:10px;color:#666;text-transform:uppercase;letter-spacing:2px;margin-bottom:40px">UID: ${uidSafe}</p>
+        <div style="max-width:400px;margin:0 auto;padding-top:20px">
+          <p style="font-size:12px;font-weight:900;text-transform:uppercase;color:#D4AF37;margin-bottom:15px;text-align:left">Tus Membresías Activas:</p>
+          ${membresiasHtml}
+        </div>
+      </div>
+      <div class="f"><p>KALIAN HIRI KULTUR GUNEA</p><p>Este carnet es personal e intransferible.</p></div>
+    </div></body></html>`;
+}
+
 export const sendMembershipUpdateEmail = onCall(
   { secrets: [BREVO_API_KEY], region: EU_REGION },
   async (request) => {
     if (!request.auth) throw new HttpsError('unauthenticated', 'Auth required');
+    await assertStaff(request.auth);
 
     const { email, nombre, uid, membresias } = request.data as {
       email: string; nombre: string; uid: string; membresias: Record<string, string>;
     };
 
-    const hoy = new Date().toISOString().split('T')[0];
-    const qrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${uid}`;
-
-    const membresiasHtml = Object.entries(membresias)
-      .filter(([, fecha]) => fecha >= hoy)
-      .map(([cat, fecha]) => {
-        const cat_nombre = cat === 'musica' ? 'Music Is Cool' : cat === 'danza' ? 'Club de Baile' : cat === 'local' ? 'Locales' : cat;
-        return `<div style="background:#1A1A1A;border:1px solid #D4AF3733;padding:15px;margin-bottom:10px;border-radius:12px;text-align:left">
-          <p style="margin:0;color:#D4AF37;font-weight:900;text-transform:uppercase;font-size:12px">${escapeHtml(cat_nombre)}</p>
-          <p style="margin:5px 0 0;font-size:10px;color:#F5F5F066;font-weight:700">VÁLIDO HASTA: ${escapeHtml(fecha)}</p>
-        </div>`;
-      }).join('') || '<p style="color:#666;font-size:12px;font-style:italic">No tienes membresías activas.</p>';
-
-    const nombreSafe = escapeHtml(nombre);
-    const uidSafe = escapeHtml(uid);
-    const qrUrlSafe = escapeHtml(qrUrl);
-
     return callBrevo(BREVO_API_KEY.value(), {
       sender: SENDER,
       to: [{ email, name: nombre }],
       subject: 'Tu Carnet Digital Kalian ha sido actualizado',
-      htmlContent: `<!DOCTYPE html><html><head>
-        <style>
-          body{margin:0;padding:0;background:#0A0A0A;font-family:Inter,sans-serif;color:#F5F5F0}
-          .c{max-width:600px;margin:0 auto;background:#0A0A0A;border:1px solid #D4AF3733}
-          .h{padding:40px;text-align:center;border-bottom:1px solid #D4AF3733}
-          .b{padding:40px;text-align:center}
-          .f{padding:30px;text-align:center;background:#000;border-top:1px solid #D4AF3733;font-size:10px;color:#666}
-          h1{color:#D4AF37;font-size:32px;font-weight:900;text-transform:uppercase;margin:0;font-style:italic}
-          .qr{background:#FFF;padding:20px;display:inline-block;border-radius:24px;margin:30px 0}
-          .acc{color:#D4AF37;font-weight:700}
-        </style></head><body>
-        <div class="c">
-          <div class="h"><h1>CARNET DIGITAL</h1></div>
-          <div class="b">
-            <p>Hola <span class="acc">${nombreSafe}</span>,</p>
-            <p>Tu membresía en Kalian ha sido actualizada. Presenta este QR en el centro:</p>
-            <div class="qr"><img src="${qrUrlSafe}" width="200" height="200" style="display:block"></div>
-            <p style="font-size:10px;color:#666;text-transform:uppercase;letter-spacing:2px;margin-bottom:40px">UID: ${uidSafe}</p>
-            <div style="max-width:400px;margin:0 auto;padding-top:20px">
-              <p style="font-size:12px;font-weight:900;text-transform:uppercase;color:#D4AF37;margin-bottom:15px;text-align:left">Tus Membresías Activas:</p>
-              ${membresiasHtml}
-            </div>
-          </div>
-          <div class="f"><p>KALIAN HIRI KULTUR GUNEA</p><p>Este carnet es personal e intransferible.</p></div>
-        </div></body></html>`,
+      htmlContent: emailCarnet(nombre, uid, membresias),
     });
+  }
+);
+
+// ─── enviarCarnetDigital ────────────────────────────────────────────────────
+// La llama el PROPIO socio al entrar en su área por primera vez. Antes el carnet
+// se mandaba en el momento del alta, cuando la cuenta aún no tenía contraseña y
+// el QR apuntaba a un uid inutilizable. Es idempotente: marca `carnetEnviadoAt`
+// en el doc del socio y no vuelve a enviar. El socio se localiza por su uid o
+// por el email del token, nunca por datos del request.
+export const enviarCarnetDigital = onCall(
+  { secrets: [BREVO_API_KEY], region: EU_REGION },
+  async (request) => {
+    if (!request.auth) throw new HttpsError('unauthenticated', 'Auth required');
+
+    const uid = request.auth.uid;
+    const emailToken = String(request.auth.token?.email || '').toLowerCase();
+
+    const db = admin.firestore();
+    let snap = await db.collection('socios').where('uid', '==', uid).limit(1).get();
+    if (snap.empty && emailToken) {
+      snap = await db.collection('socios').where('email', '==', emailToken).limit(1).get();
+    }
+    if (snap.empty) return { enviado: false, motivo: 'sin_socio' };
+
+    const socioRef = snap.docs[0].ref;
+    const socio = snap.docs[0].data() as any;
+
+    // Ya activada y con carnet enviado: nada que hacer (idempotencia).
+    if (socio.carnetEnviadoAt) return { enviado: false, motivo: 'ya_enviado' };
+
+    const email = String(socio.email || '').toLowerCase().trim();
+    if (!email) return { enviado: false, motivo: 'sin_email' };
+
+    await callBrevo(BREVO_API_KEY.value(), {
+      sender: SENDER,
+      to: [{ email, name: String(socio.nombre || '') }],
+      subject: 'Tu Carnet Digital Kalian',
+      htmlContent: emailCarnet(String(socio.nombre || ''), uid, socio.membresias || {}),
+    });
+
+    await socioRef.update({
+      carnetEnviadoAt: new Date().toISOString(),
+      cuentaActivada: true,
+    });
+
+    logger.info('enviarCarnetDigital: enviado', { email: maskEmail(email) });
+    return { enviado: true };
   }
 );
 
@@ -354,6 +422,28 @@ export const sendCourseApprovalEmail = onCall(
     const precio = Number(sol.modalidad?.precio) || 0;
     const modalidad = String(sol.modalidad?.tipo || '');
 
+    // Si el socio se acaba de crear y todavía no tiene contraseña, este mismo
+    // email lleva el enlace de activación: así el alta se resuelve en un solo
+    // correo en vez de tres (aceptación + bienvenida + carnet) a la vez.
+    let activacionHtml = '';
+    const dni = String(sol.dni || '').toUpperCase().trim();
+    if (dni) {
+      const socioSnap = await db.collection('socios').doc(dni).get();
+      if (socioSnap.exists && socioSnap.data()?.cuentaActivada === false) {
+        try {
+          const link = await admin.auth().generatePasswordResetLink(email);
+          activacionHtml = `<div class="div"></div>
+            <p>Te hemos creado una cuenta de soci@. Crea tu contraseña para acceder:</p>
+            <div style="margin:30px 0"><a href="${escapeHtml(link)}" class="btn">CREAR MI CONTRASEÑA</a></div>
+            <p style="font-size:12px;color:#666">El enlace es personal y caduca en unas horas. Si expira, usa "He olvidado mi contraseña" en la pantalla de acceso. Al entrar recibirás tu carnet digital con el QR.</p>`;
+        } catch (err: any) {
+          logger.warn('sendCourseApprovalEmail: sin enlace de activación', {
+            email: maskEmail(email), code: err?.code,
+          });
+        }
+      }
+    }
+
     const fila = (etiqueta: string, valor: string) => valor
       ? `<tr>
           <td style="padding:8px 0;font-size:11px;font-weight:900;text-transform:uppercase;letter-spacing:2px;color:#D4AF37;white-space:nowrap">${escapeHtml(etiqueta)}</td>
@@ -403,10 +493,9 @@ export const sendCourseApprovalEmail = onCall(
             ${precio > 0
               ? '<p style="font-size:13px;color:#F5F5F099">El pago de la inscripción queda pendiente de confirmar en el centro. Te indicaremos la forma de pago acordada.</p>'
               : ''}
-            <div class="div"></div>
+            ${activacionHtml || `<div class="div"></div>
             <p>Consulta tu carnet digital y tus cursos desde tu área de soci@:</p>
-            <div style="margin:30px 0"><a href="https://kalian.es/login" class="btn">ENTRAR EN MI ÁREA</a></div>
-            <p style="font-size:12px;color:#666">Si es tu primer curso con nosotros, recibirás también un email para activar tu cuenta y definir tu contraseña.</p>
+            <div style="margin:30px 0"><a href="https://kalian.es/login" class="btn">ENTRAR EN MI ÁREA</a></div>`}
           </div>
           <div class="f"><p>KALIAN HIRI KULTUR GUNEA</p><p>Responsable: Kalian. Finalidad: Gestión de soci@s y cursos. Derechos: Acceso y supresión.</p></div>
         </div></body></html>`,

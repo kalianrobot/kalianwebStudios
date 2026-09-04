@@ -4,7 +4,7 @@ import { collection, onSnapshot, doc, setDoc, getDoc, query, where, DocumentData
 import { Link } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
 import { createSocioAuth } from '../../lib/adminAuth';
-import { sendWelcomeEmail, sendMembershipUpdateEmail, sendCourseApprovalEmail } from '../../lib/brevoService';
+import { sendMembershipUpdateEmail, sendCourseApprovalEmail } from '../../lib/brevoService';
 import { registrarIngreso, MetodoPago } from '../../lib/finanzas';
 
 const AdminSolicitudes = () => {
@@ -121,14 +121,7 @@ const AdminSolicitudes = () => {
           if (authResult.uid) realUid = authResult.uid;
         } catch (err) {
           console.error("Error creating auth user:", err);
-          fallosEmail.push("activación de cuenta");
-        }
-
-        try {
-          await sendWelcomeEmail(emailClean, sol.nombre || "Soci@s Kalian", "https://kalian.es/login");
-        } catch (err) {
-          console.error("Error enviando email de bienvenida:", err);
-          fallosEmail.push("bienvenida");
+          fallosEmail.push("alta de la cuenta");
         }
 
         await setDoc(socioRef, {
@@ -140,16 +133,12 @@ const AdminSolicitudes = () => {
           estado: fechaFin ? 'activo' : 'inactivo',
           cursos: [sol.cursoId],
           verificado: true,
+          // Marca el alta como pendiente de activar: el email de aceptación
+          // incluirá el enlace para crear la contraseña, y el carnet digital se
+          // manda solo cuando el socio entre por primera vez (enviarCarnetDigital).
+          cuentaActivada: false,
           fechaAlta: new Date().toISOString()
         });
-
-        // Trigger membership update email for new socio
-        try {
-          await sendMembershipUpdateEmail(emailClean, sol.nombre, realUid, fechaFin ? { [categoria]: fechaFin } : {});
-        } catch (err) {
-          console.error("Error enviando el carnet digital:", err);
-          fallosEmail.push("carnet digital");
-        }
       } else {
         // Si ya es socio, solo añadimos el curso si no lo tiene y actualizamos expiración
         const updateData: any = {
@@ -160,16 +149,19 @@ const AdminSolicitudes = () => {
           updateData[`membresias.${categoria}`] = fechaFin;
         }
         await updateDoc(socioRef, updateData);
-        
-        // Trigger membership update email
-        const finalSocioSnap = await getDoc(socioRef);
-        if (finalSocioSnap.exists()) {
+
+        // Carnet actualizado: solo si el curso aporta membresía nueva y el socio
+        // ya tiene cuenta activa. Si no, el email de aceptación es suficiente.
+        if (fechaFin) {
+          const finalSocioSnap = await getDoc(socioRef);
           const sData = finalSocioSnap.data();
-          try {
-            await sendMembershipUpdateEmail(sData.email, sData.nombre, sData.uid, sData.membresias || {});
-          } catch (err) {
-            console.error("Error enviando el carnet digital:", err);
-            fallosEmail.push("carnet digital");
+          if (sData?.carnetEnviadoAt || sData?.cuentaActivada !== false) {
+            try {
+              await sendMembershipUpdateEmail(sData!.email, sData!.nombre, sData!.uid, sData!.membresias || {});
+            } catch (err) {
+              console.error("Error enviando el carnet digital:", err);
+              fallosEmail.push("carnet digital");
+            }
           }
         }
       }

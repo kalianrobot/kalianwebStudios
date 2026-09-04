@@ -95,14 +95,25 @@ La solicitud llega desde la programación pública (`solicitudes_cursos`, estado
 
 1. Se valida el DNI/NIE (formato español). Sin DNI válido no se aprueba nada.
 2. Se añade al alumno al curso (`alumnos` + `aforo_actual`).
-3. Si no existe el socio, se crea: cuenta en Auth + doc en `socios`, y se le envían el **email de restablecimiento de contraseña** y el de **bienvenida**.
-4. Se envía el **carnet digital** (`sendMembershipUpdateEmail`), tanto a socios nuevos como existentes.
-5. Se crea el registro de pago de inscripción como pendiente (`pagos_inscripciones`).
-6. Se marca la solicitud como `'aprobado'`.
-7. Se envía el **email de inscripción aceptada** (`sendCourseApprovalEmail`) con el curso, la modalidad, la fecha de inicio, el horario, el profesor, la sala y el importe.
-8. Si la modalidad tiene precio, se registra el ingreso en contabilidad con el método de pago elegido en la ficha.
+3. Si no existe el socio, se crea: cuenta en Firebase Auth + doc `socios/{DNI}` con `cuentaActivada: false`. **No se envía ningún email aquí.**
+4. Se crea el registro de pago de inscripción como pendiente (`pagos_inscripciones`).
+5. Se marca la solicitud como `'aprobado'`.
+6. Se envía el **email de inscripción aceptada** con curso, modalidad, fecha de inicio, horario, profesor, sala e importe.
+7. Si la modalidad tiene precio, se registra el ingreso en contabilidad con el método de pago elegido.
 
-**Ningún email aborta la aprobación**: si Brevo falla, el socio y el curso ya están actualizados, así que la solicitud queda aprobada igualmente y el panel muestra un aviso naranja con la lista de emails que no salieron ("⚠️ Solicitud aprobada, pero fallaron estos emails: …"). Si ves ese aviso, revisa los logs de la function en Firebase antes de reenviar nada a mano.
+**Un evento, un email.** El socio recibe:
+
+| Momento | Socio nuevo | Socio que ya existía |
+|---|---|---|
+| Al aprobar | Inscripción aceptada, **con el botón para crear su contraseña** | Inscripción aceptada |
+| Al entrar por primera vez en `/perfil` | Carnet digital con el QR | — |
+| Si el curso amplía su membresía | — | Carnet digital actualizado |
+
+Antes llegaban tres correos a la vez (bienvenida, reset de contraseña y carnet). El de bienvenida llevaba un botón "Activar mi cuenta" que solo apuntaba a `/login` y no activaba nada, y el carnet llegaba con el QR de una cuenta que todavía no tenía contraseña. Ahora el enlace de activación es el real de Firebase Auth, lo genera la Cloud Function, y el carnet espera a que la cuenta exista de verdad.
+
+El enlace de activación **caduca en unas horas**. Si el socio lo deja pasar, no hace falta nada por parte del staff: usa "He olvidado mi contraseña" en `/login`, que sigue funcionando igual.
+
+**Ningún email aborta la aprobación**: si Brevo falla, el socio y el curso ya están actualizados, así que la solicitud queda aprobada igualmente y el panel muestra un aviso naranja con la lista de lo que no salió ("⚠️ Solicitud aprobada, pero fallaron estos emails: …"). Si ves ese aviso, revisa los logs de la function en Firebase antes de reenviar nada a mano.
 
 El email de aceptación se envía **después** de marcar la solicitud como aprobada, porque la Cloud Function comprueba ese estado antes de enviar: es lo que impide que nadie dispare emails de inscripción con datos inventados.
 

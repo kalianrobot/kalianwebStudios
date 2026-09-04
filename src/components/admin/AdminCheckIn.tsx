@@ -4,6 +4,7 @@ import { collection, query, where, getDocs, doc, updateDoc, DocumentData, getDoc
 import { Link } from 'react-router-dom';
 import { Html5Qrcode } from 'html5-qrcode';
 import { Camera, X } from 'lucide-react';
+import { normalizeDni } from '../../lib/dni';
 
 const AdminCheckIn = () => {
   const [eventos, setEventos] = useState<DocumentData[]>([]);
@@ -199,7 +200,7 @@ const AdminCheckIn = () => {
       let precio = evento?.precio_estandar || 0;
 
       if (dni) {
-        const socioSnap = await getDoc(doc(db, "socios", dni.toUpperCase()));
+        const socioSnap = await getDoc(doc(db, "socios", normalizeDni(dni)));
         if (socioSnap.exists()) {
           const sData = socioSnap.data();
           nombre = sData.nombre;
@@ -301,7 +302,7 @@ const AdminCheckIn = () => {
     if (!dni) return;
 
     try {
-      const socioRef = doc(db, "socios", dni.toUpperCase());
+      const socioRef = doc(db, "socios", normalizeDni(dni));
       const socioSnap = await getDoc(socioRef);
       
       if (socioSnap.exists()) {

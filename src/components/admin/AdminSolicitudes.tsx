@@ -4,7 +4,7 @@ import { collection, onSnapshot, doc, getDoc, query, where, DocumentData, update
 import { Link } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
 import { createSocioAuth } from '../../lib/adminAuth';
-import { sendWelcomeEmail, sendMembershipUpdateEmail } from '../../lib/brevoService';
+import { sendMembershipUpdateEmail, sendCourseApprovalEmail } from '../../lib/brevoService';
 import { registrarIngreso, MetodoPago } from '../../lib/finanzas';
 
 const AdminSolicitudes = () => {
@@ -70,6 +70,10 @@ const AdminSolicitudes = () => {
     if (!window.confirm(`¿Aprobar solicitud de ${sol.nombre} para el curso ${sol.cursoTitulo}?`)) return;
     
     setLoading(true);
+    // Ningún email debe abortar la aprobación: si Brevo falla a mitad, el socio
+    // ya está creado y el curso actualizado, así que la solicitud tiene que
+    // quedar aprobada igualmente. Los fallos se acumulan aquí y se avisan al final.
+    const fallosEmail: string[] = [];
     try {
       const emailClean = sol.email.trim().toLowerCase();
       const dniUpper = (sol.dni || "").toUpperCase().trim();
@@ -90,35 +94,38 @@ const AdminSolicitudes = () => {
       const solicitudRef = doc(db, "solicitudes_cursos", sol.id);
       const pagoInscripcionRef = doc(db, "pagos_inscripciones", `${dniUpper}_${sol.cursoId}`);
 
-      // Pre-lectura (fuera de la transacción) solo para decidir si hace falta
-      // crear la cuenta de Auth. createSocioAuth/sendWelcomeEmail no son
-      // operaciones Firestore y no deben reintentarse dentro de una
-      // transacción (duplicarían cuentas/emails en un retry).
+      // Pre-lectura fuera de la transacción: solo sirve para decidir si hay que
+      // crear la cuenta en Auth. `createSocioAuth` no es una operación Firestore
+      // y no puede ir dentro de la transacción: un reintento duplicaría cuentas.
       const socioPreSnap = await getDoc(socioRef);
-      const socioExistiaAntes = socioPreSnap.exists();
+      let realUid = socioPreSnap.data()?.uid || "";
 
-      let realUid = socioExistiaAntes ? (socioPreSnap.data()?.uid || "") : ("manual-" + Math.random().toString(36).substring(7));
-      if (!socioExistiaAntes) {
+      if (!socioPreSnap.exists()) {
+        realUid = "manual-" + Math.random().toString(36).substring(7);
         try {
           const authResult = await createSocioAuth(emailClean);
           if (authResult.uid) realUid = authResult.uid;
-
-          await sendWelcomeEmail(emailClean, sol.nombre || "Soci@s Kalian", "https://kalian.es/login");
         } catch (err) {
           console.error("Error creating auth user:", err);
+          fallosEmail.push("alta de la cuenta");
         }
       }
 
-      // Escritura atómica de los 4 documentos que deben quedar consistentes
-      // entre sí: aforo/alumnos del curso, alta o update del socio, registro
-      // de pago de inscripción y estado de la solicitud. Si falla cualquiera,
-      // no se aplica ninguno (antes podía quedar aforo incrementado sin
-      // socio, o socio sin registro de pago).
+      // Las cuatro escrituras que deben quedar consistentes entre sí van en una
+      // única transacción: aforo y alumnos del curso, alta o actualización del
+      // socio, registro de pago de inscripción y estado de la solicitud. Antes
+      // eran escrituras sueltas: un fallo a mitad dejaba el aforo incrementado
+      // sin socio, o el socio sin su registro de pago.
       let fechaFin = "";
       let categoria = sol.categoria || "musica";
-      let socioFinalData: any = null;
+      let socioFinal: any = null;
 
       await runTransaction(db, async (tx) => {
+        // Reset en cada intento: la transacción puede reintentarse.
+        fechaFin = "";
+        categoria = sol.categoria || "musica";
+        socioFinal = null;
+
         const cursoSnap = await tx.get(cursoRef);
         const socioSnap = await tx.get(socioRef);
 
@@ -136,7 +143,7 @@ const AdminSolicitudes = () => {
         }
 
         if (!socioSnap.exists()) {
-          socioFinalData = {
+          socioFinal = {
             dni: dniUpper,
             nombre: sol.nombre,
             email: emailClean,
@@ -145,10 +152,15 @@ const AdminSolicitudes = () => {
             estado: fechaFin ? 'activo' : 'inactivo',
             cursos: [sol.cursoId],
             verificado: true,
+            // Marca el alta como pendiente de activar: el email de aceptación
+            // incluirá el enlace para crear la contraseña, y el carnet digital
+            // se manda cuando el socio entre por primera vez (enviarCarnetDigital).
+            cuentaActivada: false,
             fechaAlta: new Date().toISOString()
           };
-          tx.set(socioRef, socioFinalData);
+          tx.set(socioRef, socioFinal);
         } else {
+          // Socio existente: añadimos el curso y actualizamos la expiración.
           const sData = socioSnap.data();
           const updateData: any = {
             cursos: arrayUnion(sol.cursoId),
@@ -158,10 +170,12 @@ const AdminSolicitudes = () => {
             updateData[`membresias.${categoria}`] = fechaFin;
           }
           tx.update(socioRef, updateData);
-          socioFinalData = {
+          socioFinal = {
             ...sData,
-            estado: updateData.estado,
-            membresias: fechaFin ? { ...(sData.membresias || {}), [categoria]: fechaFin } : (sData.membresias || {})
+            estado: 'activo',
+            membresias: fechaFin
+              ? { ...(sData.membresias || {}), [categoria]: fechaFin }
+              : (sData.membresias || {})
           };
         }
 
@@ -178,9 +192,26 @@ const AdminSolicitudes = () => {
         });
       });
 
-      // Trigger membership update email (mismo comportamiento que antes: no
-      // bloquea la aprobación ya confirmada por la transacción si falla).
-      await sendMembershipUpdateEmail(socioFinalData.email, socioFinalData.nombre, socioFinalData.uid, socioFinalData.membresias || {});
+      // Carnet actualizado: solo si el curso aporta membresía nueva y el socio
+      // ya tiene cuenta activa. En un alta nueva (`cuentaActivada: false`) el
+      // carnet lo manda `enviarCarnetDigital` en el primer acceso a /perfil.
+      if (fechaFin && (socioFinal?.carnetEnviadoAt || socioFinal?.cuentaActivada !== false)) {
+        try {
+          await sendMembershipUpdateEmail(socioFinal.email, socioFinal.nombre, socioFinal.uid, socioFinal.membresias || {});
+        } catch (err) {
+          console.error("Error enviando el carnet digital:", err);
+          fallosEmail.push("carnet digital");
+        }
+      }
+
+      // Email de aceptación de la inscripción. Va después de la transacción
+      // porque la Cloud Function exige el estado 'aprobado' antes de enviar nada.
+      try {
+        await sendCourseApprovalEmail(sol.id);
+      } catch (err) {
+        console.error("Error enviando el email de aceptación:", err);
+        fallosEmail.push("aceptación de la inscripción");
+      }
 
       // Registrar en Finanzas
       const monto = sol.modalidad?.precio || 0;
@@ -194,8 +225,13 @@ const AdminSolicitudes = () => {
         });
       }
 
-      setMsg("✅ Solicitud aprobada con éxito");
-      setTimeout(() => setMsg(''), 3000);
+      if (fallosEmail.length) {
+        setMsg(`⚠️ Solicitud aprobada, pero fallaron estos emails: ${fallosEmail.join(', ')}`);
+        setTimeout(() => setMsg(''), 10000);
+      } else {
+        setMsg("✅ Solicitud aprobada y email de aceptación enviado");
+        setTimeout(() => setMsg(''), 3000);
+      }
       fetchSolicitudes();
     } catch (err) {
       console.error(err);

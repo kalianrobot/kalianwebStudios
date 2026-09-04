@@ -97,10 +97,15 @@ const AdminCheckIn = () => {
     setSocioEncontrado(null);
 
     const term = busqueda.trim().toUpperCase();
+    // El QR del ticket codifica "KALIAN-RES-XXXXXX" (ver ReservaForm.tsx), no
+    // sólo el ticketID; si viene con ese prefijo hay que extraerlo antes de
+    // buscar (mismo patrón que ControlAcceso.tsx).
+    const ticketMatch = term.match(/^KALIAN-RES-([A-Z0-9]+)$/);
+    const ticketID = ticketMatch ? ticketMatch[1] : term;
 
     try {
       // 1. Buscar por Ticket ID
-      const qReserva = query(collection(db, "reservas"), where("ticketID", "==", term));
+      const qReserva = query(collection(db, "reservas"), where("ticketID", "==", ticketID));
       const snapReserva = await getDocs(qReserva);
       
       if (!snapReserva.empty) {

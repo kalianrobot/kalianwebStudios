@@ -8,10 +8,9 @@ import {
   onSnapshot,
   doc,
   getDoc,
-  deleteDoc,
-  updateDoc,
   increment,
   writeBatch,
+  runTransaction,
   DocumentData
 } from 'firebase/firestore';
 
@@ -62,17 +61,24 @@ const AdminReservas = () => {
       const yaIngresados = Number(reserva.asistentes_ingresados || 0);
       const pendientes = Math.max(0, totalReserva - yaIngresados);
 
-      if (pendientes > 0 && reserva.eventoId) {
-        try {
-          await updateDoc(doc(db, coleccionActividad, reserva.eventoId), {
-            aforo_reservado: increment(-pendientes)
-          });
-        } catch (e: any) {
-          console.warn('No se pudo decrementar aforo (puede que el evento ya no exista):', e.message);
-        }
-      }
+      const reservaRef = doc(db, 'reservas', reserva.id);
+      const actividadRef = reserva.eventoId ? doc(db, coleccionActividad, reserva.eventoId) : null;
 
-      await deleteDoc(doc(db, 'reservas', reserva.id));
+      // Transacción: devolver aforo y borrar la reserva de forma atómica.
+      // Antes eran dos escrituras separadas; si la segunda fallaba, el
+      // aforo quedaba restado con la reserva todavía viva.
+      await runTransaction(db, async (tx) => {
+        if (pendientes > 0 && actividadRef) {
+          const actividadSnap = await tx.get(actividadRef);
+          if (actividadSnap.exists()) {
+            tx.update(actividadRef, { aforo_reservado: increment(-pendientes) });
+          }
+          // Si el evento/curso ya no existe, no hay aforo que devolver —
+          // seguimos y borramos la reserva igualmente.
+        }
+        tx.delete(reservaRef);
+      });
+
       setMsg(`✅ Reserva de ${quien} eliminada. Aforo devuelto: ${pendientes}`);
       setTimeout(() => setMsg(''), 4000);
     } catch (err: any) {

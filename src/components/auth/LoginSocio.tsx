@@ -1,8 +1,9 @@
 import React, { useState, useEffect } from 'react';
 import { auth, db } from '../../firebase';
-import { createUserWithEmailAndPassword, signInWithEmailAndPassword, sendEmailVerification, sendPasswordResetEmail, onAuthStateChanged } from 'firebase/auth';
+import { createUserWithEmailAndPassword, signInWithEmailAndPassword, onAuthStateChanged } from 'firebase/auth';
 import { doc, setDoc } from 'firebase/firestore';
 import { useNavigate, Link } from 'react-router-dom';
+import { requestPasswordReset } from '../../lib/brevoService';
 
 const LoginSocio = () => {
   const [esRegistro, setEsRegistro] = useState(false);
@@ -57,7 +58,7 @@ const LoginSocio = () => {
     setError(''); setInfo('');
     setCargando(true);
     try {
-      await sendPasswordResetEmail(auth, form.email);
+      await requestPasswordReset(form.email);
       setInfo("✅ Se ha enviado un email para restablecer tu contraseña. Revisa tu bandeja de entrada.");
     } catch (err: any) {
       console.error(err);

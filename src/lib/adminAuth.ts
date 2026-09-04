@@ -1,5 +1,5 @@
 import { initializeApp, getApps } from "firebase/app";
-import { getAuth, createUserWithEmailAndPassword, sendPasswordResetEmail } from "firebase/auth";
+import { getAuth, createUserWithEmailAndPassword } from "firebase/auth";
 import firebaseConfig from "../../firebase-applet-config.json";
 
 const isDev = import.meta.env.DEV;
@@ -19,8 +19,11 @@ const generateSecurePassword = (length = 24): string => {
 };
 
 /**
- * Creates a new user in Firebase Auth without signing out the current admin.
- * Returns the UID and a password reset link.
+ * Crea el usuario en Firebase Auth sin desloguear al admin que está operando.
+ * NO envía ningún email: el enlace para crear la contraseña lo genera y manda
+ * después la Cloud Function correspondiente (`sendWelcomeEmail` en las altas
+ * manuales, `sendCourseApprovalEmail` al aprobar una inscripción), para que al
+ * socio le llegue un único correo en vez de dos.
  */
 export const createSocioAuth = async (email: string) => {
   if (isDev) console.log("createSocioAuth: Iniciando para", email);
@@ -33,22 +36,11 @@ export const createSocioAuth = async (email: string) => {
     const user = userCredential.user;
     if (isDev) console.log("createSocioAuth: Usuario creado en Auth con UID:", user.uid);
 
-    try {
-      await sendPasswordResetEmail(secondaryAuth, email);
-    } catch (resetErr) {
-      if (isDev) console.warn("createSocioAuth: Error al enviar reset (no crítico):", resetErr);
-    }
-
-    return { uid: user.uid, resetSent: true };
+    return { uid: user.uid };
   } catch (error: any) {
     if (isDev) console.error("createSocioAuth: Error capturado:", error.code);
     if (error.code === 'auth/email-already-in-use') {
-      try {
-        await sendPasswordResetEmail(secondaryAuth, email);
-      } catch (e) {
-        if (isDev) console.warn("createSocioAuth: Error al enviar reset a usuario existente:", e);
-      }
-      return { uid: null, resetSent: true, alreadyExists: true };
+      return { uid: null, alreadyExists: true };
     }
     throw error;
   }

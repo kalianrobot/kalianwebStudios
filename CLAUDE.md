@@ -62,7 +62,7 @@ Cuando termines un cambio en código, corre el type-check antes de commit. No co
 - **Master email**: `kalianrobot@gmail.com` está hardcoded en `firestore.rules` y `src/lib/constants.ts → MASTER_EMAIL`. No lo refactorices a config sin pedirlo.
 - **Botón de Emergencia (PDF)**: vive en `src/components/admin/ControlAcceso.tsx:655` (`descargarListadoEmergencia`), NO en AdminEventos.
 - **i18n**: cualquier cadena visible va por `t()`. Toda nueva clave se añade en `src/i18n/es.ts` Y `src/i18n/eu.ts`.
-- **Secretos Brevo** server-side: `defineSecret('BREVO_API_KEY' | 'BREVO_WEBHOOK_SECRET' | 'BREVO_NEWSLETTER_LIST_ID')`. La `VITE_BREVO_API_KEY` del cliente es deuda técnica conocida — no añadas más secretos al cliente.
+- **Secretos Brevo** server-side: `defineSecret('BREVO_API_KEY' | 'BREVO_WEBHOOK_SECRET' | 'BREVO_NEWSLETTER_LIST_ID')`. El cliente no tiene acceso a ninguno (fix de seguridad ya aplicado, ver `SECURITY_SPEC.md` hallazgo C1) — no añadas secretos al cliente.
 - **Persistencia offline**: NO está activada. No prometas comportamiento offline sin activarla explícitamente.
 
 ---

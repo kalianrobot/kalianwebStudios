@@ -3,11 +3,13 @@ import { onDocumentDeleted } from 'firebase-functions/v2/firestore';
 import { onSchedule } from 'firebase-functions/v2/scheduler';
 import { defineSecret } from 'firebase-functions/params';
 import { logger } from 'firebase-functions';
-import * as admin from 'firebase-admin';
+import { initializeApp } from 'firebase-admin/app';
+import { getFirestore, FieldValue, DocumentReference } from 'firebase-admin/firestore';
+import { getAuth } from 'firebase-admin/auth';
 import { timingSafeEqual } from 'crypto';
 import { safeJson, escapeHtml, maskEmail, withRetry, formatFechaLarga } from './helpers';
 
-admin.initializeApp();
+initializeApp();
 
 const EU_REGION = 'europe-west1';
 
@@ -59,7 +61,7 @@ async function assertStaff(auth: { uid: string; token?: Record<string, unknown> 
   const email = String(auth.token?.email || '').toLowerCase();
   if (email === MASTER_EMAIL) return;
 
-  const userSnap = await admin.firestore().collection('users').doc(auth.uid).get();
+  const userSnap = await getFirestore().collection('users').doc(auth.uid).get();
   const role = userSnap.exists ? String(userSnap.data()?.role || '') : '';
   if (!['admin', 'teacher', 'profesor', 'teacher_admin'].includes(role)) {
     throw new HttpsError('permission-denied', 'Solo staff puede realizar esta acción.');
@@ -94,7 +96,7 @@ export const validatePuertaAccess = onCall(
       throw new HttpsError('resource-exhausted', 'Demasiados intentos. Espera un momento.');
     }
 
-    const db = admin.firestore();
+    const db = getFirestore();
     const configSnap = await db.doc('configuracion/seguridad').get();
     if (!configSnap.exists) {
       throw new HttpsError('internal', 'Clave de puerta no configurada.');
@@ -121,7 +123,7 @@ export const validatePuertaAccess = onCall(
       await userRef.set({ uid: PUERTA_UID, role: 'portero', nombre: 'Puerta Service' });
     }
 
-    const customToken = await admin.auth().createCustomToken(PUERTA_UID, { role: 'portero' });
+    const customToken = await getAuth().createCustomToken(PUERTA_UID, { role: 'portero' });
     return { token: customToken };
   }
 );
@@ -156,7 +158,7 @@ export const requestPasswordReset = onCall(
 
     let link: string;
     try {
-      link = await admin.auth().generatePasswordResetLink(email);
+      link = await getAuth().generatePasswordResetLink(email);
     } catch (err: any) {
       // No revelar si el email existe o no (anti-enumeración, igual que la
       // invariante de newsletter): responder éxito igualmente sin enviar nada.
@@ -213,7 +215,7 @@ export const sendWelcomeEmail = onCall(
 
     let activationLink: string;
     try {
-      activationLink = await admin.auth().generatePasswordResetLink(email);
+      activationLink = await getAuth().generatePasswordResetLink(email);
     } catch (err: any) {
       logger.error('sendWelcomeEmail: no se pudo generar el enlace de activación', {
         email: maskEmail(email), code: err?.code,
@@ -338,7 +340,7 @@ export const enviarCarnetDigital = onCall(
     const uid = request.auth.uid;
     const emailToken = String(request.auth.token?.email || '').toLowerCase();
 
-    const db = admin.firestore();
+    const db = getFirestore();
     let snap = await db.collection('socios').where('uid', '==', uid).limit(1).get();
     if (snap.empty && emailToken) {
       snap = await db.collection('socios').where('email', '==', emailToken).limit(1).get();
@@ -389,7 +391,7 @@ export const sendCourseApprovalEmail = onCall(
       throw new HttpsError('invalid-argument', 'Solicitud no válida.');
     }
 
-    const db = admin.firestore();
+    const db = getFirestore();
     const solSnap = await db.collection('solicitudes_cursos').doc(solicitudId).get();
     if (!solSnap.exists) throw new HttpsError('not-found', 'Solicitud no encontrada.');
 
@@ -431,7 +433,7 @@ export const sendCourseApprovalEmail = onCall(
       const socioSnap = await db.collection('socios').doc(dni).get();
       if (socioSnap.exists && socioSnap.data()?.cuentaActivada === false) {
         try {
-          const link = await admin.auth().generatePasswordResetLink(email);
+          const link = await getAuth().generatePasswordResetLink(email);
           activacionHtml = `<div class="div"></div>
             <p>Te hemos creado una cuenta de soci@. Crea tu contraseña para acceder:</p>
             <div style="margin:30px 0"><a href="${escapeHtml(link)}" class="btn">CREAR MI CONTRASEÑA</a></div>
@@ -518,7 +520,7 @@ export const sendReservationConfirmation = onCall(
       throw new HttpsError('invalid-argument', 'Token no válido.');
     }
 
-    const db = admin.firestore();
+    const db = getFirestore();
     const snap = await db.collection('reservas')
       .where('manageToken', '==', manageToken)
       .limit(1)
@@ -624,7 +626,7 @@ export const gestionarReservaInvitado = onCall(
       throw new HttpsError('invalid-argument', 'Acción no válida.');
     }
 
-    const db = admin.firestore();
+    const db = getFirestore();
 
     // Localizar la reserva por su manageToken. Error genérico si no existe
     // (no revelamos si el token es real o no).
@@ -689,7 +691,7 @@ export const gestionarReservaInvitado = onCall(
           const actDoc = await tx.get(actRef);
           if (actDoc.exists) {
             tx.update(actRef, {
-              aforo_reservado: admin.firestore.FieldValue.increment(-pendientes),
+              aforo_reservado: FieldValue.increment(-pendientes),
             });
           }
         }
@@ -744,7 +746,7 @@ export const gestionarReservaInvitado = onCall(
             `Sin aforo suficiente. Plazas libres: ${Math.max(0, aforoMax - aforoRes)}.`);
         }
         tx.update(actRef, {
-          aforo_reservado: admin.firestore.FieldValue.increment(diferencia),
+          aforo_reservado: FieldValue.increment(diferencia),
         });
 
         // Recalcular totalPagar: el componente del titular ya tiene cualquier
@@ -779,7 +781,7 @@ async function calcularPrecioInterno(params: {
   cupon?: string;
 }): Promise<{ total: number; esSocio: boolean; esClave: boolean; socioVigente: boolean }> {
   const { eventoId, esCurso, nAcomp, dniTitular, cupon } = params;
-  const db = admin.firestore();
+  const db = getFirestore();
   const coleccion = esCurso ? 'cursos' : 'eventos';
 
   const eventoSnap = await db.doc(`${coleccion}/${eventoId}`).get();
@@ -871,7 +873,7 @@ export const comprobarReservaDuplicada = onCall(
       throw new HttpsError('invalid-argument', 'eventoId no válido.');
     }
 
-    const db = admin.firestore();
+    const db = getFirestore();
     let q = db.collection('reservas').where('eventoId', '==', eventoId);
 
     const uid = request.auth?.uid;
@@ -919,7 +921,7 @@ export const subscribeNewsletter = onCall(
     const nombreNorm = nombre.trim();
 
     // Verificación de origen: alta reciente pendiente en Firestore
-    const db = admin.firestore();
+    const db = getFirestore();
     const snap = await db.collection('newsletter_subscribers')
       .where('email', '==', emailNorm)
       .limit(5)
@@ -1046,7 +1048,7 @@ export const brevoWebhook = onRequest(
     }
 
     try {
-      const db = admin.firestore();
+      const db = getFirestore();
       const snap = await db.collection('newsletter_subscribers')
         .where('email', '==', email)
         .limit(1)
@@ -1061,7 +1063,7 @@ export const brevoWebhook = onRequest(
       await snap.docs[0].ref.update({
         estado: 'baja',
         motivo: event,
-        fecha_baja: admin.firestore.FieldValue.serverTimestamp(),
+        fecha_baja: FieldValue.serverTimestamp(),
       });
       logger.info('brevoWebhook: suscriptor marcado como baja', { email: maskEmail(email), event });
     } catch (err: any) {
@@ -1136,7 +1138,7 @@ export const reconciliarNewsletterBrevo = onSchedule(
     timeoutSeconds: 540,
   },
   async () => {
-    const db = admin.firestore();
+    const db = getFirestore();
     // .trim(): el valor se interpola crudo en la URL de listado de contactos.
     const listId = BREVO_NEWSLETTER_LIST_ID.value().trim();
     const apiKey = BREVO_API_KEY.value();
@@ -1181,7 +1183,7 @@ export const reconciliarNewsletterBrevo = onSchedule(
 
     // Construir índice de emails ya en Firestore (con ref + datos cacheados)
     const snap = await db.collection('newsletter_subscribers').get();
-    const docsFirestore = new Map<string, { ref: admin.firestore.DocumentReference; data: any }>();
+    const docsFirestore = new Map<string, { ref: DocumentReference; data: any }>();
     for (const docu of snap.docs) {
       const d = docu.data() as any;
       const e = (d.email || '').toLowerCase().trim();
@@ -1200,13 +1202,13 @@ export const reconciliarNewsletterBrevo = onSchedule(
           await existente.ref.update({
             estado: 'baja',
             motivo: 'reconciliacion',
-            fecha_baja: admin.firestore.FieldValue.serverTimestamp(),
+            fecha_baja: FieldValue.serverTimestamp(),
           });
           marcadosBaja++;
         } else if (!blacklisted && estadoActual === 'pendiente_confirmacion') {
           await existente.ref.update({
             estado: 'activo',
-            fecha_confirmacion: admin.firestore.FieldValue.serverTimestamp(),
+            fecha_confirmacion: FieldValue.serverTimestamp(),
           });
           promovidosActivo++;
         } else if (!blacklisted && estadoActual === 'baja') {
@@ -1216,8 +1218,8 @@ export const reconciliarNewsletterBrevo = onSchedule(
           if (fechaAlta > fechaBaja) {
             await existente.ref.update({
               estado: 'activo',
-              fecha_confirmacion: admin.firestore.FieldValue.serverTimestamp(),
-              motivo: admin.firestore.FieldValue.delete(),
+              fecha_confirmacion: FieldValue.serverTimestamp(),
+              motivo: FieldValue.delete(),
             });
             promovidosActivo++;
           }
@@ -1228,8 +1230,8 @@ export const reconciliarNewsletterBrevo = onSchedule(
           email,
           nombre: nombre || email.split('@')[0],
           estado: blacklisted ? 'baja' : 'activo',
-          ...(blacklisted ? { motivo: 'bounce_o_baja', fecha_baja: admin.firestore.FieldValue.serverTimestamp() } : {}),
-          fecha: admin.firestore.FieldValue.serverTimestamp(),
+          ...(blacklisted ? { motivo: 'bounce_o_baja', fecha_baja: FieldValue.serverTimestamp() } : {}),
+          fecha: FieldValue.serverTimestamp(),
           origen: 'brevo_import',
           acepto_terminos: true,
         });
@@ -1254,7 +1256,7 @@ export const reconciliarNewsletterBrevo = onSchedule(
           await ref.update({
             estado: 'baja',
             motivo: 'no_confirmado',
-            fecha_baja: admin.firestore.FieldValue.serverTimestamp(),
+            fecha_baja: FieldValue.serverTimestamp(),
           });
           pendientesCaducados++;
         }
@@ -1278,7 +1280,7 @@ export const reconciliarNewsletterBrevo = onSchedule(
         await ref.update({
           estado: 'baja',
           motivo: sinPruebaConsentimiento ? 'migracion_sin_consentimiento' : 'reconciliacion',
-          fecha_baja: admin.firestore.FieldValue.serverTimestamp(),
+          fecha_baja: FieldValue.serverTimestamp(),
         });
         if (sinPruebaConsentimiento) bajasSinConsentimiento++;
         else bajasPorAusencia++;

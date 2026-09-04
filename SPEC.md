@@ -59,10 +59,11 @@ SPA React. Routing en `src/App.tsx`. `Suspense + lazy()` para todas las páginas
 ### Backend
 Firebase. Tres bloques:
 1. **Firestore + reglas** (`firestore.rules`): única fuente de verdad para todos los datos del dominio. Reglas server-side estrictas por colección.
-2. **Cloud Functions** (`functions/src/index.ts`, region `europe-west1`, Node 22 con `fetch` nativo):
+2. **Cloud Functions** (`functions/src/index.ts`, region `europe-west1`, Node 22 con `fetch` nativo, `firebase-admin` v14 API modular — `getFirestore()`/`getAuth()`/`FieldValue` importados de `firebase-admin/firestore|auth`, nunca `import * as admin`):
    - `validatePuertaAccess` — auth de tablet de puerta por contraseña compartida → custom token rol `portero`. Compara con `timingSafeEqual` + rate limit 5 intentos/min por IP.
    - `sendWelcomeEmail`, `sendMembershipUpdateEmail`, `enviarCarnetDigital`, `sendCourseApprovalEmail`, `sendReservationConfirmation`, `requestPasswordReset` — emails transaccionales vía Brevo. Ninguno usa plantillas de Brevo: el HTML se construye en la function (la única plantilla de Brevo es la del DOI de newsletter). Todas escapan HTML en interpolaciones.
-   - `requestPasswordReset` — genera el link de reset con `admin.auth().generatePasswordResetLink` y lo envía por Brevo desde `info@kalian.es` (en vez del email por defecto de Firebase Auth, que sale desde `firebaseapp.com` con peor entrega). Sin auth, rate limit 5/min/IP, no revela si el email existe.
+   - `requestPasswordReset` — genera el link de reset con `admin.auth().generatePasswordResetLink` y lo envía por Brevo desde `info@kalian.es` (en vez del email por defecto de Firebase Auth, que sale desde `firebaseapp.com` con peor entrega y que Google va a deprecar). Sin auth, rate limit 5/min/IP, no revela si el email existe.
+   - **Emails de auth — regla de oro**: ningún flujo del cliente puede invocar `sendPasswordResetEmail`/`sendEmailVerification`/`sendSignInLinkToEmail` de `firebase/auth`. La regla ESLint `no-restricted-imports` en `eslint.config.js` bloquea esos imports con mensaje explicativo. Todo email de auth pasa por Cloud Function → Brevo → `info@kalian.es`.
    - `sendWelcomeEmail` — genera el enlace de activación con `generatePasswordResetLink` **dentro de la function**; el cliente ya no pasa `activationLink` (antes iba hardcodeado a `/login` y no activaba nada, lo que obligaba a mandar un email de reset aparte). Exige rol staff.
    - `enviarCarnetDigital` — la llama el propio socio en su primer acceso a `/perfil`. Localiza su doc por `uid` o por el email del token, manda el carnet una sola vez (marca `carnetEnviadoAt`) y pone `cuentaActivada: true`. Idempotente.
    - `sendCourseApprovalEmail` — email de "inscripción aceptada" al aprobar una solicitud de curso. Si el socio se acaba de crear (`cuentaActivada === false`), incluye además el botón para crear la contraseña, de modo que el alta se resuelve en **un solo correo**. El cliente solo pasa `solicitudId`: destinatario, curso, horario, profesor y precio se leen de `solicitudes_cursos/{id}` + `cursos/{id}`. Exige rol staff server-side (`assertStaff`) y estado `'aprobado'` en la solicitud, así que solo puede dispararse desde el flujo real de AdminSolicitudes.
@@ -257,6 +258,7 @@ Clase utilitaria global: `kalian-poster-text` para títulos grandes.
 ### Cloud Functions
 - Region `europe-west1` siempre.
 - Secretos vía `defineSecret(...)`, nunca env vars planas para Brevo.
+- `firebase-admin` en API modular: `import { getFirestore } from 'firebase-admin/firestore'`, no `import * as admin from 'firebase-admin'`. La API con namespaces (`admin.firestore()`, `admin.firestore.FieldValue`) se eliminó en la v14.
 - Las callables corren con Admin SDK y **bypassan `firestore.rules`**: si una function solo debe usarla staff, comprobar el rol con `assertStaff(request.auth)` (replica `isAdmin()`/`isTeacher()` leyendo `users/{uid}.role`), no basta con `request.auth`.
 - En emails transaccionales, leer destinatario y contenido del doc autoritativo en Firestore; el cliente pasa solo un identificador.
 - Webhook entrante: validar secret antes de procesar.
@@ -397,6 +399,8 @@ CSP y cabeceras de seguridad: definidas en `firebase.json` (HSTS, X-Frame DENY, 
 - **Auditoría de seguridad junio 2026** cerrada: Sprint 1 críticos (Brevo API key fuera del bundle, validación de origen en email confirmación, escape HTML, PII enmascarada en logs), Sprint 2 altos (timestamp en webhook, retry en delete-Brevo, `timingSafeEqual` + rate limit en puerta, precio server-side, CSP sin `unsafe-inline`, `isDev` en logs cliente), Sprint 3 medios (`hasOnly` en `isValid*`, regex emails, `isValidPagoMensual`, timeouts en Brevo, `safeJson`), Sprint 4 bajos (`ticketID` con `crypto`, `node-fetch` eliminado, limpieza de reglas). Detalle en [SECURITY_SPEC.md §4](SECURITY_SPEC.md).
 
 ### Pendiente operativo (no código)
+- **Firebase Auth: desactivar templates por defecto**. En Firebase Console → Authentication → Templates → "Password reset" (y "Email verification" si se activase alguna vez): dejarlos desactivados o apuntando a un dominio custom. El envío desde `noreply@<project>.firebaseapp.com` está deprecado por Google y va a spam. Todos nuestros emails de auth ya salen desde `info@kalian.es` vía Brevo (`requestPasswordReset`).
+- **Custom action URL** (medio plazo): configurar `https://kalian.es/auth/action` como Authorized domain + action URL en Firebase Auth, añadir ruta en `App.tsx` con `verifyPasswordResetCode`/`confirmPasswordReset` para que el reset se complete bajo nuestro dominio en lugar de `firebaseapp.com`. Requiere pantalla nueva de "nueva contraseña".
 - Fijar el valor del secreto `BREVO_NEWSLETTER_DOI_TEMPLATE_ID` (Firebase Secret Manager) a `14`, el ID de la plantilla DOI ya creada y activa en Brevo.
 - Probar el flujo end-to-end en producción: alta → email DOI recibido → clic → `/newsletter/estado?accion=confirmado` → contacto confirmado en Brevo → `reconciliarNewsletterBrevo` promueve a `activo`.
 - **Campaña de reconfirmación RGPD con dos listas** (sustituye al plan anterior de atributo `RECONFIRMADO` sobre lista única, inviable por el `duplicate_parameter` descrito en §3):

@@ -270,7 +270,7 @@ const AdminSocios = () => {
         if (authResult.uid) realUid = authResult.uid;
         
         // Send welcome email via Brevo
-        await sendWelcomeEmail(emailClean, form.nombre || "Socio Kalian", "https://kalian.es/login");
+        await sendWelcomeEmail(emailClean, form.nombre || "Socio Kalian");
       } catch (err) {
         console.error("Error creating auth user or sending email:", err);
       }

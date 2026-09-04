@@ -61,8 +61,11 @@ Firebase. Tres bloques:
 1. **Firestore + reglas** (`firestore.rules`): única fuente de verdad para todos los datos del dominio. Reglas server-side estrictas por colección.
 2. **Cloud Functions** (`functions/src/index.ts`, region `europe-west1`, Node 22 con `fetch` nativo):
    - `validatePuertaAccess` — auth de tablet de puerta por contraseña compartida → custom token rol `portero`. Compara con `timingSafeEqual` + rate limit 5 intentos/min por IP.
-   - `sendWelcomeEmail`, `sendMembershipUpdateEmail`, `sendReservationConfirmation`, `requestPasswordReset` — emails transaccionales vía Brevo. Todas las plantillas escapan HTML en interpolaciones.
+   - `sendWelcomeEmail`, `sendMembershipUpdateEmail`, `enviarCarnetDigital`, `sendCourseApprovalEmail`, `sendReservationConfirmation`, `requestPasswordReset` — emails transaccionales vía Brevo. Ninguno usa plantillas de Brevo: el HTML se construye en la function (la única plantilla de Brevo es la del DOI de newsletter). Todas escapan HTML en interpolaciones.
    - `requestPasswordReset` — genera el link de reset con `admin.auth().generatePasswordResetLink` y lo envía por Brevo desde `info@kalian.es` (en vez del email por defecto de Firebase Auth, que sale desde `firebaseapp.com` con peor entrega). Sin auth, rate limit 5/min/IP, no revela si el email existe.
+   - `sendWelcomeEmail` — genera el enlace de activación con `generatePasswordResetLink` **dentro de la function**; el cliente ya no pasa `activationLink` (antes iba hardcodeado a `/login` y no activaba nada, lo que obligaba a mandar un email de reset aparte). Exige rol staff.
+   - `enviarCarnetDigital` — la llama el propio socio en su primer acceso a `/perfil`. Localiza su doc por `uid` o por el email del token, manda el carnet una sola vez (marca `carnetEnviadoAt`) y pone `cuentaActivada: true`. Idempotente.
+   - `sendCourseApprovalEmail` — email de "inscripción aceptada" al aprobar una solicitud de curso. Si el socio se acaba de crear (`cuentaActivada === false`), incluye además el botón para crear la contraseña, de modo que el alta se resuelve en **un solo correo**. El cliente solo pasa `solicitudId`: destinatario, curso, horario, profesor y precio se leen de `solicitudes_cursos/{id}` + `cursos/{id}`. Exige rol staff server-side (`assertStaff`) y estado `'aprobado'` en la solicitud, así que solo puede dispararse desde el flujo real de AdminSolicitudes.
    - `sendReservationConfirmation` lee la reserva del doc autoritativo por `manageToken`; el cliente no controla destinatario.
    - `gestionarReservaInvitado` — gestión de reserva sin login (capability token `manageToken`).
    - `calcularPrecioReserva` — precio autoritativo server-side; el cliente lo llama al enviar el formulario (y, con debounce, para el preview en tiempo real) para que `totalPagar` no sea manipulable. Devuelve también `socioVigente` (membresía en vigor, independiente de si hubo descuento) para que el cliente pueda evaluar la apertura anticipada de socios sin haber iniciado sesión.
@@ -254,6 +257,8 @@ Clase utilitaria global: `kalian-poster-text` para títulos grandes.
 ### Cloud Functions
 - Region `europe-west1` siempre.
 - Secretos vía `defineSecret(...)`, nunca env vars planas para Brevo.
+- Las callables corren con Admin SDK y **bypassan `firestore.rules`**: si una function solo debe usarla staff, comprobar el rol con `assertStaff(request.auth)` (replica `isAdmin()`/`isTeacher()` leyendo `users/{uid}.role`), no basta con `request.auth`.
+- En emails transaccionales, leer destinatario y contenido del doc autoritativo en Firestore; el cliente pasa solo un identificador.
 - Webhook entrante: validar secret antes de procesar.
 - Devolver 200 incluso en eventos ignorados (evita reintentos innecesarios).
 

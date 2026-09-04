@@ -89,6 +89,34 @@ El procedimiento operativo paso a paso (crear la lista, cambiar el secreto, envi
 
 Para el detalle del flujo y estados ver [SPEC.md §5](SPEC.md) (esquema `newsletter_subscribers`).
 
+### 2.6 Aprobación de una solicitud de inscripción a curso
+
+La solicitud llega desde la programación pública (`solicitudes_cursos`, estado `'pendiente'`) y se aprueba desde `/staff/solicitudes`. Al pulsar APROBAR, en este orden:
+
+1. Se valida el DNI/NIE (formato español). Sin DNI válido no se aprueba nada.
+2. Se añade al alumno al curso (`alumnos` + `aforo_actual`).
+3. Si no existe el socio, se crea: cuenta en Firebase Auth + doc `socios/{DNI}` con `cuentaActivada: false`. **No se envía ningún email aquí.**
+4. Se crea el registro de pago de inscripción como pendiente (`pagos_inscripciones`).
+5. Se marca la solicitud como `'aprobado'`.
+6. Se envía el **email de inscripción aceptada** con curso, modalidad, fecha de inicio, horario, profesor, sala e importe.
+7. Si la modalidad tiene precio, se registra el ingreso en contabilidad con el método de pago elegido.
+
+**Un evento, un email.** El socio recibe:
+
+| Momento | Socio nuevo | Socio que ya existía |
+|---|---|---|
+| Al aprobar | Inscripción aceptada, **con el botón para crear su contraseña** | Inscripción aceptada |
+| Al entrar por primera vez en `/perfil` | Carnet digital con el QR | — |
+| Si el curso amplía su membresía | — | Carnet digital actualizado |
+
+Antes llegaban tres correos a la vez (bienvenida, reset de contraseña y carnet). El de bienvenida llevaba un botón "Activar mi cuenta" que solo apuntaba a `/login` y no activaba nada, y el carnet llegaba con el QR de una cuenta que todavía no tenía contraseña. Ahora el enlace de activación es el real de Firebase Auth, lo genera la Cloud Function, y el carnet espera a que la cuenta exista de verdad.
+
+El enlace de activación **caduca en unas horas**. Si el socio lo deja pasar, no hace falta nada por parte del staff: usa "He olvidado mi contraseña" en `/login`, que sigue funcionando igual.
+
+**Ningún email aborta la aprobación**: si Brevo falla, el socio y el curso ya están actualizados, así que la solicitud queda aprobada igualmente y el panel muestra un aviso naranja con la lista de lo que no salió ("⚠️ Solicitud aprobada, pero fallaron estos emails: …"). Si ves ese aviso, revisa los logs de la function en Firebase antes de reenviar nada a mano.
+
+El email de aceptación se envía **después** de marcar la solicitud como aprobada, porque la Cloud Function comprueba ese estado antes de enviar: es lo que impide que nadie dispare emails de inscripción con datos inventados.
+
 ---
 
 ## 3. Manual de Staff (admin)
@@ -106,7 +134,7 @@ Acceso vía `/staff/login` con email/contraseña. Solo `role == 'admin'` o maste
 | Academias | `/staff/academias` | Catálogo de academias externas asociadas. |
 | Staff | `/staff/staff` | Gestión de cuentas con rol `admin`/`teacher`. |
 | Newsletter | `/staff/newsletter` | Lista de suscriptores. Badge "PENDIENTE" para no confirmados. Export CSV de activos. |
-| Solicitudes | `/staff/solicitudes` | Bandeja de solicitudes de inscripción pública. |
+| Solicitudes | `/staff/solicitudes` | Bandeja de solicitudes de inscripción pública. Al aprobar se dispara el email de inscripción aceptada (ver 2.6). |
 | Contabilidad | `/staff/contabilidad` | Filtros por mes/año, drilldown por socio, purga de residuos. |
 | Reservas | `/staff/reservas` | Vista de reservas (socios + invitados). |
 | Galería | `/staff/galeria` | Gestión de exposiciones. |

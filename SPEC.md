@@ -59,7 +59,7 @@ SPA React. Routing en `src/App.tsx`. `Suspense + lazy()` para todas las páginas
 ### Backend
 Firebase. Tres bloques:
 1. **Firestore + reglas** (`firestore.rules`): única fuente de verdad para todos los datos del dominio. Reglas server-side estrictas por colección.
-2. **Cloud Functions** (`functions/src/index.ts`, region `europe-west1`, Node 22 con `fetch` nativo):
+2. **Cloud Functions** (`functions/src/index.ts`, region `europe-west1`, Node 22 con `fetch` nativo, `firebase-admin` v14 API modular — `getFirestore()`/`getAuth()`/`FieldValue` importados de `firebase-admin/firestore|auth`, nunca `import * as admin`):
    - `validatePuertaAccess` — auth de tablet de puerta por contraseña compartida → custom token rol `portero`. Compara con `timingSafeEqual` + rate limit 5 intentos/min por IP.
    - `sendWelcomeEmail`, `sendMembershipUpdateEmail`, `enviarCarnetDigital`, `sendCourseApprovalEmail`, `sendReservationConfirmation`, `requestPasswordReset` — emails transaccionales vía Brevo. Ninguno usa plantillas de Brevo: el HTML se construye en la function (la única plantilla de Brevo es la del DOI de newsletter). Todas escapan HTML en interpolaciones.
    - `requestPasswordReset` — genera el link de reset con `admin.auth().generatePasswordResetLink` y lo envía por Brevo desde `info@kalian.es` (en vez del email por defecto de Firebase Auth, que sale desde `firebaseapp.com` con peor entrega). Sin auth, rate limit 5/min/IP, no revela si el email existe.
@@ -257,6 +257,7 @@ Clase utilitaria global: `kalian-poster-text` para títulos grandes.
 ### Cloud Functions
 - Region `europe-west1` siempre.
 - Secretos vía `defineSecret(...)`, nunca env vars planas para Brevo.
+- `firebase-admin` en API modular: `import { getFirestore } from 'firebase-admin/firestore'`, no `import * as admin from 'firebase-admin'`. La API con namespaces (`admin.firestore()`, `admin.firestore.FieldValue`) se eliminó en la v14.
 - Las callables corren con Admin SDK y **bypassan `firestore.rules`**: si una function solo debe usarla staff, comprobar el rol con `assertStaff(request.auth)` (replica `isAdmin()`/`isTeacher()` leyendo `users/{uid}.role`), no basta con `request.auth`.
 - En emails transaccionales, leer destinatario y contenido del doc autoritativo en Firestore; el cliente pasa solo un identificador.
 - Webhook entrante: validar secret antes de procesar.

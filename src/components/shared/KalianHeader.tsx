@@ -28,7 +28,7 @@ const KalianHeader: React.FC<KalianHeaderProps> = ({ showPanelButton = false, sh
       {showNewsletterLink && (
         <Link
           to="/newsletter-kalian-privado"
-          className="absolute top-4 right-4 md:top-8 md:right-8 z-20 bg-kalian-gold/10 border border-kalian-gold/30 text-kalian-gold px-3 py-2 md:px-5 md:py-3 rounded-xl md:rounded-2xl kalian-poster-text text-[10px] md:text-sm tracking-widest hover:bg-kalian-gold hover:text-black transition-all shadow-lg"
+          className="absolute top-3 right-3 md:top-8 md:right-8 z-20 bg-kalian-gold text-black px-5 py-3 md:px-8 md:py-4 rounded-2xl kalian-poster-text text-sm md:text-xl tracking-widest hover:bg-white transition-all shadow-2xl shadow-kalian-gold/30"
         >
           {t('newsletter.cta')}
         </Link>

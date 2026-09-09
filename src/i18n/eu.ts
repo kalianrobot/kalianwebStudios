@@ -215,6 +215,7 @@ const eu: Record<string, string> = {
   'newsletter.subscribe': 'Harpidetu Orain',
   'newsletter.dataProtectionTitle': 'Datuen Babesari buruzko Oinarrizko Informazioa',
   'newsletter.dataProtectionText': 'Arduraduna: Kalian HKG Elkartea. Helburua: buletina bidaltzea. Legitimazioa: adostasuna. Hartzailea: Brevo (Sendinblue SAS, EB). Eskubideak: sarbidea, zuzenketa, ezabaketa eta aurkaritza info@kalian.es helbidean.',
+  'newsletter.cta': 'Harpidetu Newsletterrera',
 
   // Newsletter — Egoera orria (berretsia / baja / berretsi gabe)
   'newsletterEstado.confirmado.title': 'Harpidetza berretsia!',

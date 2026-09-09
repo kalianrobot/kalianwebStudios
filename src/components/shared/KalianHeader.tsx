@@ -3,13 +3,16 @@ import { Link } from 'react-router-dom';
 import { doc, getDoc } from 'firebase/firestore';
 import { db } from '../../firebase';
 import { KalianLogo } from '../public/KalianLogo';
+import { useLanguage } from '../../context/LanguageContext';
 
 interface KalianHeaderProps {
   showPanelButton?: boolean;
+  showNewsletterLink?: boolean;
 }
 
-const KalianHeader: React.FC<KalianHeaderProps> = ({ showPanelButton = false }) => {
+const KalianHeader: React.FC<KalianHeaderProps> = ({ showPanelButton = false, showNewsletterLink = false }) => {
   const [config, setConfig] = useState<any>(null);
+  const { t } = useLanguage();
 
   useEffect(() => {
     const fetchConfig = async () => {
@@ -21,6 +24,16 @@ const KalianHeader: React.FC<KalianHeaderProps> = ({ showPanelButton = false }) 
 
   return (
     <div className="p-10 md:p-20 text-center space-y-6 relative overflow-hidden">
+      {/* Newsletter CTA (top-right) */}
+      {showNewsletterLink && (
+        <Link
+          to="/newsletter-kalian-privado"
+          className="absolute top-4 right-4 md:top-8 md:right-8 z-20 bg-kalian-gold/10 border border-kalian-gold/30 text-kalian-gold px-3 py-2 md:px-5 md:py-3 rounded-xl md:rounded-2xl kalian-poster-text text-[10px] md:text-sm tracking-widest hover:bg-kalian-gold hover:text-black transition-all shadow-lg"
+        >
+          {t('newsletter.cta')}
+        </Link>
+      )}
+
       {/* Background Glow */}
       <div className="absolute inset-0 opacity-5 pointer-events-none">
         <div className="absolute top-0 left-0 w-full h-full bg-[radial-gradient(circle_at_center,_var(--color-kalian-gold)_0%,_transparent_70%)]"></div>

@@ -207,7 +207,7 @@ const ProgramacionPublica = () => {
   return (
     <div className="min-h-screen bg-kalian-dark text-kalian-cream font-sans pb-20">
       {/* SHARED HEADER */}
-      <KalianHeader showPanelButton={false} />
+      <KalianHeader showPanelButton={false} showNewsletterLink={true} />
 
       <div className="max-w-6xl mx-auto px-6 space-y-32">
         

@@ -35,7 +35,7 @@ const ProgramacionPublica = () => {
 
   const [categoriaActiva, setCategoriaActiva] = useState<string | null>(null);
   const [subcategoriaActiva, setSubcategoriaActiva] = useState<string | null>(null);
-  const cursosListRef = useRef<HTMLDivElement>(null);
+  const cursosSectionRef = useRef<HTMLElement>(null);
 
   const [errorSeleccion, setErrorSeleccion] = useState<string | null>(null);
 
@@ -122,16 +122,29 @@ const ProgramacionPublica = () => {
     };
   }, []);
 
-  // Scroll automático al seleccionar subcategoría
+  // Al navegar entre categorías, especialidades y cursos el contenido nuevo se
+  // renderiza por encima del scroll actual, así que el usuario se queda por debajo
+  // y parece que no ha pasado nada. Llevamos la vista al inicio de la sección.
+  const irAInicioCursos = () => {
+    requestAnimationFrame(() => {
+      const seccion = cursosSectionRef.current;
+      if (!seccion) return;
+      const alturaNavbar = document.querySelector('nav')?.getBoundingClientRect().height || 0;
+      const y = seccion.getBoundingClientRect().top + window.scrollY - alturaNavbar - 16;
+      window.scrollTo({ top: Math.max(y, 0), behavior: 'smooth' });
+    });
+  };
+
+  // Con un modal abierto el fondo seguía desplazándose (sobre todo en móvil) y al
+  // cerrarlo aparecías en otro punto de la página.
   useEffect(() => {
-    if (subcategoriaActiva && cursosListRef.current) {
-      const yOffset = -100; // Ajuste para que el encabezado no quede pegado al borde superior
-      const element = cursosListRef.current;
-      const y = element.getBoundingClientRect().top + window.pageYOffset + yOffset;
-      
-      window.scrollTo({ top: y, behavior: 'smooth' });
-    }
-  }, [subcategoriaActiva]);
+    const hayModalAbierto = !!(cursoDetalle || itemSeleccionado || solicitudCurso || posterSeleccionado);
+    if (!hayModalAbierto) return;
+
+    const overflowOriginal = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    return () => { document.body.style.overflow = overflowOriginal; };
+  }, [cursoDetalle, itemSeleccionado, solicitudCurso, posterSeleccionado]);
 
   const enviarSolicitud = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -231,7 +244,7 @@ const ProgramacionPublica = () => {
         </section>
 
         {/* CURSOS Y TALLERES */}
-        <section className="space-y-12">
+        <section ref={cursosSectionRef} className="space-y-12">
           <SectionTitle title={t('home.kalian')} subtitle={t('home.club')} color={config?.titleColor} />
 
           {!categoriaActiva ? (
@@ -243,7 +256,7 @@ const ProgramacionPublica = () => {
                   whileInView={{ opacity: 1, scale: 1 }}
                   viewport={{ once: true }}
                   whileHover={{ scale: 1.03 }}
-                  onClick={() => setCategoriaActiva(aca.nombre)}
+                  onClick={() => { setCategoriaActiva(aca.nombre); irAInicioCursos(); }}
                   className="bg-black/40 border border-kalian-gold/10 rounded-[3rem] p-12 text-center space-y-6 cursor-pointer hover:border-kalian-gold/40 transition-all group relative overflow-hidden shadow-xl hover:shadow-kalian-gold/5"
                 >
                   <div className="absolute inset-0 bg-kalian-gold/5 opacity-0 group-hover:opacity-100 transition-opacity duration-700"></div>
@@ -275,7 +288,7 @@ const ProgramacionPublica = () => {
             >
               <div className="flex justify-between items-center">
                 <button 
-                  onClick={() => setCategoriaActiva(null)}
+                  onClick={() => { setCategoriaActiva(null); irAInicioCursos(); }}
                   className="text-kalian-gold font-black uppercase text-[10px] tracking-[0.4em] flex items-center gap-2 hover:text-white transition-colors group"
                 >
                   <span className="group-hover:-translate-x-2 transition-transform">←</span> {t('home.backCategories')}
@@ -309,7 +322,7 @@ const ProgramacionPublica = () => {
                       key={sub}
                       whileHover={{ scale: 1.1, rotate: -2 }}
                       whileTap={{ scale: 0.95 }}
-                      onClick={() => setSubcategoriaActiva(sub)}
+                      onClick={() => { setSubcategoriaActiva(sub); irAInicioCursos(); }}
                       className="px-12 py-6 bg-black/60 border border-kalian-gold/30 rounded-[2rem] kalian-poster-text text-2xl tracking-widest hover:bg-kalian-gold hover:text-black transition-all uppercase italic shadow-2xl"
                     >
                       {sub}
@@ -326,7 +339,7 @@ const ProgramacionPublica = () => {
             >
               <div className="flex justify-between items-center">
                 <button 
-                  onClick={() => setSubcategoriaActiva(null)}
+                  onClick={() => { setSubcategoriaActiva(null); irAInicioCursos(); }}
                   className="text-kalian-gold font-black uppercase text-[10px] tracking-[0.4em] flex items-center gap-2 hover:text-white transition-colors group"
                 >
                   <span className="group-hover:-translate-x-2 transition-transform">←</span> {t('home.changeSpecialty')}
@@ -339,7 +352,7 @@ const ProgramacionPublica = () => {
                 </div>
               </div>
 
-              <div className="space-y-8" ref={cursosListRef}>
+              <div className="space-y-8">
                 {cursos.filter(c => {
                   const catMatch = c.categoria === categoriaActiva || 
                                  academias.find(a => a.id === c.categoria)?.nombre === categoriaActiva ||

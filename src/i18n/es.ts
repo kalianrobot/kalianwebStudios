@@ -216,6 +216,7 @@ const es: Record<string, string> = {
   'newsletter.dataProtectionTitle': 'Información Básica de Protección de Datos',
   'newsletter.dataProtectionText': 'Responsable: Asociación Kalian HKG. Finalidad: envío del boletín. Legitimación: consentimiento. Destinatario: Brevo (Sendinblue SAS, UE). Derechos: acceso, rectificación, supresión y oposición en info@kalian.es.',
   'newsletter.cta': 'Inscríbete a la Newsletter',
+  'newsletter.backToProgram': 'Volver a programación',
 
   // Newsletter — Página de estado (confirmación / baja / no reconfirmado)
   'newsletterEstado.confirmado.title': '¡Suscripción confirmada!',

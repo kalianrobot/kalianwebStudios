@@ -425,7 +425,9 @@ const es: Record<string, string> = {
   'auth.loginError': 'Error al iniciar sesión',
   'auth.sendEmailError': 'Error al enviar email',
   'auth.provideEmailForReset': 'Introduce tu email para enviarte el enlace.',
-  'auth.resetEmailSent': '✅ Email enviado. Revisa tu bandeja de entrada.',
+  'auth.resetEmailSent': 'Si ese email tiene cuenta en Kalian, en unos minutos recibirás el enlace para crear tu contraseña. Revisa también la carpeta de spam. Si no llega, avisa a Kalian: puede que tu cuenta de acceso aún no esté creada.',
+  'auth.sendingResetEmail': 'Enviando enlace…',
+  'auth.enteringPanel': 'ENTRANDO…',
 
   // Teacher Dashboard
   'teacher.panelTitle': 'PANEL',

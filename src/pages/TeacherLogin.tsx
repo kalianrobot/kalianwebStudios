@@ -8,6 +8,7 @@ const TeacherLogin = () => {
   const [pass, setPass] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
+  const [resetting, setResetting] = useState(false);
   const [info, setInfo] = useState('');
   const { loginTeacher, resetPassword } = useAuth();
   const navigate = useNavigate();
@@ -33,7 +34,7 @@ const TeacherLogin = () => {
       setError(t('auth.provideEmailForReset'));
       return;
     }
-    setLoading(true);
+    setResetting(true);
     setError('');
     setInfo('');
     try {
@@ -42,9 +43,11 @@ const TeacherLogin = () => {
     } catch (err: any) {
       setError(err.message || t('auth.sendEmailError'));
     } finally {
-      setLoading(false);
+      setResetting(false);
     }
   };
+
+  const busy = loading || resetting;
 
   return (
     <div className="min-h-screen bg-kalian-dark flex items-center justify-center p-6 font-sans">
@@ -76,28 +79,41 @@ const TeacherLogin = () => {
               className="w-full p-5 bg-kalian-gold/5 rounded-2xl outline-none border border-kalian-gold/10 focus:border-kalian-gold transition-all text-kalian-gold text-center text-2xl"
               value={pass}
               onChange={e => setPass(e.target.value)}
-              required={!info}
+              required
             />
           </div>
 
           {error && <p className="text-red-500 text-center font-bold text-[10px] uppercase tracking-widest animate-pulse">{error}</p>}
-          {info && <p className="text-kalian-gold text-center font-bold text-[10px] uppercase tracking-widest">{info}</p>}
+          {info && <p className="text-kalian-gold text-center font-bold text-xs leading-relaxed px-2">{info}</p>}
 
-          <button 
-            disabled={loading}
-            className="w-full bg-kalian-gold text-black p-6 rounded-2xl kalian-poster-text text-xl tracking-widest hover:bg-white transition-all shadow-2xl shadow-kalian-gold/20 active:scale-95 uppercase disabled:opacity-50"
+          <button
+            disabled={busy}
+            aria-busy={loading}
+            className={`w-full p-6 rounded-2xl kalian-poster-text text-xl tracking-widest transition-all shadow-2xl shadow-kalian-gold/20 uppercase flex items-center justify-center gap-4 ${
+              loading
+                ? 'bg-kalian-gold/60 text-black/70 cursor-wait scale-[0.98]'
+                : 'bg-kalian-gold text-black hover:bg-white active:scale-95 disabled:opacity-50'
+            }`}
           >
-            {loading ? t('auth.loading') : t('auth.enterPanel')}
+            {loading && (
+              <span className="w-6 h-6 rounded-full border-[3px] border-black/20 border-t-black animate-spin shrink-0" />
+            )}
+            {loading ? t('auth.enteringPanel') : t('auth.enterPanel')}
           </button>
         </form>
 
         <div className="mt-8 text-center">
-          <button 
+          <button
+            type="button"
             onClick={handleReset}
-            disabled={loading}
-            className="text-kalian-gold/70 font-black text-[9px] uppercase tracking-[0.3em] hover:text-kalian-gold transition-colors border-b border-transparent hover:border-kalian-gold/40 pb-1"
+            disabled={busy}
+            aria-busy={resetting}
+            className="inline-flex items-center gap-3 text-kalian-gold/70 font-black text-[9px] uppercase tracking-[0.3em] hover:text-kalian-gold transition-colors border-b border-transparent hover:border-kalian-gold/40 pb-1 disabled:opacity-50 disabled:cursor-wait"
           >
-            {t('auth.forgotPassword')}
+            {resetting && (
+              <span className="w-3 h-3 rounded-full border-2 border-kalian-gold/30 border-t-kalian-gold animate-spin shrink-0" />
+            )}
+            {resetting ? t('auth.sendingResetEmail') : t('auth.forgotPassword')}
           </button>
         </div>
       </div>

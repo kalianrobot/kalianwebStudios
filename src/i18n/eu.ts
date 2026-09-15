@@ -425,7 +425,9 @@ const eu: Record<string, string> = {
   'auth.loginError': 'Errorea saioa hastean',
   'auth.sendEmailError': 'Errorea emaila bidaltzean',
   'auth.provideEmailForReset': 'Sartu zure emaila esteka bidaltzeko.',
-  'auth.resetEmailSent': '✅ Emaila bidalita. Begiratu zure sarrera-ontzia.',
+  'auth.resetEmailSent': 'Email horrek Kalianen konturik badu, minutu batzuetan pasahitza sortzeko esteka jasoko duzu. Begiratu spam karpeta ere. Ez bazaizu iristen, abisatu Kalianeri: agian zure sarbide-kontua oraindik ez dago sortuta.',
+  'auth.sendingResetEmail': 'Esteka bidaltzen…',
+  'auth.enteringPanel': 'SARTZEN…',
 
   // Irakasle Panela
   'teacher.panelTitle': 'PANELA',

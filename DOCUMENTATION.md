@@ -130,7 +130,7 @@ Acceso vía `/staff/login` con email/contraseña. Solo `role == 'admin'` o maste
 | Cursos | `/staff/cursos` | Catálogo académico, profesor asignado, horarios. |
 | Socios | `/staff/socios` | Alta, edición, gestión de membresías. Pestañas activos/inactivos. |
 | Locales | `/staff/locales` | Salas de ensayo. Inquilinos, pagos del local. |
-| Profesores | `/staff/profesores` | Alta de profesores y asignación. |
+| Profesores | `/staff/profesores` | Alta de profesores y asignación. Al crear uno se le envía el email para crear su contraseña; el botón **Enviar acceso** de cada ficha lo reenvía (ver 4.1). |
 | Academias | `/staff/academias` | Catálogo de academias externas asociadas. |
 | Staff | `/staff/staff` | Gestión de cuentas con rol `admin`/`teacher`. |
 | Newsletter | `/staff/newsletter` | Lista de suscriptores. Badge "PENDIENTE" para no confirmados. Export CSV de activos. |
@@ -146,6 +146,15 @@ Acceso vía `/staff/login` con email/contraseña. Solo `role == 'admin'` o maste
 ## 4. Manual de Profesor (teacher)
 
 Acceso vía `/profesor/login`.
+
+### 4.1 Cómo consigue el profesor su contraseña
+
+El alta en `/staff/profesores` crea la cuenta en Firebase Auth con una contraseña aleatoria que nadie conoce, y acto seguido envía el email **"Crea tu contraseña"** con el enlace real de Firebase. Ese es el camino normal.
+
+Si el profesor no recibe nada:
+
+- El enlace **"¿Has olvidado tu contraseña?"** del login siempre responde lo mismo exista o no la cuenta (anti-enumeración), así que su silencio no distingue entre "email en spam" y "no hay cuenta".
+- Para salir de dudas, el admin pulsa **Enviar acceso** en la ficha del profesor. Si la cuenta no existe en Auth, el panel lo dice explícitamente y ofrece crearla y mandar el email en el momento.
 
 - **Pasar lista**: ve únicamente los cursos que tiene asignados.
 - **Validación de cuota de socio**: la fila del alumno muestra visualmente si la cuota del mes actual está pagada.

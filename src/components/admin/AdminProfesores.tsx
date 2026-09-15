@@ -3,6 +3,7 @@ import { db } from '../../firebase';
 import { collection, setDoc, doc, getDocs, deleteDoc, query, orderBy, DocumentData, updateDoc, where } from 'firebase/firestore';
 import { Link } from 'react-router-dom';
 import { createSocioAuth } from '../../lib/adminAuth';
+import { sendWelcomeEmail } from '../../lib/brevoService';
 
 const AdminProfesores = () => {
   const [profesores, setProfesores] = useState<DocumentData[]>([]);
@@ -108,7 +109,16 @@ const AdminProfesores = () => {
           role: 'teacher'
         }, { merge: true });
 
-        setMsg("✅ Profesor creado y acceso vinculado");
+        // 5. Email con el enlace para crear la contraseña. Sin esto el profesor
+        // tiene cuenta en Auth con una password aleatoria que nadie conoce y no
+        // hay forma de que se entere de que debe usar "olvidé mi contraseña".
+        try {
+          await sendWelcomeEmail(emailClean, form.nombre || "Profesor/a Kalian");
+          setMsg("✅ Profesor creado. Le hemos enviado el email para crear su contraseña.");
+        } catch (mailErr: any) {
+          console.error("Error al enviar el email de acceso:", mailErr);
+          setMsg("⚠️ Profesor creado, pero el email de acceso no salió. Usa 'Enviar acceso' en su ficha.");
+        }
       }
       
       setTimeout(() => setMsg(''), 3000);
@@ -129,6 +139,88 @@ const AdminProfesores = () => {
       await deleteDoc(doc(db, "users", uid));
       fetchProfesores();
     }
+  };
+
+  // Manda (o remanda) el enlace para crear la contraseña. `sendWelcomeEmail`
+  // falla con 'failed-precondition' cuando el email no tiene cuenta en Firebase
+  // Auth: justo el caso en el que "he olvidado mi contraseña" no envía nada,
+  // porque `requestPasswordReset` calla por anti-enumeración. Aquí sí lo
+  // decimos, que el admin tiene derecho a saberlo, y ofrecemos crear la cuenta.
+  const enviarAcceso = async (p: DocumentData) => {
+    const emailClean = (p.email || '').trim().toLowerCase();
+    if (!emailClean) {
+      alert("Este profesor no tiene email: edítalo antes de enviarle el acceso.");
+      return;
+    }
+
+    setLoading(true);
+    setMsg('');
+    try {
+      await sendWelcomeEmail(emailClean, p.nombre || "Profesor/a Kalian");
+      setMsg(`✅ Email de acceso enviado a ${emailClean}`);
+      setTimeout(() => setMsg(''), 6000);
+    } catch (err: any) {
+      const sinCuentaAuth = String(err?.code || '').includes('failed-precondition');
+
+      if (!sinCuentaAuth) {
+        console.error("Error al enviar el email de acceso:", err);
+        alert("No se pudo enviar el email: " + (err?.message || "error desconocido"));
+        setLoading(false);
+        return;
+      }
+
+      const crear = window.confirm(
+        `${emailClean} NO tiene cuenta de acceso en Firebase Auth.\n\n` +
+        `Por eso "he olvidado mi contraseña" no le manda nada: no hay cuenta para la que generar el enlace.\n\n` +
+        `¿Creamos la cuenta ahora y le enviamos el email para que ponga su contraseña?`
+      );
+      if (!crear) {
+        setLoading(false);
+        return;
+      }
+
+      try {
+        const { uid: nuevoUid } = await createSocioAuth(emailClean);
+        if (!nuevoUid) {
+          alert("La cuenta ya existía en Auth pero el enlace sigue sin poder generarse. Revisa este email en la consola de Firebase Auth.");
+          setLoading(false);
+          return;
+        }
+
+        // El doc estaba bajo un id que no es el UID de Auth (DNI, id antiguo).
+        // Si no lo movemos, el profesor entraría sin rol teacher.
+        if (nuevoUid !== p.id) {
+          await setDoc(doc(db, "profesores", nuevoUid), {
+            nombre: p.nombre,
+            email: emailClean,
+            especialidad: p.especialidad || '',
+            nombre_eu: p.nombre_eu || '',
+            especialidad_eu: p.especialidad_eu || '',
+            activo: p.activo !== false,
+            uid: nuevoUid,
+            fechaAlta: p.fechaAlta || new Date().toISOString()
+          });
+          await deleteDoc(doc(db, "profesores", p.id));
+          await deleteDoc(doc(db, "users", p.id)).catch(() => {});
+        }
+
+        await setDoc(doc(db, "users", nuevoUid), {
+          uid: nuevoUid,
+          email: emailClean,
+          nombre: p.nombre,
+          role: 'teacher'
+        }, { merge: true });
+
+        await sendWelcomeEmail(emailClean, p.nombre || "Profesor/a Kalian");
+        setMsg(`✅ Cuenta creada y email enviado a ${emailClean}`);
+        setTimeout(() => setMsg(''), 6000);
+        fetchProfesores();
+      } catch (fixErr: any) {
+        console.error("Error al crear la cuenta de acceso:", fixErr);
+        alert("No se pudo crear la cuenta: " + (fixErr?.message || "error desconocido"));
+      }
+    }
+    setLoading(false);
   };
 
   const repararAcceso = async (p: DocumentData) => {
@@ -266,8 +358,16 @@ const AdminProfesores = () => {
                     </div>
                   )}
                 </div>
-                <div className="flex gap-2">
-                  <button 
+                <div className="flex gap-2 items-center">
+                  <button
+                    onClick={() => enviarAcceso(p)}
+                    disabled={loading}
+                    title="Enviar el email con el enlace para crear la contraseña"
+                    className="px-4 py-3 bg-emerald-50 text-emerald-700 rounded-xl text-[9px] font-black uppercase tracking-widest hover:bg-emerald-600 hover:text-white transition-all disabled:opacity-40 disabled:cursor-wait"
+                  >
+                    Enviar acceso
+                  </button>
+                  <button
                     onClick={() => {
                       setEditando(p.uid);
                       setForm({

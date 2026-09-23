@@ -253,9 +253,11 @@ const AdminContabilidad = () => {
     }
   };
 
-  // Cálculos de Resumen. Se usa montoCaja (bruto para Evento) para que el total
-  // cuadre con el efectivo/tarjeta realmente cobrado, no solo la parte de Kalian.
-  const totalPeriodo = transacciones.reduce((acc, t) => acc + montoCaja(t), 0);
+  // Cálculos de Resumen. Eventos se lleva como caja aparte (ver card "Caja
+  // Eventos" más abajo): su bruto incluye la parte del artista, que es una
+  // deuda pendiente de liquidar y no ingreso de Socios/Cursos, así que no
+  // suma al total general ni a sus gráficos.
+  const totalPeriodo = transacciones.filter(t => t.categoria !== 'Evento').reduce((acc, t) => acc + montoCaja(t), 0);
   const totalCursos = transacciones.filter(t => t.categoria === 'Curso').reduce((acc, t) => acc + t.monto, 0);
   const totalSociosIndividual = transacciones.filter(t => t.categoria === 'Socio').reduce((acc, t) => acc + t.monto, 0);
   const totalSociosLocales = transacciones.filter(t => t.categoria === 'Aportación Socio Local').reduce((acc, t) => acc + t.monto, 0);
@@ -266,22 +268,21 @@ const AdminContabilidad = () => {
   const totalEventosKalian = eventosTransacciones.reduce((acc, t) => acc + t.monto, 0);
   const totalEventosArtista = eventosTransacciones.reduce((acc, t) => acc + (t.monto_artista ?? 0), 0);
 
-  // Datos para el Gráfico Anual (Barras por mes)
+  // Datos para el Gráfico Anual (Barras por mes). Excluye Eventos: caja aparte.
   const getAnnualChartData = () => {
     const data = mesesCortos.map((nombre, i) => {
       const total = transacciones
-        .filter(t => t.fecha.toDate().getMonth() === i)
+        .filter(t => t.categoria !== 'Evento' && t.fecha.toDate().getMonth() === i)
         .reduce((acc, t) => acc + montoCaja(t), 0);
       return { name: nombre, total };
     });
     return data;
   };
 
-  // Datos para el Gráfico de Tarta (Categorías)
+  // Datos para el Gráfico de Tarta. Solo Caja General (Cursos/Socios); Eventos es caja aparte.
   const getPieData = () => [
     { name: 'Cursos', value: totalCursos, color: '#6366f1' },
-    { name: 'Socios', value: totalSocios, color: '#f59e0b' },
-    { name: 'Eventos', value: totalEventos, color: '#f43f5e' }
+    { name: 'Socios', value: totalSocios, color: '#f59e0b' }
   ];
 
   // Datos para el Gráfico Mensual (Últimos 4 meses - solo si estamos en modo mensual)
@@ -301,7 +302,7 @@ const AdminContabilidad = () => {
       const total = transacciones
         .filter(t => {
           const fecha = t.fecha.toDate();
-          return fecha.getMonth() === mes && fecha.getFullYear() === anio;
+          return t.categoria !== 'Evento' && fecha.getMonth() === mes && fecha.getFullYear() === anio;
         })
         .reduce((acc, t) => acc + montoCaja(t), 0);
       
@@ -432,12 +433,12 @@ const AdminContabilidad = () => {
               <TrendingUp size={120} />
             </div>
             <p className="text-[9px] font-black text-kalian-gold/40 uppercase tracking-[0.4em] mb-4">
-              {viewMode === 'mensual' ? `Total ${mesesNombres[selectedMonth]}` : `Total Anual ${selectedYear}`}
+              {viewMode === 'mensual' ? `Caja General ${mesesNombres[selectedMonth]}` : `Caja General ${selectedYear}`}
             </p>
             <h2 className="text-5xl kalian-poster-text text-kalian-gold leading-none">{totalPeriodo.toFixed(2)}€</h2>
             <div className="mt-6 flex items-center gap-2">
               <span className="w-2 h-2 rounded-full bg-emerald-500"></span>
-              <p className="text-[8px] font-bold text-kalian-cream/40 uppercase tracking-widest">Ingresos validados</p>
+              <p className="text-[8px] font-bold text-kalian-cream/40 uppercase tracking-widest">Soci@s + Cursos (sin eventos)</p>
             </div>
           </div>
 
@@ -483,7 +484,7 @@ const AdminContabilidad = () => {
             <div className="absolute -right-4 -top-4 text-kalian-gold/5 group-hover:text-kalian-gold/10 transition-colors">
               <Ticket size={120} />
             </div>
-            <p className="text-[9px] font-black text-kalian-gold/40 uppercase tracking-[0.4em] mb-4">Ingresos Eventos</p>
+            <p className="text-[9px] font-black text-kalian-gold/40 uppercase tracking-[0.4em] mb-4">Caja Eventos (aparte)</p>
             <h2 className="text-5xl kalian-poster-text text-kalian-cream leading-none">{totalEventos.toFixed(2)}€</h2>
             <div className="mt-6 flex items-center gap-2">
               <span className="w-2 h-2 rounded-full bg-rose-500"></span>
@@ -507,7 +508,7 @@ const AdminContabilidad = () => {
           <div className={`${viewMode === 'anual' ? 'lg:col-span-12' : 'lg:col-span-8'} bg-black/40 border border-kalian-gold/10 p-10 rounded-[3rem]`}>
             <div className="flex justify-between items-center mb-10">
               <h3 className="text-xl kalian-poster-text text-kalian-gold/40 uppercase tracking-widest italic">
-                {viewMode === 'mensual' ? `Evolución Ingresos (${mesesNombres[selectedMonth]})` : `Ingresos Mensuales ${selectedYear}`}
+                {viewMode === 'mensual' ? `Evolución Caja General (${mesesNombres[selectedMonth]})` : `Caja General Mensual ${selectedYear}`}
               </h3>
               <div className="flex items-center gap-2 text-kalian-gold/40">
                 <BarChart3 size={16} />
@@ -585,7 +586,7 @@ const AdminContabilidad = () => {
             <div className="lg:col-span-12 grid grid-cols-1 md:grid-cols-2 gap-8">
               <div className="bg-black/40 border border-kalian-gold/10 p-10 rounded-[3rem]">
                 <div className="flex justify-between items-center mb-10">
-                  <h3 className="text-xl kalian-poster-text text-kalian-gold/40 uppercase tracking-widest italic">Desglose por Categoría ({selectedYear})</h3>
+                  <h3 className="text-xl kalian-poster-text text-kalian-gold/40 uppercase tracking-widest italic">Desglose Caja General ({selectedYear})</h3>
                   <PieIcon size={16} className="text-kalian-gold/40" />
                 </div>
                 <div className="h-[300px] w-full">

@@ -165,12 +165,15 @@ dos botones:
 
 **Contabilidad** (`/staff/contabilidad`) ya muestra, en la fila de cada
 evento y en cada entrada expandida, el desglose `Bruto · Kalian · Artista`.
-El total que suma al balance mensual y a los gráficos (categoría "Evento",
-"Total del período", CSV) es el **bruto cobrado en puerta**, para que cuadre
-con el efectivo/tarjeta realmente recaudado — la parte del artista es una
-deuda pendiente de liquidar, no dinero que "desaparece" del cuadre. La card
-"Ingresos Eventos" muestra aparte cuánto de ese bruto es neto Kalian y
-cuánto es para el artista.
+**Eventos se lleva como caja aparte**: la card "Caja Eventos" y su gráfico
+no suman al total de "Caja General" (Soci@s + Cursos) ni a sus gráficos —
+el bruto de un evento incluye la parte del artista, que es una deuda
+pendiente de liquidar, no ingreso de la caja general, y mezclarlo ahí
+descuadraba el balance. Dentro de su propia card, "Caja Eventos" sí usa el
+**bruto cobrado en puerta** (no el neto Kalian) para que cuadre con el
+efectivo/tarjeta realmente recaudado, y debajo desglosa cuánto de ese bruto
+es neto Kalian y cuánto es para el artista. El CSV exporta Bruto/Kalian/
+Artista como columnas separadas por movimiento.
 
 **Liquidar al artista es manual**: no hay botón que registre
 automáticamente el pago. Cuando el gerente entrega el efectivo o hace la

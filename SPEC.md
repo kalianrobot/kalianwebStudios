@@ -208,9 +208,47 @@ fallback `monto_bruto = monto`, `monto_artista = 0`, `variante_precio =
 'estandar'` — lectura correcta, porque hasta entonces no existía caché
 formalizado. No hay backfill de datos históricos.
 
+**`AdminContabilidad` lleva Eventos como caja aparte**: la card/gráfico
+"Caja Eventos" no suma al total de "Caja General" (`Socio` + `Curso` +
+derivadas) ni a sus gráficos de barras/tarta — el bruto de un evento
+incluye la parte del artista (deuda pendiente de liquidar, no ingreso de la
+caja general), así que mezclarlo con Socios/Cursos descuadraba el balance
+percibido. Dentro de su propia card, "Caja Eventos" suma el **bruto**
+(`monto_bruto ?? monto`), no el neto Kalian — así cuadra con el
+efectivo/tarjeta realmente recaudado en puerta — y desglosa aparte cuánto
+de ese bruto es neto Kalian y cuánto es para el artista. El CSV exporta
+columnas Bruto/Kalian/Artista independientes por movimiento.
+
 Esta redefinición de `monto` aplica **solo** a `categoria == 'Evento'`. Para
 `Socio`, `Curso`, `Aportación Socio Local`, `Cierre Aportación Curso` y
 `cuota_socio`, `monto` sigue siendo el total del movimiento.
+
+### Liquidar al artista: categoría `'Pago Artista'`
+
+Cuando Kalian entrega al artista lo que le corresponde, se registra desde
+`AdminContabilidad` (botón "+ Pago artista" en la fila del evento, visible
+mientras `pendienteArtista > 0`) un doc `finanzas`:
+
+```ts
+// finanzas/{id} con categoria == 'Pago Artista'
+{
+  monto: number    // negativo: -importe entregado
+  eventoId: string // referencia al evento liquidado
+  concepto: string // "Pago artista: <título del evento>"
+}
+```
+
+No lleva `monto_bruto`/`monto_artista`/`variante_precio` — no es una venta de
+entrada, es una salida de caja. `firestore.rules → isValidFinanza` no impone
+un enum sobre `categoria`, así que no hizo falta tocar las reglas.
+
+`AdminContabilidad.agruparMovimientos` agrupa `'Evento'` y `'Pago Artista'`
+por `eventoId` en la misma fila: `totalArtista` (lo que se le debe, viene de
+las entradas) menos `totalPagadoArtista` (suma de `'Pago Artista'` en valor
+absoluto) da `pendienteArtista`. La card "Caja Eventos" resta esos pagos de
+su bruto — es la caja física del evento después de liquidar. `montoCaja()`
+no necesita caso especial para `'Pago Artista'`: al no ser `'Evento'`, ya
+devuelve `monto` tal cual (negativo).
 
 **Fuente autoritativa de la recaudación de un evento**: `finanzas` filtrada
 por `eventoId` (y `categoria == 'Evento'` en cliente, para no requerir índice

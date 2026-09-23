@@ -3,20 +3,21 @@ import { db } from '../../firebase';
 import { collection, query, orderBy, onSnapshot, Timestamp, where, getDocs, writeBatch, doc, updateDoc, serverTimestamp } from 'firebase/firestore';
 import { Link } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
-import { 
-  BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell, PieChart, Pie 
+import {
+  BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell, PieChart, Pie
 } from 'recharts';
 import {
   Download, Filter, Calendar, TrendingUp, GraduationCap, Users, ArrowLeft, Search, Ticket, Settings, PieChart as PieIcon, BarChart3, ChevronRight, ChevronDown
 } from 'lucide-react';
 import { fetchConfig, updateConfig, subscribeToConfig } from '../../lib/configService';
+import { registrarIngreso, MetodoPago } from '../../lib/finanzas';
 
 interface Transaccion {
   id: string;
   fecha: Timestamp;
   monto: number;
   concepto: string;
-  categoria: 'Socio' | 'Curso' | 'Evento' | 'Aportación Socio Local' | 'Cierre Aportación Curso';
+  categoria: 'Socio' | 'Curso' | 'Evento' | 'Aportación Socio Local' | 'Cierre Aportación Curso' | 'Pago Artista';
   metodo: 'Efectivo' | 'Tarjeta' | 'Transferencia';
   socio_id: string;
   eventoId?: string;
@@ -38,7 +39,7 @@ interface DetalleSocio {
 
 type Fila =
   | { tipo: 'individual'; t: Transaccion }
-  | { tipo: 'grupo'; id: string; titulo: string; total: number; totalBruto: number; totalArtista: number; ultima: Timestamp; hijos: Transaccion[]; metodo: string };
+  | { tipo: 'grupo'; id: string; titulo: string; total: number; totalBruto: number; totalArtista: number; totalPagadoArtista: number; pendienteArtista: number; ultima: Timestamp; hijos: Transaccion[]; metodo: string };
 
 // Extrae el título del evento del concepto: "Entrada Evento: KALIAN JAZZ (Titular)" → "KALIAN JAZZ"
 const extraerTituloEvento = (concepto: string): string | null => {
@@ -52,12 +53,22 @@ const extraerSufijo = (concepto: string): string => {
   return m ? m[1] : concepto;
 };
 
+// Cuánto entró/salió en caja/banco por este movimiento. Para 'Evento', `monto` es el
+// neto Kalian (la parte del artista es una deuda a pagar, no ingreso propio), así que
+// el cuadre de caja usa el bruto cobrado. 'Pago Artista' ya es un importe plano
+// (negativo) y el resto de categorías no tienen split.
+const montoCaja = (t: Transaccion): number => t.categoria === 'Evento' ? (t.monto_bruto ?? t.monto) : t.monto;
+
+// 'Evento' (venta de entrada) y 'Pago Artista' (liquidación) se agrupan juntos por
+// evento para poder ver, en la misma fila, cuánto se vendió y cuánto se ha pagado ya.
+const esMovimientoDeEvento = (t: Transaccion): boolean => t.categoria === 'Evento' || t.categoria === 'Pago Artista';
+
 const agruparMovimientos = (rows: Transaccion[]): Fila[] => {
   const grupos = new Map<string, Transaccion[]>();
   const individuales: Transaccion[] = [];
 
   for (const t of rows) {
-    if (t.categoria !== 'Evento') {
+    if (!esMovimientoDeEvento(t)) {
       individuales.push(t);
       continue;
     }
@@ -68,14 +79,19 @@ const agruparMovimientos = (rows: Transaccion[]): Fila[] => {
 
   const filas: Fila[] = [];
   for (const [id, hijos] of grupos) {
-    const titulo = extraerTituloEvento(hijos[0].concepto) || hijos[0].concepto;
-    const total = hijos.reduce((a, t) => a + t.monto, 0);
-    const totalBruto = hijos.reduce((a, t) => a + (t.monto_bruto ?? t.monto), 0);
-    const totalArtista = hijos.reduce((a, t) => a + (t.monto_artista ?? 0), 0);
+    const entradas = hijos.filter(t => t.categoria === 'Evento');
+    const pagosArtista = hijos.filter(t => t.categoria === 'Pago Artista');
+    const tituloBase = entradas[0] || hijos[0];
+    const titulo = extraerTituloEvento(tituloBase.concepto) || tituloBase.concepto;
+    const total = entradas.reduce((a, t) => a + t.monto, 0);
+    const totalBruto = entradas.reduce((a, t) => a + (t.monto_bruto ?? t.monto), 0);
+    const totalArtista = entradas.reduce((a, t) => a + (t.monto_artista ?? 0), 0);
+    const totalPagadoArtista = pagosArtista.reduce((a, t) => a + Math.abs(t.monto), 0);
+    const pendienteArtista = totalArtista - totalPagadoArtista;
     const ultima = hijos.reduce((max, t) => (t.fecha.toMillis() > max.toMillis() ? t.fecha : max), hijos[0].fecha);
     const metodos = new Set(hijos.map(h => h.metodo));
     const metodo = metodos.size === 1 ? [...metodos][0] : 'Varios';
-    filas.push({ tipo: 'grupo', id, titulo, total, totalBruto, totalArtista, ultima, hijos, metodo });
+    filas.push({ tipo: 'grupo', id, titulo, total, totalBruto, totalArtista, totalPagadoArtista, pendienteArtista, ultima, hijos, metodo });
   }
   for (const t of individuales) filas.push({ tipo: 'individual', t });
 
@@ -101,6 +117,10 @@ const AdminContabilidad = () => {
   const [cuotaGlobal, setCuotaGlobal] = useState(15);
   const [showConfig, setShowConfig] = useState(false);
   const [nuevaCuota, setNuevaCuota] = useState(15);
+  const [pagoArtista, setPagoArtista] = useState<{ eventoId: string; titulo: string; pendiente: number } | null>(null);
+  const [pagoArtistaImporte, setPagoArtistaImporte] = useState('');
+  const [pagoArtistaMetodo, setPagoArtistaMetodo] = useState<MetodoPago>('Efectivo');
+  const [guardandoPagoArtista, setGuardandoPagoArtista] = useState(false);
   const [expandidos, setExpandidos] = useState<Set<string>>(new Set());
   const [detalleModal, setDetalleModal] = useState<{ t: Transaccion; detalles: DetalleSocio[] } | null>(null);
   const [loadingDetalle, setLoadingDetalle] = useState(false);
@@ -171,6 +191,39 @@ const AdminContabilidad = () => {
     } catch (err: any) {
       console.error(err);
       alert("Error al borrar movimiento: " + (err.message || "desconocido"));
+    }
+  };
+
+  const abrirPagoArtista = (fila: Extract<Fila, { tipo: 'grupo' }>) => {
+    setPagoArtista({ eventoId: fila.id, titulo: fila.titulo, pendiente: fila.pendienteArtista });
+    setPagoArtistaImporte(fila.pendienteArtista > 0 ? fila.pendienteArtista.toFixed(2) : '');
+    setPagoArtistaMetodo('Efectivo');
+  };
+
+  const guardarPagoArtista = async () => {
+    if (!pagoArtista) return;
+    const importe = Number(pagoArtistaImporte);
+    if (!Number.isFinite(importe) || importe <= 0) {
+      alert('Introduce un importe válido (> 0).');
+      return;
+    }
+    setGuardandoPagoArtista(true);
+    try {
+      await registrarIngreso({
+        monto: -importe,
+        concepto: `Pago artista: ${pagoArtista.titulo}`,
+        categoria: 'Pago Artista',
+        metodo: pagoArtistaMetodo,
+        eventoId: pagoArtista.eventoId,
+        staff_id: user?.uid,
+      });
+      setPagoArtista(null);
+      setPagoArtistaImporte('');
+    } catch (err: any) {
+      console.error(err);
+      alert('Error al registrar el pago: ' + (err.message || 'desconocido'));
+    } finally {
+      setGuardandoPagoArtista(false);
     }
   };
 
@@ -248,31 +301,41 @@ const AdminContabilidad = () => {
     }
   };
 
-  // Cálculos de Resumen
-  const totalPeriodo = transacciones.reduce((acc, t) => acc + t.monto, 0);
+  // Cálculos de Resumen. Eventos (entradas + pagos a artista) se lleva como
+  // caja aparte (ver card "Caja Eventos" más abajo): su bruto incluye la
+  // parte del artista, que es una deuda pendiente de liquidar y no ingreso
+  // de Socios/Cursos, así que no suma al total general ni a sus gráficos.
+  const totalPeriodo = transacciones.filter(t => !esMovimientoDeEvento(t)).reduce((acc, t) => acc + montoCaja(t), 0);
   const totalCursos = transacciones.filter(t => t.categoria === 'Curso').reduce((acc, t) => acc + t.monto, 0);
   const totalSociosIndividual = transacciones.filter(t => t.categoria === 'Socio').reduce((acc, t) => acc + t.monto, 0);
   const totalSociosLocales = transacciones.filter(t => t.categoria === 'Aportación Socio Local').reduce((acc, t) => acc + t.monto, 0);
   const totalCierresCurso = transacciones.filter(t => t.categoria === 'Cierre Aportación Curso').reduce((acc, t) => acc + t.monto, 0);
   const totalSocios = totalSociosIndividual + totalSociosLocales + totalCierresCurso;
-  const totalEventos = transacciones.filter(t => t.categoria === 'Evento').reduce((acc, t) => acc + t.monto, 0);
+  const entradasTransacciones = transacciones.filter(t => t.categoria === 'Evento');
+  const pagosArtistaTransacciones = transacciones.filter(t => t.categoria === 'Pago Artista');
+  // Caja Eventos = bruto de entradas + pagos ya hechos al artista (negativos): lo que queda de esa caja.
+  const totalEventos = entradasTransacciones.reduce((acc, t) => acc + montoCaja(t), 0)
+    + pagosArtistaTransacciones.reduce((acc, t) => acc + t.monto, 0);
+  const totalEventosKalian = entradasTransacciones.reduce((acc, t) => acc + t.monto, 0);
+  const totalEventosArtista = entradasTransacciones.reduce((acc, t) => acc + (t.monto_artista ?? 0), 0);
+  const totalEventosPagadoArtista = pagosArtistaTransacciones.reduce((acc, t) => acc + Math.abs(t.monto), 0);
+  const totalEventosPendienteArtista = totalEventosArtista - totalEventosPagadoArtista;
 
-  // Datos para el Gráfico Anual (Barras por mes)
+  // Datos para el Gráfico Anual (Barras por mes). Excluye Eventos: caja aparte.
   const getAnnualChartData = () => {
     const data = mesesCortos.map((nombre, i) => {
       const total = transacciones
-        .filter(t => t.fecha.toDate().getMonth() === i)
-        .reduce((acc, t) => acc + t.monto, 0);
+        .filter(t => !esMovimientoDeEvento(t) && t.fecha.toDate().getMonth() === i)
+        .reduce((acc, t) => acc + montoCaja(t), 0);
       return { name: nombre, total };
     });
     return data;
   };
 
-  // Datos para el Gráfico de Tarta (Categorías)
+  // Datos para el Gráfico de Tarta. Solo Caja General (Cursos/Socios); Eventos es caja aparte.
   const getPieData = () => [
     { name: 'Cursos', value: totalCursos, color: '#6366f1' },
-    { name: 'Socios', value: totalSocios, color: '#f59e0b' },
-    { name: 'Eventos', value: totalEventos, color: '#f43f5e' }
+    { name: 'Socios', value: totalSocios, color: '#f59e0b' }
   ];
 
   // Datos para el Gráfico Mensual (Últimos 4 meses - solo si estamos en modo mensual)
@@ -292,9 +355,9 @@ const AdminContabilidad = () => {
       const total = transacciones
         .filter(t => {
           const fecha = t.fecha.toDate();
-          return fecha.getMonth() === mes && fecha.getFullYear() === anio;
+          return !esMovimientoDeEvento(t) && fecha.getMonth() === mes && fecha.getFullYear() === anio;
         })
-        .reduce((acc, t) => acc + t.monto, 0);
+        .reduce((acc, t) => acc + montoCaja(t), 0);
       
       data.push({
         name: mesesCortos[mes],
@@ -311,7 +374,7 @@ const AdminContabilidad = () => {
 
   // Exportar a CSV
   const exportToCSV = () => {
-    const headers = ["Fecha", "Concepto", "Categoría", "Método", "Monto", "Socio ID"];
+    const headers = ["Fecha", "Concepto", "Categoría", "Método", "Bruto", "Kalian", "Artista", "Socio ID"];
     const rows = transacciones
       .filter(t => filtroCategoria === 'todas' || t.categoria === filtroCategoria)
       .map(t => [
@@ -319,7 +382,9 @@ const AdminContabilidad = () => {
         t.concepto,
         t.categoria,
         t.metodo,
-        `${t.monto}€`,
+        `${montoCaja(t)}€`,
+        t.categoria === 'Evento' ? `${t.monto}€` : '',
+        t.categoria === 'Evento' ? `${t.monto_artista ?? 0}€` : t.categoria === 'Pago Artista' ? `${-Math.abs(t.monto)}€` : '',
         t.socio_id
       ]);
 
@@ -421,12 +486,12 @@ const AdminContabilidad = () => {
               <TrendingUp size={120} />
             </div>
             <p className="text-[9px] font-black text-kalian-gold/40 uppercase tracking-[0.4em] mb-4">
-              {viewMode === 'mensual' ? `Total ${mesesNombres[selectedMonth]}` : `Total Anual ${selectedYear}`}
+              {viewMode === 'mensual' ? `Caja General ${mesesNombres[selectedMonth]}` : `Caja General ${selectedYear}`}
             </p>
             <h2 className="text-5xl kalian-poster-text text-kalian-gold leading-none">{totalPeriodo.toFixed(2)}€</h2>
             <div className="mt-6 flex items-center gap-2">
               <span className="w-2 h-2 rounded-full bg-emerald-500"></span>
-              <p className="text-[8px] font-bold text-kalian-cream/40 uppercase tracking-widest">Ingresos validados</p>
+              <p className="text-[8px] font-bold text-kalian-cream/40 uppercase tracking-widest">Soci@s + Cursos (sin eventos)</p>
             </div>
           </div>
 
@@ -472,11 +537,29 @@ const AdminContabilidad = () => {
             <div className="absolute -right-4 -top-4 text-kalian-gold/5 group-hover:text-kalian-gold/10 transition-colors">
               <Ticket size={120} />
             </div>
-            <p className="text-[9px] font-black text-kalian-gold/40 uppercase tracking-[0.4em] mb-4">Ingresos Eventos</p>
+            <p className="text-[9px] font-black text-kalian-gold/40 uppercase tracking-[0.4em] mb-4">Caja Eventos (aparte)</p>
             <h2 className="text-5xl kalian-poster-text text-kalian-cream leading-none">{totalEventos.toFixed(2)}€</h2>
             <div className="mt-6 flex items-center gap-2">
               <span className="w-2 h-2 rounded-full bg-rose-500"></span>
-              <p className="text-[8px] font-bold text-kalian-cream/40 uppercase tracking-widest">Puerta y Reservas</p>
+              <p className="text-[8px] font-bold text-kalian-cream/40 uppercase tracking-widest">Puerta y Reservas (bruto)</p>
+            </div>
+            <div className="mt-2 pt-2 border-t border-kalian-gold/10 space-y-1">
+              <div className="flex justify-between text-[8px] font-black uppercase tracking-widest">
+                <span className="text-kalian-gold/40">Kalian:</span>
+                <span className="text-kalian-cream">{totalEventosKalian.toFixed(2)}€</span>
+              </div>
+              <div className="flex justify-between text-[8px] font-black uppercase tracking-widest">
+                <span className="text-kalian-gold/40">Artista (total):</span>
+                <span className="text-kalian-cream">{totalEventosArtista.toFixed(2)}€</span>
+              </div>
+              <div className="flex justify-between text-[8px] font-black uppercase tracking-widest">
+                <span className="text-kalian-gold/40">Pagado al artista:</span>
+                <span className="text-kalian-cream">{totalEventosPagadoArtista.toFixed(2)}€</span>
+              </div>
+              <div className="flex justify-between text-[8px] font-black uppercase tracking-widest">
+                <span className="text-rose-500/70">Pendiente:</span>
+                <span className={totalEventosPendienteArtista > 0 ? 'text-rose-500' : 'text-kalian-cream'}>{totalEventosPendienteArtista.toFixed(2)}€</span>
+              </div>
             </div>
           </div>
         </div>
@@ -486,7 +569,7 @@ const AdminContabilidad = () => {
           <div className={`${viewMode === 'anual' ? 'lg:col-span-12' : 'lg:col-span-8'} bg-black/40 border border-kalian-gold/10 p-10 rounded-[3rem]`}>
             <div className="flex justify-between items-center mb-10">
               <h3 className="text-xl kalian-poster-text text-kalian-gold/40 uppercase tracking-widest italic">
-                {viewMode === 'mensual' ? `Evolución Ingresos (${mesesNombres[selectedMonth]})` : `Ingresos Mensuales ${selectedYear}`}
+                {viewMode === 'mensual' ? `Evolución Caja General (${mesesNombres[selectedMonth]})` : `Caja General Mensual ${selectedYear}`}
               </h3>
               <div className="flex items-center gap-2 text-kalian-gold/40">
                 <BarChart3 size={16} />
@@ -542,7 +625,7 @@ const AdminContabilidad = () => {
                 <div className="space-y-2">
                   <p className="text-[9px] font-black text-kalian-gold/40 uppercase tracking-[0.3em] ml-4">Categoría</p>
                   <div className="grid grid-cols-2 gap-2">
-                    {['todas', 'Socio', 'Aportación Socio Local', 'Cierre Aportación Curso', 'Curso', 'Evento'].map(cat => (
+                    {['todas', 'Socio', 'Aportación Socio Local', 'Cierre Aportación Curso', 'Curso', 'Evento', 'Pago Artista'].map(cat => (
                       <button
                         key={cat}
                         onClick={() => setFiltroCategoria(cat)}
@@ -564,7 +647,7 @@ const AdminContabilidad = () => {
             <div className="lg:col-span-12 grid grid-cols-1 md:grid-cols-2 gap-8">
               <div className="bg-black/40 border border-kalian-gold/10 p-10 rounded-[3rem]">
                 <div className="flex justify-between items-center mb-10">
-                  <h3 className="text-xl kalian-poster-text text-kalian-gold/40 uppercase tracking-widest italic">Desglose por Categoría ({selectedYear})</h3>
+                  <h3 className="text-xl kalian-poster-text text-kalian-gold/40 uppercase tracking-widest italic">Desglose Caja General ({selectedYear})</h3>
                   <PieIcon size={16} className="text-kalian-gold/40" />
                 </div>
                 <div className="h-[300px] w-full">
@@ -610,7 +693,7 @@ const AdminContabilidad = () => {
                   <div className="space-y-2">
                     <p className="text-[9px] font-black text-kalian-gold/40 uppercase tracking-[0.3em] ml-4">Categoría</p>
                     <div className="grid grid-cols-2 gap-2">
-                      {['todas', 'Socio', 'Aportación Socio Local', 'Curso', 'Evento'].map(cat => (
+                      {['todas', 'Socio', 'Aportación Socio Local', 'Curso', 'Evento', 'Pago Artista'].map(cat => (
                         <button
                           key={cat}
                           onClick={() => setFiltroCategoria(cat)}
@@ -719,6 +802,9 @@ const AdminContabilidad = () => {
                           <p className="text-sm font-bold text-kalian-cream group-hover:text-kalian-gold transition-colors">{fila.titulo}</p>
                           <p className="text-[9px] font-black uppercase tracking-widest text-kalian-gold/40 mt-1">
                             Bruto {fila.totalBruto.toFixed(2)}€ · Kalian {fila.total.toFixed(2)}€ · Artista {fila.totalArtista.toFixed(2)}€
+                            {fila.totalArtista > 0 && (
+                              <> · Pagado {fila.totalPagadoArtista.toFixed(2)}€ · <span className={fila.pendienteArtista > 0 ? 'text-rose-500' : ''}>Pendiente {fila.pendienteArtista.toFixed(2)}€</span></>
+                            )}
                           </p>
                         </td>
                         <td className="p-6">
@@ -730,10 +816,19 @@ const AdminContabilidad = () => {
                           <span className="text-sm font-black text-kalian-gold">{fila.hijos.length}</span>
                         </td>
                         <td className="p-6 text-[10px] font-black text-kalian-cream/60 uppercase tracking-widest">{fila.metodo}</td>
-                        <td className="p-6 text-[10px] font-mono text-kalian-gold/20">—</td>
+                        <td className="p-6">
+                          {fila.pendienteArtista > 0 && (
+                            <button
+                              onClick={(e) => { e.stopPropagation(); abrirPagoArtista(fila); }}
+                              className="text-[9px] font-black uppercase tracking-widest text-kalian-gold/60 hover:text-kalian-gold border border-kalian-gold/20 hover:border-kalian-gold/60 rounded-full px-3 py-1 transition-all whitespace-nowrap"
+                            >
+                              + Pago artista
+                            </button>
+                          )}
+                        </td>
                         <td className="p-6 text-right">
                           <span className="text-lg kalian-poster-text text-kalian-gold">
-                            +{fila.total.toFixed(2)}€
+                            +{fila.totalBruto.toFixed(2)}€
                           </span>
                         </td>
                       </tr>
@@ -742,17 +837,23 @@ const AdminContabilidad = () => {
                           <td className="p-3"></td>
                           <td className="p-3 pl-10 text-[10px] font-mono text-kalian-cream/40">{h.fecha.toDate().toLocaleString()}</td>
                           <td className="p-3 text-[12px] font-bold">
-                            {extraerSufijo(h.concepto)}
-                            <span className="block text-[9px] font-black uppercase tracking-widest text-kalian-cream/30 mt-0.5">
-                              Bruto {(h.monto_bruto ?? h.monto).toFixed(2)}€ · Kalian {h.monto.toFixed(2)}€ · Artista {(h.monto_artista ?? 0).toFixed(2)}€
-                            </span>
+                            {h.categoria === 'Pago Artista' ? h.concepto : extraerSufijo(h.concepto)}
+                            {h.categoria === 'Pago Artista' ? (
+                              <span className="block text-[9px] font-black uppercase tracking-widest text-rose-500/60 mt-0.5">Liquidación al artista</span>
+                            ) : (
+                              <span className="block text-[9px] font-black uppercase tracking-widest text-kalian-cream/30 mt-0.5">
+                                Bruto {(h.monto_bruto ?? h.monto).toFixed(2)}€ · Kalian {h.monto.toFixed(2)}€ · Artista {(h.monto_artista ?? 0).toFixed(2)}€
+                              </span>
+                            )}
                           </td>
                           <td className="p-3"></td>
                           <td className="p-3"></td>
                           <td className="p-3 text-[10px] font-black uppercase tracking-widest text-kalian-cream/50">{h.metodo}</td>
                           <td className="p-3 text-[10px] font-mono text-kalian-gold/40">{h.socio_id}</td>
                           <td className="p-3 text-right">
-                            <span className="text-sm kalian-poster-text text-kalian-cream">{h.monto.toFixed(2)}€</span>
+                            <span className={`text-sm kalian-poster-text ${h.categoria === 'Pago Artista' ? 'text-rose-500' : 'text-kalian-cream'}`}>
+                              {h.categoria === 'Pago Artista' ? `-${Math.abs(h.monto).toFixed(2)}` : (h.monto_bruto ?? h.monto).toFixed(2)}€
+                            </span>
                           </td>
                         </tr>
                       ))}
@@ -825,6 +926,63 @@ const AdminContabilidad = () => {
           </div>
           );
         })()}
+
+        {/* MODAL PAGO ARTISTA */}
+        {pagoArtista && (
+          <div className="fixed inset-0 bg-black/90 backdrop-blur-sm z-50 flex items-center justify-center p-4" onClick={() => !guardandoPagoArtista && setPagoArtista(null)}>
+            <div className="bg-kalian-dark border border-kalian-gold/30 w-full max-w-md rounded-[3rem] shadow-2xl p-10 relative" onClick={e => e.stopPropagation()}>
+              <button onClick={() => !guardandoPagoArtista && setPagoArtista(null)} className="absolute top-8 right-8 text-kalian-gold/40 hover:text-kalian-gold text-2xl">×</button>
+              <h3 className="text-2xl kalian-poster-text text-kalian-gold mb-2 italic uppercase">Pago al artista</h3>
+              <p className="text-sm text-kalian-cream/70 mb-6">{pagoArtista.titulo}</p>
+
+              <div className="space-y-6">
+                <div className="space-y-2">
+                  <p className="text-[9px] font-black text-kalian-gold/40 uppercase tracking-[0.3em] ml-4">
+                    Pendiente de liquidar: {pagoArtista.pendiente.toFixed(2)}€
+                  </p>
+                  <input
+                    type="number"
+                    min="0"
+                    step="0.01"
+                    autoFocus
+                    className="w-full p-5 bg-kalian-gold/5 rounded-2xl outline-none border border-kalian-gold/10 focus:border-kalian-gold text-kalian-gold font-bold text-2xl kalian-poster-text"
+                    value={pagoArtistaImporte}
+                    onChange={(e) => setPagoArtistaImporte(e.target.value)}
+                  />
+                </div>
+
+                <div className="space-y-2">
+                  <p className="text-[9px] font-black text-kalian-gold/40 uppercase tracking-[0.3em] ml-4">Método</p>
+                  <div className="grid grid-cols-3 gap-2">
+                    {(['Efectivo', 'Tarjeta', 'Transferencia'] as MetodoPago[]).map(m => (
+                      <button
+                        key={m}
+                        onClick={() => setPagoArtistaMetodo(m)}
+                        className={`px-3 py-3 rounded-xl text-[10px] font-black uppercase tracking-widest border transition-all ${pagoArtistaMetodo === m ? 'bg-kalian-gold text-black border-kalian-gold' : 'bg-white/5 text-kalian-cream/60 border-white/10 hover:border-kalian-gold/40'}`}
+                      >
+                        {m}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                <div className="p-6 bg-kalian-gold/5 rounded-2xl border border-kalian-gold/10">
+                  <p className="text-[10px] font-bold text-kalian-gold/60 leading-relaxed italic">
+                    "Registra el importe que Kalian ya ha entregado al artista para este evento. Se resta de la caja del evento y reduce lo pendiente de liquidar."
+                  </p>
+                </div>
+
+                <button
+                  onClick={guardarPagoArtista}
+                  disabled={guardandoPagoArtista}
+                  className="w-full bg-kalian-gold text-black p-5 rounded-2xl kalian-poster-text text-xl tracking-widest hover:bg-white transition-all shadow-xl shadow-kalian-gold/20 disabled:opacity-50"
+                >
+                  {guardandoPagoArtista ? 'GUARDANDO…' : 'REGISTRAR PAGO'}
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
 
         {/* MODAL CONFIGURACIÓN */}
         {showConfig && (

@@ -208,6 +208,15 @@ fallback `monto_bruto = monto`, `monto_artista = 0`, `variante_precio =
 'estandar'` — lectura correcta, porque hasta entonces no existía caché
 formalizado. No hay backfill de datos históricos.
 
+**Totales de caja en `AdminContabilidad`**: el resumen (`Total del período`,
+`Ingresos Eventos`, gráficos de barras/tarta, CSV) sigue sumando lo que
+realmente entró en efectivo/tarjeta/transferencia (el bruto), no el neto
+Kalian — si sumara `monto` a secas para `categoria == 'Evento'`, el total
+del panel dejaría fuera la parte del artista (que es una deuda pendiente de
+liquidar, no un ingreso perdido) y no cuadraría con la caja física. El
+desglose Kalian/artista se muestra aparte (card "Ingresos Eventos" y fila
+por fila/evento), nunca sustituye al bruto en los totales agregados.
+
 Esta redefinición de `monto` aplica **solo** a `categoria == 'Evento'`. Para
 `Socio`, `Curso`, `Aportación Socio Local`, `Cierre Aportación Curso` y
 `cuota_socio`, `monto` sigue siendo el total del movimiento.

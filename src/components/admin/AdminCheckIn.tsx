@@ -5,8 +5,11 @@ import { Link } from 'react-router-dom';
 import { Html5Qrcode } from 'html5-qrcode';
 import { Camera, X } from 'lucide-react';
 import { normalizeDni } from '../../lib/dni';
+import { useAuth } from '../../context/AuthContext';
+import { registrarIngreso, resolverVariantePrecio, resolverAportacionKalian, calcularReparto } from '../../lib/finanzas';
 
 const AdminCheckIn = () => {
+  const { user } = useAuth();
   const [eventos, setEventos] = useState<DocumentData[]>([]);
   const [eventoId, setEventoId] = useState('');
   const [busqueda, setBusqueda] = useState('');
@@ -179,6 +182,24 @@ const AdminCheckIn = () => {
         ultimaActualizacion: new Date().toISOString()
       }, { merge: true });
 
+      // Registrar en Finanzas: aportación Kalian según variante, resto para el artista
+      if (precio > 0) {
+        const variante = resolverVariantePrecio({ precio, origen: 'socio_carnet', esSocio: tieneDescuento });
+        const { kalian, artista } = calcularReparto(precio, resolverAportacionKalian(variante, evento));
+        await registrarIngreso({
+          monto: kalian,
+          monto_bruto: precio,
+          monto_artista: artista,
+          variante_precio: variante,
+          concepto: `Entrada Evento: ${evento?.titulo || ''} (Soci@)`,
+          categoria: 'Evento',
+          metodo: 'Efectivo',
+          socio_id: socioEncontrado.id,
+          staff_id: user?.uid,
+          eventoId
+        });
+      }
+
       setMsg(`✅ Acceso concedido a ${socioEncontrado.nombre}. Cobrado: ${precio}€`);
       setSocioEncontrado(null);
       setBusqueda('');
@@ -249,6 +270,24 @@ const AdminCheckIn = () => {
         ultimaActualizacion: new Date().toISOString()
       }, { merge: true });
 
+      // Registrar en Finanzas: aportación Kalian según variante, resto para el artista
+      if (precio > 0) {
+        const variante = resolverVariantePrecio({ precio, origen: 'walkin', esSocio });
+        const { kalian, artista } = calcularReparto(precio, resolverAportacionKalian(variante, evento));
+        await registrarIngreso({
+          monto: kalian,
+          monto_bruto: precio,
+          monto_artista: artista,
+          variante_precio: variante,
+          concepto: `Entrada Puerta: ${evento?.titulo || ''} (Walk-in${esSocio ? ' Soci@' : ''})`,
+          categoria: 'Evento',
+          metodo: 'Efectivo',
+          socio_id: socioId || 'anonimo',
+          staff_id: user?.uid,
+          eventoId
+        });
+      }
+
       setMsg(`✅ Walk-in registrado: ${nombre}. Cobrado: ${precio}€`);
       setBusqueda('');
     } catch (err) {
@@ -285,6 +324,27 @@ const AdminCheckIn = () => {
           total: increment(cobrado),
           ultimaActualizacion: new Date().toISOString()
         }, { merge: true });
+
+        // Registrar en Finanzas: aportación Kalian según variante, resto para el artista.
+        // Usamos reserva.eventoId (no el `eventoId` del selector) porque la reserva pudo
+        // encontrarse por ticketID sin filtrar por el evento seleccionado en pantalla.
+        const evento = eventos.find(e => e.id === reserva.eventoId);
+        const slot = nuevosSlots[index];
+        const esCupon = slot.tipo === 'titular' && !!reserva.cuponUsado;
+        const variante = resolverVariantePrecio({ precio: cobrado, origen: 'reserva', esSocio: false, esCupon });
+        const { kalian, artista } = calcularReparto(cobrado, resolverAportacionKalian(variante, evento));
+        await registrarIngreso({
+          monto: kalian,
+          monto_bruto: cobrado,
+          monto_artista: artista,
+          variante_precio: variante,
+          concepto: `Entrada Evento: ${evento?.titulo || reserva.eventoTitulo || ''} (${slot.tipo})`,
+          categoria: 'Evento',
+          metodo: 'Efectivo',
+          socio_id: 'anonimo',
+          staff_id: user?.uid,
+          eventoId: reserva.eventoId
+        });
       }
 
       setReserva({ ...reserva, slots: nuevosSlots, totalPendiente: totalPendiente });

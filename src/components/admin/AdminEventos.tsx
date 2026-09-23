@@ -5,6 +5,10 @@ import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 import { Link, useSearchParams } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
 import { normalizeToSlug } from '../../lib/slug';
+import { APORTACION_KALIAN_DEFAULT } from '../../lib/constants';
+import { construirCierreEvento } from '../../lib/informeCierreEvento';
+import { generarInformeCierreEventoPdf } from '../../lib/informeCierreEventoPdf';
+import { generarRecibiArtistaEventoPdf } from '../../lib/recibiArtistaEventoPdf';
 
 const AdminEventos = () => {
   const [searchParams] = useSearchParams();
@@ -34,6 +38,9 @@ ENTRADA HASTA LAS 00:00. RESERVAS DISPONIBLES HASTA COMPLETAR AFORO.`;
     cupon: '',
     precioCupon: '',
     fechaCupon: '',
+    aportacion_kalian_estandar: String(APORTACION_KALIAN_DEFAULT),
+    aportacion_kalian_descuento: String(APORTACION_KALIAN_DEFAULT),
+    aportacion_kalian_cupon: String(APORTACION_KALIAN_DEFAULT),
     apertura_socios: '',
     apertura_general: '',
     imagenUrl: '',
@@ -51,6 +58,31 @@ ENTRADA HASTA LAS 00:00. RESERVAS DISPONIBLES HASTA COMPLETAR AFORO.`;
   const { user } = useAuth();
   const [conflictos, setConflictos] = useState<{fecha: string, motivo: string}[]>([]);
   const [isCheckingConflictos, setIsCheckingConflictos] = useState(false);
+  const [generandoPdf, setGenerandoPdf] = useState<string | null>(null);
+
+  const descargarCierre = async (eventoId: string) => {
+    setGenerandoPdf(`cierre-${eventoId}`);
+    try {
+      const cierre = await construirCierreEvento(eventoId);
+      generarInformeCierreEventoPdf(cierre, user?.email || user?.uid || 'desconocido');
+    } catch (err: any) {
+      console.error(err);
+      alert("❌ Error al generar el informe de cierre: " + (err.message || 'desconocido'));
+    }
+    setGenerandoPdf(null);
+  };
+
+  const descargarRecibiArtista = async (eventoId: string) => {
+    setGenerandoPdf(`recibi-${eventoId}`);
+    try {
+      const cierre = await construirCierreEvento(eventoId);
+      generarRecibiArtistaEventoPdf(cierre);
+    } catch (err: any) {
+      console.error(err);
+      alert("❌ Error al generar el recibí del artista: " + (err.message || 'desconocido'));
+    }
+    setGenerandoPdf(null);
+  };
 
   useEffect(() => { 
     if (!user) return;
@@ -98,6 +130,9 @@ ENTRADA HASTA LAS 00:00. RESERVAS DISPONIBLES HASTA COMPLETAR AFORO.`;
           cupon: ev.cupon || ev.clave_descuento || ev.codigoCupon || '',
           precioCupon: ev.precioCupon?.toString() || ev.precio_clave?.toString() || '',
           fechaCupon: ev.fechaCupon || ev.fechaAperturaCupon || '',
+          aportacion_kalian_estandar: ev.aportacion_kalian_estandar?.toString() ?? String(APORTACION_KALIAN_DEFAULT),
+          aportacion_kalian_descuento: ev.aportacion_kalian_descuento?.toString() ?? String(APORTACION_KALIAN_DEFAULT),
+          aportacion_kalian_cupon: ev.aportacion_kalian_cupon?.toString() ?? String(APORTACION_KALIAN_DEFAULT),
           apertura_socios: ev.apertura_socios || '',
           apertura_general: ev.apertura_general || '',
           imagenUrl: ev.imagenUrl || '',
@@ -187,6 +222,18 @@ ENTRADA HASTA LAS 00:00. RESERVAS DISPONIBLES HASTA COMPLETAR AFORO.`;
       alert("⚠️ Si defines un cupón, debes especificar también el precio y la fecha de apertura para ese cupón.");
       return;
     }
+    if (Number(form.aportacion_kalian_estandar) > Number(form.precio_estandar)) {
+      alert("⚠️ La aportación Kalian estándar no puede superar la aportación estándar del evento.");
+      return;
+    }
+    if (form.tiene_descuento && Number(form.aportacion_kalian_descuento) > Number(form.precio_descuento)) {
+      alert("⚠️ La aportación Kalian soci@ no puede superar la aportación soci@ del evento.");
+      return;
+    }
+    if (form.cupon && Number(form.aportacion_kalian_cupon) > Number(form.precioCupon)) {
+      alert("⚠️ La aportación Kalian del cupón no puede superar la aportación del cupón.");
+      return;
+    }
 
     setSubiendo(true);
     try {
@@ -204,6 +251,9 @@ ENTRADA HASTA LAS 00:00. RESERVAS DISPONIBLES HASTA COMPLETAR AFORO.`;
         precio_estandar: Number(form.precio_estandar),
         precio_descuento: form.tiene_descuento ? Number(form.precio_descuento) : Number(form.precio_estandar),
         precioCupon: form.cupon ? Number(form.precioCupon) : Number(form.precio_estandar),
+        aportacion_kalian_estandar: Number(form.aportacion_kalian_estandar) || 0,
+        aportacion_kalian_descuento: form.tiene_descuento ? (Number(form.aportacion_kalian_descuento) || 0) : (Number(form.aportacion_kalian_estandar) || 0),
+        aportacion_kalian_cupon: form.cupon ? (Number(form.aportacion_kalian_cupon) || 0) : (Number(form.aportacion_kalian_estandar) || 0),
         aforo_maximo: Number(form.aforo_maximo),
         max_acompanantes: Number(form.max_acompanantes),
         aforo_reservado: editando ? (eventos.find(ev => ev.id === editando)?.aforo_reservado || 0) : 0,
@@ -238,6 +288,9 @@ ENTRADA HASTA LAS 00:00. RESERVAS DISPONIBLES HASTA COMPLETAR AFORO.`;
         cupon: '',
         precioCupon: '',
         fechaCupon: '',
+        aportacion_kalian_estandar: String(APORTACION_KALIAN_DEFAULT),
+        aportacion_kalian_descuento: String(APORTACION_KALIAN_DEFAULT),
+        aportacion_kalian_cupon: String(APORTACION_KALIAN_DEFAULT),
         apertura_socios: '',
         apertura_general: '',
         imagenUrl: '',
@@ -375,6 +428,41 @@ ENTRADA HASTA LAS 00:00. RESERVAS DISPONIBLES HASTA COMPLETAR AFORO.`;
                 <input type="number" placeholder="APORTACIÓN SOCI@S (€)" className="w-full p-5 bg-kalian-gold/5 rounded-2xl outline-none border border-kalian-gold/10 focus:border-kalian-gold transition-all text-kalian-gold font-black text-xl" value={form.precio_descuento} onChange={e => setForm({...form, precio_descuento: e.target.value})} required />
               </div>
             )}
+          </div>
+
+          {/* REPARTO: APORTACIÓN KALIAN POR VARIANTE (el resto es para el artista) */}
+          <div className="p-8 bg-black/40 rounded-[3rem] border border-kalian-gold/10 space-y-6">
+            <h3 className="text-sm font-black uppercase text-kalian-gold/80 tracking-[0.2em]">Aportación Kalian por Variante (€)</h3>
+            <p className="text-[10px] text-kalian-gold/40 italic ml-1">
+              * Lo que no se queda Kalian es lo que se paga al artista por esa entrada.
+            </p>
+            <div className={`grid grid-cols-1 gap-6 ${form.tiene_descuento || form.cupon ? 'md:grid-cols-3' : 'md:grid-cols-1'}`}>
+              <div className="space-y-2">
+                <label className="text-[9px] font-black uppercase text-kalian-gold/40 ml-4 tracking-widest">Aportación Kalian Estándar (€)</label>
+                <input type="number" min="0" className="w-full p-5 bg-kalian-gold/5 rounded-2xl outline-none border border-kalian-gold/10 focus:border-kalian-gold transition-all text-kalian-cream font-bold" value={form.aportacion_kalian_estandar} onChange={e => setForm({...form, aportacion_kalian_estandar: e.target.value})} required />
+                {Number(form.aportacion_kalian_estandar) > Number(form.precio_estandar) && (
+                  <p className="text-[9px] text-red-500 font-bold ml-4">⚠ No puede superar la aportación estándar ({form.precio_estandar || 0}€).</p>
+                )}
+              </div>
+              {form.tiene_descuento && (
+                <div className="space-y-2">
+                  <label className="text-[9px] font-black uppercase text-kalian-gold/40 ml-4 tracking-widest">Aportación Kalian Soci@ (€)</label>
+                  <input type="number" min="0" className="w-full p-5 bg-kalian-gold/5 rounded-2xl outline-none border border-kalian-gold/10 focus:border-kalian-gold transition-all text-kalian-cream font-bold" value={form.aportacion_kalian_descuento} onChange={e => setForm({...form, aportacion_kalian_descuento: e.target.value})} required />
+                  {Number(form.aportacion_kalian_descuento) > Number(form.precio_descuento) && (
+                    <p className="text-[9px] text-red-500 font-bold ml-4">⚠ No puede superar la aportación soci@ ({form.precio_descuento || 0}€).</p>
+                  )}
+                </div>
+              )}
+              {form.cupon && (
+                <div className="space-y-2">
+                  <label className="text-[9px] font-black uppercase text-kalian-gold/40 ml-4 tracking-widest">Aportación Kalian Cupón (€)</label>
+                  <input type="number" min="0" className="w-full p-5 bg-kalian-gold/5 rounded-2xl outline-none border border-kalian-gold/10 focus:border-kalian-gold transition-all text-kalian-cream font-bold" value={form.aportacion_kalian_cupon} onChange={e => setForm({...form, aportacion_kalian_cupon: e.target.value})} required />
+                  {Number(form.aportacion_kalian_cupon) > Number(form.precioCupon) && (
+                    <p className="text-[9px] text-red-500 font-bold ml-4">⚠ No puede superar la aportación del cupón ({form.precioCupon || 0}€).</p>
+                  )}
+                </div>
+              )}
+            </div>
           </div>
 
           {/* GESTIÓN DE CUPÓN Y ACCESO ANTICIPADO */}
@@ -584,6 +672,9 @@ ENTRADA HASTA LAS 00:00. RESERVAS DISPONIBLES HASTA COMPLETAR AFORO.`;
                             cupon: ev.cupon || ev.clave_descuento || ev.codigoCupon || '',
                             precioCupon: ev.precioCupon?.toString() || ev.precio_clave?.toString() || '',
                             fechaCupon: ev.fechaCupon || ev.fechaAperturaCupon || '',
+                            aportacion_kalian_estandar: ev.aportacion_kalian_estandar?.toString() ?? String(APORTACION_KALIAN_DEFAULT),
+                            aportacion_kalian_descuento: ev.aportacion_kalian_descuento?.toString() ?? String(APORTACION_KALIAN_DEFAULT),
+                            aportacion_kalian_cupon: ev.aportacion_kalian_cupon?.toString() ?? String(APORTACION_KALIAN_DEFAULT),
                             apertura_socios: ev.apertura_socios || '',
                             apertura_general: ev.apertura_general || '',
                             imagenUrl: ev.imagenUrl || '',
@@ -625,6 +716,9 @@ ENTRADA HASTA LAS 00:00. RESERVAS DISPONIBLES HASTA COMPLETAR AFORO.`;
                             cupon: ev.cupon || ev.clave_descuento || ev.codigoCupon || '',
                             precioCupon: ev.precioCupon?.toString() || ev.precio_clave?.toString() || '',
                             fechaCupon: ev.fechaCupon || ev.fechaAperturaCupon || '',
+                            aportacion_kalian_estandar: ev.aportacion_kalian_estandar?.toString() ?? String(APORTACION_KALIAN_DEFAULT),
+                            aportacion_kalian_descuento: ev.aportacion_kalian_descuento?.toString() ?? String(APORTACION_KALIAN_DEFAULT),
+                            aportacion_kalian_cupon: ev.aportacion_kalian_cupon?.toString() ?? String(APORTACION_KALIAN_DEFAULT),
                             apertura_socios: ev.apertura_socios || '',
                             apertura_general: ev.apertura_general || '',
                             imagenUrl: ev.imagenUrl || '',
@@ -709,6 +803,9 @@ ENTRADA HASTA LAS 00:00. RESERVAS DISPONIBLES HASTA COMPLETAR AFORO.`;
                             cupon: ev.cupon || ev.clave_descuento || ev.codigoCupon || '',
                             precioCupon: ev.precioCupon?.toString() || ev.precio_clave?.toString() || '',
                             fechaCupon: '',
+                            aportacion_kalian_estandar: ev.aportacion_kalian_estandar?.toString() ?? String(APORTACION_KALIAN_DEFAULT),
+                            aportacion_kalian_descuento: ev.aportacion_kalian_descuento?.toString() ?? String(APORTACION_KALIAN_DEFAULT),
+                            aportacion_kalian_cupon: ev.aportacion_kalian_cupon?.toString() ?? String(APORTACION_KALIAN_DEFAULT),
                             apertura_socios: '',
                             apertura_general: '',
                             imagenUrl: ev.imagenUrl || '',
@@ -727,12 +824,26 @@ ENTRADA HASTA LAS 00:00. RESERVAS DISPONIBLES HASTA COMPLETAR AFORO.`;
                       >
                         REPETIR
                       </button>
-                      <button 
-                        onClick={async () => { 
+                      <button
+                        onClick={() => descargarCierre(ev.id)}
+                        disabled={generandoPdf === `cierre-${ev.id}`}
+                        className="bg-blue-500/5 text-blue-400/60 hover:text-blue-400 px-4 py-2 rounded-lg font-black text-[8px] uppercase tracking-widest transition-all disabled:opacity-40"
+                      >
+                        {generandoPdf === `cierre-${ev.id}` ? 'Generando…' : 'Descargar Cierre'}
+                      </button>
+                      <button
+                        onClick={() => descargarRecibiArtista(ev.id)}
+                        disabled={generandoPdf === `recibi-${ev.id}`}
+                        className="bg-emerald-500/5 text-emerald-400/60 hover:text-emerald-400 px-4 py-2 rounded-lg font-black text-[8px] uppercase tracking-widest transition-all disabled:opacity-40"
+                      >
+                        {generandoPdf === `recibi-${ev.id}` ? 'Generando…' : 'Recibí para el Artista'}
+                      </button>
+                      <button
+                        onClick={async () => {
                           if (window.confirm("¿Seguro que quieres borrar este evento del histórico?")) {
-                            await deleteDoc(doc(db, "eventos", ev.id)); 
+                            await deleteDoc(doc(db, "eventos", ev.id));
                           }
-                        }} 
+                        }}
                         className="bg-red-500/5 text-red-500/40 hover:text-red-500 px-4 py-2 rounded-lg font-black text-[8px] uppercase tracking-widest transition-all"
                       >
                         BORRAR

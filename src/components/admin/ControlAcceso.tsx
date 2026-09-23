@@ -6,7 +6,7 @@ import { useAuth } from '../../context/AuthContext';
 import { useNavigate } from 'react-router-dom';
 import { Html5Qrcode } from 'html5-qrcode';
 import { Camera, X, Users, Ticket, UserPlus, LogOut, CreditCard, Banknote, Landmark, Calculator, FileDown } from 'lucide-react';
-import { registrarIngreso, MetodoPago } from '../../lib/finanzas';
+import { registrarIngreso, resolverVariantePrecio, resolverAportacionKalian, calcularReparto, MetodoPago } from '../../lib/finanzas';
 import { normalizeDni } from '../../lib/dni';
 import { jsPDF } from 'jspdf';
 import autoTable from 'jspdf-autotable';
@@ -337,10 +337,15 @@ const ControlAcceso = ({ isPuertaMode = false }: { isPuertaMode?: boolean }) => 
         ultimaActualizacion: serverTimestamp()
       }, { merge: true });
 
-      // Registrar en Finanzas
+      // Registrar en Finanzas: aportación Kalian según variante, resto para el artista
       if (precio > 0) {
+        const variante = resolverVariantePrecio({ precio, origen: 'socio_carnet', esSocio: tieneDescuento });
+        const { kalian, artista } = calcularReparto(precio, resolverAportacionKalian(variante, eventoSeleccionado));
         await registrarIngreso({
-          monto: precio,
+          monto: kalian,
+          monto_bruto: precio,
+          monto_artista: artista,
+          variante_precio: variante,
           concepto: `Entrada Evento: ${eventoSeleccionado.titulo} (Soci@)`,
           categoria: 'Evento',
           metodo: metodoPago,
@@ -493,11 +498,18 @@ const ControlAcceso = ({ isPuertaMode = false }: { isPuertaMode?: boolean }) => 
         tipo: slot.estado === 'validado_socio' ? 'reserva_socio' : 'reserva'
       });
 
-      // 5. Finanzas
+      // 5. Finanzas: aportación Kalian según variante, resto para el artista
       if ((slot.precio || 0) > 0) {
+        const esSocio = slot.estado === 'validado_socio';
+        const esCupon = slot.tipo === 'titular' && !!reservaEncontrada.cuponUsado;
+        const variante = resolverVariantePrecio({ precio: slot.precio, origen: 'reserva', esSocio, esCupon });
+        const { kalian, artista } = calcularReparto(slot.precio, resolverAportacionKalian(variante, eventoSeleccionado));
         await registrarIngreso({
-          monto: slot.precio,
-          concepto: `Entrada Evento: ${eventoSeleccionado.titulo} (${slot.tipo}${slot.estado === 'validado_socio' ? ' Soci@' : ''})`,
+          monto: kalian,
+          monto_bruto: slot.precio,
+          monto_artista: artista,
+          variante_precio: variante,
+          concepto: `Entrada Evento: ${eventoSeleccionado.titulo} (${slot.tipo}${esSocio ? ' Soci@' : ''})`,
           categoria: 'Evento',
           metodo: metodoPago,
           socio_id: slot.socio_id || 'anonimo',
@@ -607,8 +619,13 @@ const ControlAcceso = ({ isPuertaMode = false }: { isPuertaMode?: boolean }) => 
       });
 
       if (precio > 0) {
+        const variante = resolverVariantePrecio({ precio, origen: 'walkin', esSocio });
+        const { kalian, artista } = calcularReparto(precio, resolverAportacionKalian(variante, eventoSeleccionado));
         await registrarIngreso({
-          monto: precio,
+          monto: kalian,
+          monto_bruto: precio,
+          monto_artista: artista,
+          variante_precio: variante,
           concepto: `Entrada Puerta: ${eventoSeleccionado.titulo} (Walk-in${esSocio ? ' Soci@' : ''})`,
           categoria: 'Evento',
           metodo: metodoPago,

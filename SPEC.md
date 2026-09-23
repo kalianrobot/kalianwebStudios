@@ -164,6 +164,71 @@ Convenciones:
 }
 ```
 
+### Reparto Kalian/artista en `eventos` y `finanzas`
+
+De cada entrada de evento cobrada, Kalian retiene una **aportación** (€) y el
+resto es lo que se paga al artista. La aportación es configurable **por
+variante de precio**, no una comisión única:
+
+```ts
+// eventos/{id} (campos adicionales, todos number >= 0, opcionales)
+{
+  aportacion_kalian_estandar?: number   // aplica a entradas a precio_estandar y walk-in estándar
+  aportacion_kalian_descuento?: number  // aplica si tiene_descuento (soci@s) y walk-in soci@
+  aportacion_kalian_cupon?: number      // aplica si hay `cupon` configurado
+}
+```
+
+Si un campo no está en el doc, el cliente aplica el fallback
+`APORTACION_KALIAN_DEFAULT = 5` (€) (`src/lib/constants.ts`). El formulario de
+`AdminEventos` precarga ese default al crear un evento y valida que
+`aportacion_kalian_X <= precio_X` (aviso en UI + `firestore.rules →
+isValidEvento` lo rechaza).
+
+Al cobrar (`ControlAcceso.tsx`, `AdminCheckIn.tsx`) se resuelve una
+`VariantePrecio` (`'estandar' | 'descuento_socio' | 'cupon' |
+'walkin_estandar' | 'walkin_socio' | 'gratis'`, `src/lib/constants.ts`) y se
+persiste en `finanzas/{id}`:
+
+```ts
+// finanzas/{id} con categoria == 'Evento' (campos adicionales, opcionales)
+{
+  monto: number          // ⚠️ redefinido: aportación NETA Kalian de esa entrada (no el bruto)
+  monto_bruto?: number   // total cobrado en caja para esa entrada
+  monto_artista?: number // monto_bruto - monto; lo pendiente de liquidar al artista
+  variante_precio?: VariantePrecio
+}
+```
+
+**Nota importante**: antes de este reparto, `monto` en una entrada de evento
+era el bruto cobrado (Kalian se lo quedaba todo). Los docs `finanzas`
+anteriores a este cambio no llevan `monto_bruto`/`monto_artista`/
+`variante_precio`; toda lectura (`AdminContabilidad`, PDFs) aplica el
+fallback `monto_bruto = monto`, `monto_artista = 0`, `variante_precio =
+'estandar'` — lectura correcta, porque hasta entonces no existía caché
+formalizado. No hay backfill de datos históricos.
+
+Esta redefinición de `monto` aplica **solo** a `categoria == 'Evento'`. Para
+`Socio`, `Curso`, `Aportación Socio Local`, `Cierre Aportación Curso` y
+`cuota_socio`, `monto` sigue siendo el total del movimiento.
+
+**Fuente autoritativa de la recaudación de un evento**: `finanzas` filtrada
+por `eventoId` (y `categoria == 'Evento'` en cliente, para no requerir índice
+compuesto). `caja_eventos/{YYYY-MM}` sigue siendo solo un acumulado mensual
+para el mini-panel de puerta ("cuánto llevo hoy"); nunca se usa para
+informes por evento, y puede no coincidir con el total de un informe si hubo
+más de un evento el mismo mes.
+
+Dos PDFs client-side (`src/lib/informeCierreEventoPdf.ts`,
+`src/lib/recibiArtistaEventoPdf.ts`, generados desde
+`src/lib/informeCierreEvento.ts → construirCierreEvento()`), visibles en
+`AdminEventos` solo para eventos ya pasados:
+- **Informe de cierre** (interno, staff): reconcilia asistencia QR, no-shows,
+  walk-in y caja por método de pago; señala el descuadre si lo hay. Contiene
+  datos personales (DNI de no-shows).
+- **Recibí del artista** (externo, para firmar): desglose bruto/Kalian/
+  artista por entrada y totales, sin datos personales de asistentes.
+
 ---
 
 ## 6. Roles y autorización
@@ -392,6 +457,7 @@ CSP y cabeceras de seguridad: definidas en `firebase.json` (HSTS, X-Frame DENY, 
 ## 12. Estado actual y roadmap
 
 ### Hecho recientemente
+- Reparto Kalian/artista por evento: PDF de cierre (reconciliación de caja) y "Recibí del artista" (desglose bruto/Kalian/artista), aportación Kalian configurable por variante de precio (`eventos.aportacion_kalian_*`) y `finanzas` con desglose (`monto_bruto`/`monto_artista`/`variante_precio`). Ver §5.
 - Doble opt-in vía `POST /contacts/doubleOptinConfirmation` (no toggle de lista — inviable con formulario fuera de Brevo) + plantilla transaccional DOI (#14, "Plantilla Confirmar subscripcion a Newletter") + landing `/newsletter/estado` polivalente (PR #5).
 - Reconciliación semanal ampliada: promociones, caducidad, baja por ausencia.
 - Badge "PENDIENTE" en `AdminNewsletter`.

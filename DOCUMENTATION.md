@@ -141,6 +141,43 @@ Acceso vía `/staff/login` con email/contraseña. Solo `role == 'admin'` o maste
 | Config | `/staff/config` | Identidad, donaciones, configuración pública. |
 | Traducir EU | `/staff/traducir-eu` | Asistente para rellenar campos `*_eu`. |
 
+### 3.1 Reparto Kalian/artista y cierre de un evento
+
+De cada entrada cobrada en un evento, Kalian retiene una **aportación** (€)
+y el resto se le debe al artista. La aportación se configura **por variante
+de precio** al crear/editar el evento en `/staff/eventos`, en el bloque
+"Aportación Kalian por Variante": estándar (siempre visible), soci@ (si el
+evento tiene descuento) y cupón (si el evento tiene cupón). Todas parten de
+5 € por defecto y no pueden superar la aportación de su propia variante — si
+te pasas, la UI avisa en rojo bajo el campo y bloquea el guardado.
+
+Para un **evento ya pasado**, en el histórico de `/staff/eventos` aparecen
+dos botones:
+
+- **Descargar cierre**: PDF interno para el staff. Cuadra la asistencia por
+  QR, las reservas no presentadas y la caja por método de pago; si hay
+  descuadre (caja ≠ suma de precios de asistencia), lo resalta para que se
+  investigue antes de liquidar con el artista. Incluye DNIs de no-shows —
+  no se comparte con nadie fuera del staff.
+- **Recibí para el artista**: PDF para firmar con el artista. Desglose
+  entrada a entrada (fecha, variante, bruto, Kalian, artista) y totales, sin
+  ningún dato personal de asistentes. Trae al final la línea de firma y DNI.
+
+**Contabilidad** (`/staff/contabilidad`) ya muestra, en la fila de cada
+evento y en cada entrada expandida, el desglose `Bruto · Kalian · Artista`.
+El total que suma al balance mensual de la categoría "Evento" es el
+**Kalian neto**, no el bruto cobrado en puerta.
+
+**Liquidar al artista es manual**: no hay botón que registre
+automáticamente el pago. Cuando el gerente entrega el efectivo o hace la
+transferencia, se registra a mano en Contabilidad como el resto de egresos,
+referenciando el evento.
+
+**Eventos anteriores a esta funcionalidad**: sus entradas en Contabilidad y
+en el Recibí se leen como "Kalian se lo quedó todo, 0 € para el artista" —
+es la lectura fiel de lo que pasó, no un error. No se puede reconstruir
+retroactivamente cuánto correspondía al artista en esos eventos.
+
 ---
 
 ## 4. Manual de Profesor (teacher)
@@ -224,3 +261,7 @@ Firestore en `europe-west1`. Se recomienda configurar **exportaciones programada
 | **Listado de Emergencia** | PDF offline para el evento si cae internet. |
 | **Doble opt-in** | El alta solo es válida tras clic de confirmación en el email. |
 | **Master** | Cuenta con email `kalianrobot@gmail.com`. Permisos de todo (safety net). |
+| **Aportación Kalian** | Parte (€) de una entrada de evento que retiene Kalian, configurable por variante de precio (`eventos.aportacion_kalian_*`). Default 5 €. |
+| **Variante de precio** | Categoría de una entrada cobrada: `estandar`, `descuento_socio`, `cupon`, `walkin_estandar`, `walkin_socio` o `gratis`. Determina qué aportación Kalian se aplica. |
+| **Informe de cierre** | PDF interno que reconcilia asistencia y caja de un evento pasado; señala descuadres. |
+| **Recibí del artista** | PDF para firmar con el artista: desglose bruto/Kalian/artista por entrada y totales, sin datos personales de asistentes. |

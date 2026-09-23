@@ -52,6 +52,11 @@ const extraerSufijo = (concepto: string): string => {
   return m ? m[1] : concepto;
 };
 
+// Cuánto entró en caja/banco por este movimiento. Para 'Evento', `monto` es el neto
+// Kalian (la parte del artista es una deuda a pagar, no ingreso propio), así que el
+// cuadre de caja usa el bruto cobrado; el resto de categorías no tienen split.
+const montoCaja = (t: Transaccion): number => t.categoria === 'Evento' ? (t.monto_bruto ?? t.monto) : t.monto;
+
 const agruparMovimientos = (rows: Transaccion[]): Fila[] => {
   const grupos = new Map<string, Transaccion[]>();
   const individuales: Transaccion[] = [];
@@ -248,21 +253,25 @@ const AdminContabilidad = () => {
     }
   };
 
-  // Cálculos de Resumen
-  const totalPeriodo = transacciones.reduce((acc, t) => acc + t.monto, 0);
+  // Cálculos de Resumen. Se usa montoCaja (bruto para Evento) para que el total
+  // cuadre con el efectivo/tarjeta realmente cobrado, no solo la parte de Kalian.
+  const totalPeriodo = transacciones.reduce((acc, t) => acc + montoCaja(t), 0);
   const totalCursos = transacciones.filter(t => t.categoria === 'Curso').reduce((acc, t) => acc + t.monto, 0);
   const totalSociosIndividual = transacciones.filter(t => t.categoria === 'Socio').reduce((acc, t) => acc + t.monto, 0);
   const totalSociosLocales = transacciones.filter(t => t.categoria === 'Aportación Socio Local').reduce((acc, t) => acc + t.monto, 0);
   const totalCierresCurso = transacciones.filter(t => t.categoria === 'Cierre Aportación Curso').reduce((acc, t) => acc + t.monto, 0);
   const totalSocios = totalSociosIndividual + totalSociosLocales + totalCierresCurso;
-  const totalEventos = transacciones.filter(t => t.categoria === 'Evento').reduce((acc, t) => acc + t.monto, 0);
+  const eventosTransacciones = transacciones.filter(t => t.categoria === 'Evento');
+  const totalEventos = eventosTransacciones.reduce((acc, t) => acc + montoCaja(t), 0);
+  const totalEventosKalian = eventosTransacciones.reduce((acc, t) => acc + t.monto, 0);
+  const totalEventosArtista = eventosTransacciones.reduce((acc, t) => acc + (t.monto_artista ?? 0), 0);
 
   // Datos para el Gráfico Anual (Barras por mes)
   const getAnnualChartData = () => {
     const data = mesesCortos.map((nombre, i) => {
       const total = transacciones
         .filter(t => t.fecha.toDate().getMonth() === i)
-        .reduce((acc, t) => acc + t.monto, 0);
+        .reduce((acc, t) => acc + montoCaja(t), 0);
       return { name: nombre, total };
     });
     return data;
@@ -294,7 +303,7 @@ const AdminContabilidad = () => {
           const fecha = t.fecha.toDate();
           return fecha.getMonth() === mes && fecha.getFullYear() === anio;
         })
-        .reduce((acc, t) => acc + t.monto, 0);
+        .reduce((acc, t) => acc + montoCaja(t), 0);
       
       data.push({
         name: mesesCortos[mes],
@@ -311,7 +320,7 @@ const AdminContabilidad = () => {
 
   // Exportar a CSV
   const exportToCSV = () => {
-    const headers = ["Fecha", "Concepto", "Categoría", "Método", "Monto", "Socio ID"];
+    const headers = ["Fecha", "Concepto", "Categoría", "Método", "Bruto", "Kalian", "Artista", "Socio ID"];
     const rows = transacciones
       .filter(t => filtroCategoria === 'todas' || t.categoria === filtroCategoria)
       .map(t => [
@@ -319,7 +328,9 @@ const AdminContabilidad = () => {
         t.concepto,
         t.categoria,
         t.metodo,
-        `${t.monto}€`,
+        `${montoCaja(t)}€`,
+        t.categoria === 'Evento' ? `${t.monto}€` : '',
+        t.categoria === 'Evento' ? `${t.monto_artista ?? 0}€` : '',
         t.socio_id
       ]);
 
@@ -476,7 +487,17 @@ const AdminContabilidad = () => {
             <h2 className="text-5xl kalian-poster-text text-kalian-cream leading-none">{totalEventos.toFixed(2)}€</h2>
             <div className="mt-6 flex items-center gap-2">
               <span className="w-2 h-2 rounded-full bg-rose-500"></span>
-              <p className="text-[8px] font-bold text-kalian-cream/40 uppercase tracking-widest">Puerta y Reservas</p>
+              <p className="text-[8px] font-bold text-kalian-cream/40 uppercase tracking-widest">Puerta y Reservas (bruto)</p>
+            </div>
+            <div className="mt-2 pt-2 border-t border-kalian-gold/10 space-y-1">
+              <div className="flex justify-between text-[8px] font-black uppercase tracking-widest">
+                <span className="text-kalian-gold/40">Kalian:</span>
+                <span className="text-kalian-cream">{totalEventosKalian.toFixed(2)}€</span>
+              </div>
+              <div className="flex justify-between text-[8px] font-black uppercase tracking-widest">
+                <span className="text-kalian-gold/40">Artista:</span>
+                <span className="text-kalian-cream">{totalEventosArtista.toFixed(2)}€</span>
+              </div>
             </div>
           </div>
         </div>
@@ -733,7 +754,7 @@ const AdminContabilidad = () => {
                         <td className="p-6 text-[10px] font-mono text-kalian-gold/20">—</td>
                         <td className="p-6 text-right">
                           <span className="text-lg kalian-poster-text text-kalian-gold">
-                            +{fila.total.toFixed(2)}€
+                            +{fila.totalBruto.toFixed(2)}€
                           </span>
                         </td>
                       </tr>
@@ -752,7 +773,7 @@ const AdminContabilidad = () => {
                           <td className="p-3 text-[10px] font-black uppercase tracking-widest text-kalian-cream/50">{h.metodo}</td>
                           <td className="p-3 text-[10px] font-mono text-kalian-gold/40">{h.socio_id}</td>
                           <td className="p-3 text-right">
-                            <span className="text-sm kalian-poster-text text-kalian-cream">{h.monto.toFixed(2)}€</span>
+                            <span className="text-sm kalian-poster-text text-kalian-cream">{(h.monto_bruto ?? h.monto).toFixed(2)}€</span>
                           </td>
                         </tr>
                       ))}

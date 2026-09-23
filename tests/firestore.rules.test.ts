@@ -17,6 +17,7 @@ let testEnv: RulesTestEnvironment;
 const masterCtx  = () => testEnv.authenticatedContext('master-uid',  { email: MASTER_EMAIL });
 const adminCtx   = () => testEnv.authenticatedContext('admin-uid',   { email: 'admin@kalian.es' });
 const teacherCtx = () => testEnv.authenticatedContext('teacher-uid', { email: 'teacher@kalian.es' });
+const porteroCtx = () => testEnv.authenticatedContext('portero-uid', { email: 'portero@kalian.es' });
 const socioCtx   = () => testEnv.authenticatedContext('socio-uid',   { email: 'jose@test.es' });
 const socio2Ctx  = () => testEnv.authenticatedContext('socio2-uid',  { email: 'other@test.es' });
 const anonCtx    = () => testEnv.unauthenticatedContext();
@@ -39,6 +40,7 @@ beforeAll(async () => {
     const db = ctx.firestore();
     await setDoc(doc(db, 'users', 'admin-uid'),   { role: 'admin' });
     await setDoc(doc(db, 'users', 'teacher-uid'), { role: 'teacher' });
+    await setDoc(doc(db, 'users', 'portero-uid'), { role: 'portero' });
     await setDoc(doc(db, 'users', 'socio-uid'),   { role: 'socio' });
 
     // Seed: evento de prueba
@@ -132,6 +134,37 @@ describe('eventos', () => {
       await setDoc(doc(ctx.firestore(), 'eventos', 'evt-to-delete'), { titulo: 'Delete me', aforo_maximo: 10 });
     });
     await assertSucceeds(deleteDoc(doc(db(adminCtx()), 'eventos', 'evt-to-delete')));
+  });
+
+  // ── update-reparto-neto-por-variante: aportacion_kalian_* ──────────────────
+  it('admin puede crear evento con aportacion_kalian_estandar válida', async () => {
+    await assertSucceeds(setDoc(doc(db(adminCtx()), 'eventos', 'evt-kalian-ok'), {
+      titulo: 'Con reparto', aforo_maximo: 50, precio_estandar: 16, aportacion_kalian_estandar: 5,
+    }));
+  });
+
+  it('admin NO puede crear evento con aportacion_kalian_estandar negativa', async () => {
+    await assertFails(setDoc(doc(db(adminCtx()), 'eventos', 'evt-kalian-neg'), {
+      titulo: 'Reparto negativo', aforo_maximo: 50, precio_estandar: 16, aportacion_kalian_estandar: -1,
+    }));
+  });
+
+  it('admin NO puede crear evento con aportacion_kalian_cupon no numérica', async () => {
+    await assertFails(setDoc(doc(db(adminCtx()), 'eventos', 'evt-kalian-str'), {
+      titulo: 'Reparto string', aforo_maximo: 50, precioCupon: 8, aportacion_kalian_cupon: 'tres',
+    }));
+  });
+
+  it('admin NO puede crear evento con aportacion_kalian_cupon > precioCupon', async () => {
+    await assertFails(setDoc(doc(db(adminCtx()), 'eventos', 'evt-kalian-cap'), {
+      titulo: 'Reparto por encima del precio', aforo_maximo: 50, precioCupon: 4, aportacion_kalian_cupon: 5,
+    }));
+  });
+
+  it('admin puede escribir aportacion_kalian_descuento igual al precio_descuento (límite permitido)', async () => {
+    await assertSucceeds(setDoc(doc(db(adminCtx()), 'eventos', 'evt-kalian-limite'), {
+      titulo: 'Reparto en el límite', aforo_maximo: 50, precio_descuento: 5, aportacion_kalian_descuento: 5,
+    }));
   });
 });
 
@@ -329,6 +362,49 @@ describe('finanzas', () => {
 
   it('teacher NO puede leer finanzas', async () => {
     await assertFails(getDoc(doc(db(teacherCtx()), 'finanzas', 'f-1')));
+  });
+
+  // ── update-reparto-neto-por-variante: monto_bruto/monto_artista/variante_precio ──
+  it('admin puede escribir una entrada de evento con el desglose completo y coherente', async () => {
+    await assertSucceeds(setDoc(doc(db(adminCtx()), 'finanzas', 'f-evento-ok'), {
+      monto: 5, monto_bruto: 16, monto_artista: 11, variante_precio: 'estandar', categoria: 'Evento',
+    }));
+  });
+
+  it('rechaza el desglose si monto != monto_bruto - monto_artista', async () => {
+    await assertFails(setDoc(doc(db(adminCtx()), 'finanzas', 'f-evento-descuadrado'), {
+      monto: 5, monto_bruto: 16, monto_artista: 20, categoria: 'Evento', variante_precio: 'estandar',
+    }));
+  });
+
+  it('rechaza una variante_precio fuera del enum', async () => {
+    await assertFails(setDoc(doc(db(adminCtx()), 'finanzas', 'f-evento-variante-mala'), {
+      monto: 5, categoria: 'Evento', variante_precio: 'inventada',
+    }));
+  });
+
+  it('rechaza monto_bruto negativo', async () => {
+    await assertFails(setDoc(doc(db(adminCtx()), 'finanzas', 'f-evento-bruto-neg'), {
+      monto: 5, monto_bruto: -1, categoria: 'Evento',
+    }));
+  });
+
+  it('portero puede escribir una entrada de evento coherente', async () => {
+    await assertSucceeds(setDoc(doc(db(porteroCtx()), 'finanzas', 'f-portero-ok'), {
+      monto: 5, monto_bruto: 16, monto_artista: 11, variante_precio: 'estandar', categoria: 'Evento',
+    }));
+  });
+
+  it('portero NO puede escribir una entrada de evento descuadrada', async () => {
+    await assertFails(setDoc(doc(db(porteroCtx()), 'finanzas', 'f-portero-mal'), {
+      monto: 5, monto_bruto: 16, monto_artista: 20, categoria: 'Evento', variante_precio: 'estandar',
+    }));
+  });
+
+  it('un doc sin los campos nuevos (path antiguo) sigue siendo válido', async () => {
+    await assertSucceeds(setDoc(doc(db(adminCtx()), 'finanzas', 'f-legacy'), {
+      monto: 16, categoria: 'Evento',
+    }));
   });
 });
 

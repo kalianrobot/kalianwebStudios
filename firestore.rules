@@ -98,6 +98,15 @@ service cloud.firestore {
     }
 
     // --- EVENTOS ---
+    // Aportación Kalian por variante (update-reparto-neto-por-variante): cada
+    // campo es opcional (fallback a APORTACION_KALIAN_DEFAULT = 5 en cliente),
+    // pero cuando está presente debe ser un número >= 0 y no superar el precio
+    // de su propia variante cuando ese precio venga en la misma escritura.
+    function isValidAportacionKalian(data, campo, campoPrecio) {
+      return !data.keys().hasAny([campo])
+          || (data[campo] is number && data[campo] >= 0
+              && (!data.keys().hasAny([campoPrecio]) || data[campo] <= data[campoPrecio]));
+    }
     function isValidEvento(data) {
       return data.titulo is string && data.titulo.size() <= 200
           && (!data.keys().hasAny(['aforo_maximo']) || data.aforo_maximo is number)
@@ -105,7 +114,10 @@ service cloud.firestore {
           && (!data.keys().hasAny(['aforo_reservado']) || data.aforo_reservado is number)
           && (!data.keys().hasAny(['titulo_eu'])      || (data.titulo_eu is string      && data.titulo_eu.size() <= 200))
           && (!data.keys().hasAny(['descripcion_eu']) || (data.descripcion_eu is string && data.descripcion_eu.size() <= 2000))
-          && (!data.keys().hasAny(['reglas_eu'])      || (data.reglas_eu is string      && data.reglas_eu.size() <= 2000));
+          && (!data.keys().hasAny(['reglas_eu'])      || (data.reglas_eu is string      && data.reglas_eu.size() <= 2000))
+          && isValidAportacionKalian(data, 'aportacion_kalian_estandar', 'precio_estandar')
+          && isValidAportacionKalian(data, 'aportacion_kalian_descuento', 'precio_descuento')
+          && isValidAportacionKalian(data, 'aportacion_kalian_cupon', 'precioCupon');
     }
     // C4: una actualización pública sólo puede aumentar 'aforo_reservado' en pasos acotados
     // y nunca por encima del aforo máximo. Bloquea reset a 0 / valores arbitrarios.
@@ -295,7 +307,24 @@ service cloud.firestore {
     // actualiza tras subir/borrar documentos de curso. Sin esta regla caía
     // en el safety net (solo master admin) y el contador nunca se refrescaba.
     match /metadata/{id}              { allow read: if isSignedIn(); allow write: if isAdmin() || isTeacher(); }
-    match /finanzas/{id}              { allow read: if isAdmin(); allow write: if isAdmin() || isPortero(); }
+    // update-reparto-neto-por-variante: monto_bruto/monto_artista/variante_precio
+    // son opcionales (compatibilidad con docs históricos); cuando están los tres
+    // presentes, monto (neto Kalian) debe cuadrar con bruto - artista.
+    function isValidFinanza(data) {
+      return (!data.keys().hasAny(['monto']) || data.monto is number)
+          && (!data.keys().hasAny(['monto_bruto']) || (data.monto_bruto is number && data.monto_bruto >= 0))
+          && (!data.keys().hasAny(['monto_artista']) || (data.monto_artista is number && data.monto_artista >= 0))
+          && (!data.keys().hasAny(['variante_precio']) || data.variante_precio in
+                ['estandar', 'descuento_socio', 'cupon', 'walkin_estandar', 'walkin_socio', 'gratis'])
+          && (!data.keys().hasAll(['monto', 'monto_bruto', 'monto_artista'])
+                || data.monto == data.monto_bruto - data.monto_artista);
+    }
+    match /finanzas/{id} {
+      allow read: if isAdmin();
+      allow create: if (isAdmin() || isPortero()) && isValidFinanza(incoming());
+      allow update: if (isAdmin() || isPortero()) && isValidFinanza(incoming());
+      allow delete: if isAdmin() || isPortero();
+    }
     match /pagos_mensuales/{id} {
       allow read: if isAdmin() || isSignedIn();
       allow create: if (isAdmin() || isTeacher() || isPortero()) && isValidPagoMensual(incoming());

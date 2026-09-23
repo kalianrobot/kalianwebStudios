@@ -802,7 +802,7 @@ const AdminContabilidad = () => {
                           <p className="text-sm font-bold text-kalian-cream group-hover:text-kalian-gold transition-colors">{fila.titulo}</p>
                           <p className="text-[9px] font-black uppercase tracking-widest text-kalian-gold/40 mt-1">
                             Bruto {fila.totalBruto.toFixed(2)}€ · Kalian {fila.total.toFixed(2)}€ · Artista {fila.totalArtista.toFixed(2)}€
-                            {fila.totalArtista > 0 && (
+                            {(fila.totalArtista > 0 || fila.totalPagadoArtista > 0) && (
                               <> · Pagado {fila.totalPagadoArtista.toFixed(2)}€ · <span className={fila.pendienteArtista > 0 ? 'text-rose-500' : ''}>Pendiente {fila.pendienteArtista.toFixed(2)}€</span></>
                             )}
                           </p>
@@ -817,14 +817,12 @@ const AdminContabilidad = () => {
                         </td>
                         <td className="p-6 text-[10px] font-black text-kalian-cream/60 uppercase tracking-widest">{fila.metodo}</td>
                         <td className="p-6">
-                          {fila.pendienteArtista > 0 && (
-                            <button
-                              onClick={(e) => { e.stopPropagation(); abrirPagoArtista(fila); }}
-                              className="text-[9px] font-black uppercase tracking-widest text-kalian-gold/60 hover:text-kalian-gold border border-kalian-gold/20 hover:border-kalian-gold/60 rounded-full px-3 py-1 transition-all whitespace-nowrap"
-                            >
-                              + Pago artista
-                            </button>
-                          )}
+                          <button
+                            onClick={(e) => { e.stopPropagation(); abrirPagoArtista(fila); }}
+                            className="text-[9px] font-black uppercase tracking-widest text-kalian-gold/60 hover:text-kalian-gold border border-kalian-gold/20 hover:border-kalian-gold/60 rounded-full px-3 py-1 transition-all whitespace-nowrap"
+                          >
+                            + Pago artista
+                          </button>
                         </td>
                         <td className="p-6 text-right">
                           <span className="text-lg kalian-poster-text text-kalian-gold">
@@ -938,8 +936,13 @@ const AdminContabilidad = () => {
               <div className="space-y-6">
                 <div className="space-y-2">
                   <p className="text-[9px] font-black text-kalian-gold/40 uppercase tracking-[0.3em] ml-4">
-                    Pendiente de liquidar: {pagoArtista.pendiente.toFixed(2)}€
+                    Pendiente de liquidar (según el sistema): {pagoArtista.pendiente.toFixed(2)}€
                   </p>
+                  {pagoArtista.pendiente === 0 && (
+                    <p className="text-[9px] font-bold text-kalian-cream/40 ml-4 italic">
+                      Si el evento es anterior al reparto Kalian/artista, el sistema no sabe cuánto se debía — introduce el importe real que se pagó.
+                    </p>
+                  )}
                   <input
                     type="number"
                     min="0"

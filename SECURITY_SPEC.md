@@ -33,6 +33,8 @@ Estas afirmaciones deben ser ciertas en cualquier estado de la base de datos. Si
 17. **Emails de socio solo por staff**: `sendWelcomeEmail` y `sendMembershipUpdateEmail` exigen `assertStaff`. Antes bastaba con `request.auth`, así que cualquier socio autenticado podía disparar correos con el remitente verificado `info@kalian.es` hacia direcciones arbitrarias (vector de spam/phishing con la reputación del dominio de Kalian).
 18. **Enlaces de activación nunca viajan al cliente**: el enlace de `generatePasswordResetLink` se genera dentro de la function y se inyecta directamente en el email. Ninguna callable lo devuelve en su respuesta ni lo acepta como parámetro. Un enlace de reset es equivalente a una credencial: quien lo tiene se apodera de la cuenta. (`sendWelcomeEmail`, `sendCourseApprovalEmail`.)
 19. **Carnet digital atado al token**: `enviarCarnetDigital` no acepta ningún dato del request. Localiza el doc del socio por `request.auth.uid` o por el email del token, y el QR se genera con el `uid` del token, no con el del documento. Es idempotente vía `carnetEnviadoAt`, así que no se puede usar para bombardear a un socio con correos. (`functions/src/index.ts` → `enviarCarnetDigital`.)
+20. **Aportación Kalian por variante no puede superar el precio de su propia variante**: `eventos.aportacion_kalian_estandar|descuento|cupon` son opcionales (fallback a 5 € en cliente), pero cuando el admin los escribe, `firestore.rules → isValidEvento` los rechaza si no son `number >= 0`, y si el precio de esa misma variante (`precio_estandar`/`precio_descuento`/`precioCupon`) viene en la misma escritura, además exige `aportacion_kalian_X <= precio_X`. Evita que el reparto configurado genere un pago negativo al artista antes de llegar siquiera al cliente (que ya lo capa con `min()` al cobrar). (`firestore.rules` → `isValidAportacionKalian`.)
+21. **Coherencia bruto/neto/artista en `finanzas`**: los campos `monto_bruto`, `monto_artista` y `variante_precio` de una entrada de evento son opcionales (compatibilidad con docs previos al reparto), pero si los tres — junto con `monto` — están presentes en la escritura, `firestore.rules → isValidFinanza` exige `monto == monto_bruto - monto_artista` y `variante_precio` dentro del enum cerrado. Ni admin ni portero pueden persistir un desglose que no cuadre, aunque el cálculo en cliente (`calcularReparto`) ya lo garantiza antes de escribir. (`firestore.rules` → `isValidFinanza`.)
 
 
 ---
@@ -165,6 +167,8 @@ Los invariantes y payloads de §2 tienen contraparte ejecutable en `tests/firest
 | `isValidPagoMensual` (mes/anio range, type) | `audit: isValidPagoMensual` |
 | `isValidNewsletter` (doble opt-in, hasOnly) | `audit: isValidNewsletter` |
 | Lectura socios case-insensitive | `audit: socios read case-insensitive email` |
+| `isValidAportacionKalian` (cap al precio de la variante) | `eventos` |
+| `isValidFinanza` (coherencia bruto/neto/artista, enum de variante) | `finanzas` |
 
 Comandos: `npm run test:rules` (necesita emulador Firestore en `127.0.0.1:8080`), `npm run test:unit` para los helpers puros (`escapeHtml`, `withRetry`, `safeJson`, etc.).
 

@@ -24,6 +24,9 @@ interface Transaccion {
   local_id?: string;
   mes?: number;
   anio?: number;
+  /** Solo entradas de evento (categoria == 'Evento'). Fallback si faltan: bruto = monto, artista = 0. */
+  monto_bruto?: number;
+  monto_artista?: number;
 }
 
 interface DetalleSocio {
@@ -35,7 +38,7 @@ interface DetalleSocio {
 
 type Fila =
   | { tipo: 'individual'; t: Transaccion }
-  | { tipo: 'grupo'; id: string; titulo: string; total: number; ultima: Timestamp; hijos: Transaccion[]; metodo: string };
+  | { tipo: 'grupo'; id: string; titulo: string; total: number; totalBruto: number; totalArtista: number; ultima: Timestamp; hijos: Transaccion[]; metodo: string };
 
 // Extrae el título del evento del concepto: "Entrada Evento: KALIAN JAZZ (Titular)" → "KALIAN JAZZ"
 const extraerTituloEvento = (concepto: string): string | null => {
@@ -67,10 +70,12 @@ const agruparMovimientos = (rows: Transaccion[]): Fila[] => {
   for (const [id, hijos] of grupos) {
     const titulo = extraerTituloEvento(hijos[0].concepto) || hijos[0].concepto;
     const total = hijos.reduce((a, t) => a + t.monto, 0);
+    const totalBruto = hijos.reduce((a, t) => a + (t.monto_bruto ?? t.monto), 0);
+    const totalArtista = hijos.reduce((a, t) => a + (t.monto_artista ?? 0), 0);
     const ultima = hijos.reduce((max, t) => (t.fecha.toMillis() > max.toMillis() ? t.fecha : max), hijos[0].fecha);
     const metodos = new Set(hijos.map(h => h.metodo));
     const metodo = metodos.size === 1 ? [...metodos][0] : 'Varios';
-    filas.push({ tipo: 'grupo', id, titulo, total, ultima, hijos, metodo });
+    filas.push({ tipo: 'grupo', id, titulo, total, totalBruto, totalArtista, ultima, hijos, metodo });
   }
   for (const t of individuales) filas.push({ tipo: 'individual', t });
 
@@ -712,7 +717,9 @@ const AdminContabilidad = () => {
                         <td className="p-6 text-[10px] font-mono text-kalian-cream/40">{fila.ultima.toDate().toLocaleString()}</td>
                         <td className="p-6">
                           <p className="text-sm font-bold text-kalian-cream group-hover:text-kalian-gold transition-colors">{fila.titulo}</p>
-                          <p className="text-[9px] font-black uppercase tracking-widest text-kalian-gold/40 mt-1">Evento · grupo de entradas</p>
+                          <p className="text-[9px] font-black uppercase tracking-widest text-kalian-gold/40 mt-1">
+                            Bruto {fila.totalBruto.toFixed(2)}€ · Kalian {fila.total.toFixed(2)}€ · Artista {fila.totalArtista.toFixed(2)}€
+                          </p>
                         </td>
                         <td className="p-6">
                           <span className="text-[8px] font-black uppercase px-3 py-1 rounded-full border bg-rose-500/10 text-rose-500 border-rose-500/20">
@@ -734,7 +741,12 @@ const AdminContabilidad = () => {
                         <tr key={h.id} className="border-b border-white/5 bg-black/30 text-kalian-cream/70">
                           <td className="p-3"></td>
                           <td className="p-3 pl-10 text-[10px] font-mono text-kalian-cream/40">{h.fecha.toDate().toLocaleString()}</td>
-                          <td className="p-3 text-[12px] font-bold">{extraerSufijo(h.concepto)}</td>
+                          <td className="p-3 text-[12px] font-bold">
+                            {extraerSufijo(h.concepto)}
+                            <span className="block text-[9px] font-black uppercase tracking-widest text-kalian-cream/30 mt-0.5">
+                              Bruto {(h.monto_bruto ?? h.monto).toFixed(2)}€ · Kalian {h.monto.toFixed(2)}€ · Artista {(h.monto_artista ?? 0).toFixed(2)}€
+                            </span>
+                          </td>
                           <td className="p-3"></td>
                           <td className="p-3"></td>
                           <td className="p-3 text-[10px] font-black uppercase tracking-widest text-kalian-cream/50">{h.metodo}</td>

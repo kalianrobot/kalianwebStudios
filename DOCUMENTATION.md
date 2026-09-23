@@ -175,10 +175,14 @@ efectivo/tarjeta realmente recaudado, y debajo desglosa cuánto de ese bruto
 es neto Kalian y cuánto es para el artista. El CSV exporta Bruto/Kalian/
 Artista como columnas separadas por movimiento.
 
-**Liquidar al artista es manual**: no hay botón que registre
-automáticamente el pago. Cuando el gerente entrega el efectivo o hace la
-transferencia, se registra a mano en Contabilidad como el resto de egresos,
-referenciando el evento.
+**Liquidar al artista**: en la fila de cada evento, mientras quede algo
+pendiente, aparece el botón "+ Pago artista". Abre un formulario (importe,
+método) y registra el pago referenciando el evento — no hay automatismo que
+calcule ni dispare el pago, lo hace el gerente cuando entrega el efectivo o
+hace la transferencia. La fila del evento pasa a mostrar `Pagado` y
+`Pendiente` junto al desglose Bruto/Kalian/Artista, y la card "Caja Eventos"
+resta esos pagos de su total (es la caja física que queda del evento tras
+liquidar).
 
 **Eventos anteriores a esta funcionalidad**: sus entradas en Contabilidad y
 en el Recibí se leen como "Kalian se lo quedó todo, 0 € para el artista" —

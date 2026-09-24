@@ -764,17 +764,17 @@ const ProgramacionPublica = () => {
       {/* MODAL SOLICITUD CURSO */}
       <AnimatePresence>
         {solicitudCurso && (
-          <motion.div 
+          <motion.div
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
-            className="fixed inset-0 bg-kalian-dark/95 backdrop-blur-md flex items-center justify-center p-6 z-[1000]"
+            className="fixed inset-0 bg-kalian-dark/95 backdrop-blur-md flex items-start md:items-center justify-center p-4 md:p-6 z-[1000] overflow-y-auto"
           >
-            <motion.div 
+            <motion.div
               initial={{ y: 50, opacity: 0 }}
               animate={{ y: 0, opacity: 1 }}
               exit={{ y: 50, opacity: 0 }}
-              className="w-full max-w-xl bg-black border border-kalian-gold/20 rounded-[3rem] shadow-2xl p-10 relative overflow-hidden"
+              className="w-full max-w-xl bg-black border border-kalian-gold/20 rounded-[3rem] shadow-2xl p-6 md:p-10 relative overflow-hidden my-auto"
             >
               <div className="absolute top-0 left-0 w-full h-1 bg-kalian-gold"></div>
               <button onClick={() => setSolicitudCurso(null)} className="absolute top-8 right-8 text-kalian-gold/90 font-black text-2xl hover:text-kalian-gold transition-colors">✕</button>

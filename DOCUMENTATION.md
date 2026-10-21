@@ -98,18 +98,20 @@ La solicitud llega desde la programación pública (`solicitudes_cursos`, estado
 3. Si no existe el socio, se crea: cuenta en Firebase Auth + doc `socios/{DNI}` con `cuentaActivada: false`. **No se envía ningún email aquí.**
 4. Se crea el registro de pago de inscripción como pendiente (`pagos_inscripciones`).
 5. Se marca la solicitud como `'aprobado'`.
-6. Se envía el **email de inscripción aceptada** con curso, modalidad, fecha de inicio, horario, profesor, sala e importe.
+6. Se envía el **email de inscripción aceptada y bienvenida a Kalian**: confirmación, ficha del curso (modalidad, fecha de inicio, horario, profesor, sala e importe) y las explicaciones de cuota de socio (15 € mensuales + aportación de cada curso, a abonar en la primera clase del mes), ventajas de ser socio y acceso a la intranet.
 7. Si la modalidad tiene precio, se registra el ingreso en contabilidad con el método de pago elegido.
 
 **Un evento, un email.** El socio recibe:
 
 | Momento | Socio nuevo | Socio que ya existía |
 |---|---|---|
-| Al aprobar | Inscripción aceptada, **con el botón para crear su contraseña** | Inscripción aceptada |
+| Al aprobar | Inscripción aceptada y bienvenida, **con el botón para crear su contraseña** | Inscripción aceptada y bienvenida, con el acceso a la intranet con su contraseña actual |
 | Al entrar por primera vez en `/perfil` | Carnet digital con el QR | — |
 | Si el curso amplía su membresía | — | Carnet digital actualizado |
 
 Antes llegaban tres correos a la vez (bienvenida, reset de contraseña y carnet). El de bienvenida llevaba un botón "Activar mi cuenta" que solo apuntaba a `/login` y no activaba nada, y el carnet llegaba con el QR de una cuenta que todavía no tenía contraseña. Ahora el enlace de activación es el real de Firebase Auth, lo genera la Cloud Function, y el carnet espera a que la cuenta exista de verdad.
+
+La function comprueba en el servidor si el socio es nuevo (`socios/{DNI}.cuentaActivada === false`) justo antes de mandar el correo: solo entonces el apartado de intranet explica cómo crear la contraseña y lleva el enlace. Si no se pudo generar el enlace, el correo da las instrucciones manuales ("He olvidado mi contraseña").
 
 El enlace de activación **caduca en unas horas**. Si el socio lo deja pasar, no hace falta nada por parte del staff: usa "He olvidado mi contraseña" en `/login`, que sigue funcionando igual.
 

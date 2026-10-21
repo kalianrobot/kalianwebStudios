@@ -5,6 +5,13 @@ updates:
     schedule:
       interval: weekly
     open-pull-requests-limit: 5
+    # vitest y sus plugins @vitest/* deben subir de versión mayor a la vez:
+    # por separado, npm ci falla por conflicto de peer dependencies.
+    groups:
+      vitest:
+        patterns:
+          - "vitest"
+          - "@vitest/*"
 
   - package-ecosystem: npm
     directory: /functions

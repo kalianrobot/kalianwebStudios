@@ -424,26 +424,40 @@ export const sendCourseApprovalEmail = onCall(
     const precio = Number(sol.modalidad?.precio) || 0;
     const modalidad = String(sol.modalidad?.tipo || '');
 
-    // Si el socio se acaba de crear y todavía no tiene contraseña, este mismo
-    // email lleva el enlace de activación: así el alta se resuelve en un solo
-    // correo en vez de tres (aceptación + bienvenida + carnet) a la vez.
-    let activacionHtml = '';
+    // Este email es a la vez la aceptación y la bienvenida a Kalian. Si el socio
+    // se acaba de crear y todavía no tiene contraseña (se comprueba aquí, en el
+    // servidor, justo antes de enviar), el mismo email lleva el enlace de
+    // activación: así el alta se resuelve en un solo correo en vez de tres
+    // (aceptación + bienvenida + carnet) a la vez.
+    let socioNuevo = false;
+    let activacionLink = '';
     const dni = String(sol.dni || '').toUpperCase().trim();
     if (dni) {
       const socioSnap = await db.collection('socios').doc(dni).get();
       if (socioSnap.exists && socioSnap.data()?.cuentaActivada === false) {
+        socioNuevo = true;
         try {
-          const link = await getAuth().generatePasswordResetLink(email);
-          activacionHtml = `<div class="div"></div>
-            <p>Te hemos creado una cuenta de soci@. Crea tu contraseña para acceder:</p>
-            <div style="margin:30px 0"><a href="${escapeHtml(link)}" class="btn">CREAR MI CONTRASEÑA</a></div>
-            <p style="font-size:12px;color:#666">El enlace es personal y caduca en unas horas. Si expira, usa "He olvidado mi contraseña" en la pantalla de acceso. Al entrar recibirás tu carnet digital con el QR.</p>`;
+          activacionLink = await getAuth().generatePasswordResetLink(email);
         } catch (err: any) {
           logger.warn('sendCourseApprovalEmail: sin enlace de activación', {
             email: maskEmail(email), code: err?.code,
           });
         }
       }
+    }
+
+    // Bloque de acceso a la intranet: varía según el socio sea nuevo o ya exista.
+    const botonLogin = '<div style="margin:30px 0"><a href="https://kalian.es/login" class="btn">ENTRAR EN LA INTRANET</a></div>';
+    let intranetHtml: string;
+    if (!socioNuevo) {
+      intranetHtml = `<p>Accede a la intranet con tu correo electrónico y la contraseña que ya tienes.</p>${botonLogin}`;
+    } else if (activacionLink) {
+      intranetHtml = `<p>Para acceder por primera vez, crea tu contraseña con el botón de abajo. Una vez creada, podrás acceder a la intranet utilizando tu correo electrónico y la contraseña que hayas elegido.</p>
+            <div style="margin:30px 0"><a href="${escapeHtml(activacionLink)}" class="btn">CREAR MI CONTRASEÑA</a></div>
+            <p style="font-size:12px;color:#666">El enlace es personal y caduca en unas horas. Si expira, pulsa "He olvidado mi contraseña" en la pantalla de acceso e introduce tu correo electrónico. Al entrar por primera vez recibirás tu carnet digital con el QR.</p>`;
+    } else {
+      // No se pudo generar el enlace: instrucciones manuales equivalentes.
+      intranetHtml = `<p>Para acceder por primera vez, inicia sesión con tu correo electrónico y pulsa "He olvidado mi contraseña" para crearla siguiendo las instrucciones que recibirás por email. Una vez creada, podrás acceder a la intranet utilizando tu correo electrónico y la contraseña que hayas elegido.</p>${botonLogin}`;
     }
 
     const fila = (etiqueta: string, valor: string) => valor
@@ -485,19 +499,28 @@ export const sendCourseApprovalEmail = onCall(
           .div{height:2px;width:40px;background:#D4AF37;margin:30px auto}
           .btn{display:inline-block;background:#D4AF37;color:#000;padding:18px 36px;text-decoration:none;font-weight:900;text-transform:uppercase;letter-spacing:2px;font-size:13px;border-radius:8px}
           .box{background:#1A1A1A;border:1px solid #D4AF3733;border-radius:16px;padding:24px;margin:30px 0;text-align:left}
+          .l{text-align:left}
+          h2{color:#D4AF37;font-size:18px;font-weight:900;text-transform:uppercase;letter-spacing:1px;margin:0 0 20px}
+          h3{color:#D4AF37;font-size:13px;font-weight:900;text-transform:uppercase;letter-spacing:2px;margin:28px 0 8px}
         </style></head><body>
         <div class="c">
           <div class="h"><h1>INSCRIPCIÓN</h1><h1>ACEPTADA</h1></div>
           <div class="b">
-            <p>Hola <span class="acc">${nombreSafe}</span>,</p>
-            <p>Tu solicitud de inscripción en <span class="acc">${tituloSafe}</span> ha sido aceptada. Ya tienes plaza reservada.</p>
+            <p>Hola <span class="acc">${nombreSafe}</span>:</p>
+            <p>Te confirmamos que tu inscripción al curso <span class="acc">${tituloSafe}</span> ha sido aceptada. ¡Te damos la bienvenida a KALIAN!</p>
             <div class="box"><table style="width:100%;border-collapse:collapse">${detalles}</table></div>
-            ${precio > 0
-              ? '<p style="font-size:13px;color:#F5F5F099">El pago de la inscripción queda pendiente de confirmar en el centro. Te indicaremos la forma de pago acordada.</p>'
-              : ''}
-            ${activacionHtml || `<div class="div"></div>
-            <p>Consulta tu carnet digital y tus cursos desde tu área de soci@:</p>
-            <div style="margin:30px 0"><a href="https://kalian.es/login" class="btn">ENTRAR EN MI ÁREA</a></div>`}
+            <div class="div"></div>
+            <div class="l">
+              <h2>¿Qué debes saber como socio/a de KALIAN?</h2>
+              <h3>¿Cuál es la cuota mensual?</h3>
+              <p>La cuota de socio es de 15 € mensuales, independientemente del número de cursos en los que estés inscrito/a. A esta cuota se suma la aportación mensual correspondiente a cada curso.</p>
+              <p>Ambos importes se abonarán conjuntamente, a principios de cada mes, en la primera clase del mes.</p>
+              <h3>¿Qué ventajas tienes por ser socio/a?</h3>
+              <p>Podrás disfrutar de descuentos y, en determinadas ocasiones, de acceso gratuito a nuestras actividades. Además, tendrás prioridad en la reserva de entradas para las actividades relacionadas con la categoría en la que estés inscrito/a y acceso a la intranet de la asociación.</p>
+              <h3>¿Cómo puedes acceder a la intranet?</h3>
+              ${intranetHtml}
+              <p>Allí, tu profesor/a podrá compartir contigo archivos y materiales relacionados con el curso.</p>
+            </div>
           </div>
           <div class="f"><p>KALIAN HIRI KULTUR GUNEA</p><p>Responsable: Kalian. Finalidad: Gestión de soci@s y cursos. Derechos: Acceso y supresión.</p></div>
         </div></body></html>`,

@@ -1,5 +1,14 @@
 # Tasks — add-reparto-taquilla-evento
 
+> Archivado el 2026-09-23 sin implementar: `comision_kalian_por_entrada`
+> nunca llegó a código. `update-reparto-neto-por-variante` lo supersede
+> con un modelo de aportación configurable por variante de precio
+> (`aportacion_kalian_estandar/descuento/cupon`) antes de que este
+> cambio se implementara. Ver el Requirement `REMOVED` en
+> `openspec/changes/archive/2026-09-23-update-reparto-neto-por-variante/specs/eventos/spec.md`.
+> Ninguna casilla de abajo se marca porque ninguna se ejecutó tal
+> cual está escrita; se conserva solo como historia de la decisión.
+
 ## 1. Modelo de datos
 
 - [ ] Añadir `comision_kalian_por_entrada?: number` al tipo de

@@ -98,18 +98,20 @@ La solicitud llega desde la programación pública (`solicitudes_cursos`, estado
 3. Si no existe el socio, se crea: cuenta en Firebase Auth + doc `socios/{DNI}` con `cuentaActivada: false`. **No se envía ningún email aquí.**
 4. Se crea el registro de pago de inscripción como pendiente (`pagos_inscripciones`).
 5. Se marca la solicitud como `'aprobado'`.
-6. Se envía el **email de inscripción aceptada** con curso, modalidad, fecha de inicio, horario, profesor, sala e importe.
+6. Se envía el **email de inscripción aceptada y bienvenida a Kalian**: confirmación, ficha del curso (modalidad, fecha de inicio, horario, profesor, sala e importe) y las explicaciones de cuota de socio (15 € mensuales + aportación de cada curso, a abonar en la primera clase del mes), ventajas de ser socio y acceso a la intranet.
 7. Si la modalidad tiene precio, se registra el ingreso en contabilidad con el método de pago elegido.
 
 **Un evento, un email.** El socio recibe:
 
 | Momento | Socio nuevo | Socio que ya existía |
 |---|---|---|
-| Al aprobar | Inscripción aceptada, **con el botón para crear su contraseña** | Inscripción aceptada |
+| Al aprobar | Inscripción aceptada y bienvenida, **con el botón para crear su contraseña** | Inscripción aceptada y bienvenida, con el acceso a la intranet con su contraseña actual |
 | Al entrar por primera vez en `/perfil` | Carnet digital con el QR | — |
 | Si el curso amplía su membresía | — | Carnet digital actualizado |
 
 Antes llegaban tres correos a la vez (bienvenida, reset de contraseña y carnet). El de bienvenida llevaba un botón "Activar mi cuenta" que solo apuntaba a `/login` y no activaba nada, y el carnet llegaba con el QR de una cuenta que todavía no tenía contraseña. Ahora el enlace de activación es el real de Firebase Auth, lo genera la Cloud Function, y el carnet espera a que la cuenta exista de verdad.
+
+La function comprueba en el servidor si el socio es nuevo (`socios/{DNI}.cuentaActivada === false`) justo antes de mandar el correo: solo entonces el apartado de intranet explica cómo crear la contraseña y lleva el enlace. Si no se pudo generar el enlace, el correo da las instrucciones manuales ("He olvidado mi contraseña").
 
 El enlace de activación **caduca en unas horas**. Si el socio lo deja pasar, no hace falta nada por parte del staff: usa "He olvidado mi contraseña" en `/login`, que sigue funcionando igual.
 
@@ -165,13 +167,24 @@ dos botones:
 
 **Contabilidad** (`/staff/contabilidad`) ya muestra, en la fila de cada
 evento y en cada entrada expandida, el desglose `Bruto · Kalian · Artista`.
-El total que suma al balance mensual de la categoría "Evento" es el
-**Kalian neto**, no el bruto cobrado en puerta.
+**Eventos se lleva como caja aparte**: la card "Caja Eventos" y su gráfico
+no suman al total de "Caja General" (Soci@s + Cursos) ni a sus gráficos —
+el bruto de un evento incluye la parte del artista, que es una deuda
+pendiente de liquidar, no ingreso de la caja general, y mezclarlo ahí
+descuadraba el balance. Dentro de su propia card, "Caja Eventos" sí usa el
+**bruto cobrado en puerta** (no el neto Kalian) para que cuadre con el
+efectivo/tarjeta realmente recaudado, y debajo desglosa cuánto de ese bruto
+es neto Kalian y cuánto es para el artista. El CSV exporta Bruto/Kalian/
+Artista como columnas separadas por movimiento.
 
-**Liquidar al artista es manual**: no hay botón que registre
-automáticamente el pago. Cuando el gerente entrega el efectivo o hace la
-transferencia, se registra a mano en Contabilidad como el resto de egresos,
-referenciando el evento.
+**Liquidar al artista**: en la fila de cada evento, mientras quede algo
+pendiente, aparece el botón "+ Pago artista". Abre un formulario (importe,
+método) y registra el pago referenciando el evento — no hay automatismo que
+calcule ni dispare el pago, lo hace el gerente cuando entrega el efectivo o
+hace la transferencia. La fila del evento pasa a mostrar `Pagado` y
+`Pendiente` junto al desglose Bruto/Kalian/Artista, y la card "Caja Eventos"
+resta esos pagos de su total (es la caja física que queda del evento tras
+liquidar).
 
 **Eventos anteriores a esta funcionalidad**: sus entradas en Contabilidad y
 en el Recibí se leen como "Kalian se lo quedó todo, 0 € para el artista" —

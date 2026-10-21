@@ -66,7 +66,7 @@ Firebase. Tres bloques:
    - **Emails de auth — regla de oro**: ningún flujo del cliente puede invocar `sendPasswordResetEmail`/`sendEmailVerification`/`sendSignInLinkToEmail` de `firebase/auth`. La regla ESLint `no-restricted-imports` en `eslint.config.js` bloquea esos imports con mensaje explicativo. Todo email de auth pasa por Cloud Function → Brevo → `info@kalian.es`.
    - `sendWelcomeEmail` — genera el enlace de activación con `generatePasswordResetLink` **dentro de la function**; el cliente ya no pasa `activationLink` (antes iba hardcodeado a `/login` y no activaba nada, lo que obligaba a mandar un email de reset aparte). Exige rol staff.
    - `enviarCarnetDigital` — la llama el propio socio en su primer acceso a `/perfil`. Localiza su doc por `uid` o por el email del token, manda el carnet una sola vez (marca `carnetEnviadoAt`) y pone `cuentaActivada: true`. Idempotente.
-   - `sendCourseApprovalEmail` — email de "inscripción aceptada" al aprobar una solicitud de curso. Si el socio se acaba de crear (`cuentaActivada === false`), incluye además el botón para crear la contraseña, de modo que el alta se resuelve en **un solo correo**. El cliente solo pasa `solicitudId`: destinatario, curso, horario, profesor y precio se leen de `solicitudes_cursos/{id}` + `cursos/{id}`. Exige rol staff server-side (`assertStaff`) y estado `'aprobado'` en la solicitud, así que solo puede dispararse desde el flujo real de AdminSolicitudes.
+   - `sendCourseApprovalEmail` — email de "inscripción aceptada" y bienvenida a Kalian al aprobar una solicitud de curso (cuota de socio, ventajas e intranet). Si el socio se acaba de crear (`cuentaActivada === false`, comprobado en servidor antes de enviar), el apartado de intranet explica la creación de contraseña e incluye el botón, de modo que el alta se resuelve en **un solo correo**. El cliente solo pasa `solicitudId`: destinatario, curso, horario, profesor y precio se leen de `solicitudes_cursos/{id}` + `cursos/{id}`. Exige rol staff server-side (`assertStaff`) y estado `'aprobado'` en la solicitud, así que solo puede dispararse desde el flujo real de AdminSolicitudes.
    - `sendReservationConfirmation` lee la reserva del doc autoritativo por `manageToken`; el cliente no controla destinatario.
    - `gestionarReservaInvitado` — gestión de reserva sin login (capability token `manageToken`).
    - `calcularPrecioReserva` — precio autoritativo server-side; el cliente lo llama al enviar el formulario (y, con debounce, para el preview en tiempo real) para que `totalPagar` no sea manipulable. Devuelve también `socioVigente` (membresía en vigor, independiente de si hubo descuento) para que el cliente pueda evaluar la apertura anticipada de socios sin haber iniciado sesión.
@@ -208,9 +208,47 @@ fallback `monto_bruto = monto`, `monto_artista = 0`, `variante_precio =
 'estandar'` — lectura correcta, porque hasta entonces no existía caché
 formalizado. No hay backfill de datos históricos.
 
+**`AdminContabilidad` lleva Eventos como caja aparte**: la card/gráfico
+"Caja Eventos" no suma al total de "Caja General" (`Socio` + `Curso` +
+derivadas) ni a sus gráficos de barras/tarta — el bruto de un evento
+incluye la parte del artista (deuda pendiente de liquidar, no ingreso de la
+caja general), así que mezclarlo con Socios/Cursos descuadraba el balance
+percibido. Dentro de su propia card, "Caja Eventos" suma el **bruto**
+(`monto_bruto ?? monto`), no el neto Kalian — así cuadra con el
+efectivo/tarjeta realmente recaudado en puerta — y desglosa aparte cuánto
+de ese bruto es neto Kalian y cuánto es para el artista. El CSV exporta
+columnas Bruto/Kalian/Artista independientes por movimiento.
+
 Esta redefinición de `monto` aplica **solo** a `categoria == 'Evento'`. Para
 `Socio`, `Curso`, `Aportación Socio Local`, `Cierre Aportación Curso` y
 `cuota_socio`, `monto` sigue siendo el total del movimiento.
+
+### Liquidar al artista: categoría `'Pago Artista'`
+
+Cuando Kalian entrega al artista lo que le corresponde, se registra desde
+`AdminContabilidad` (botón "+ Pago artista" en la fila del evento, visible
+mientras `pendienteArtista > 0`) un doc `finanzas`:
+
+```ts
+// finanzas/{id} con categoria == 'Pago Artista'
+{
+  monto: number    // negativo: -importe entregado
+  eventoId: string // referencia al evento liquidado
+  concepto: string // "Pago artista: <título del evento>"
+}
+```
+
+No lleva `monto_bruto`/`monto_artista`/`variante_precio` — no es una venta de
+entrada, es una salida de caja. `firestore.rules → isValidFinanza` no impone
+un enum sobre `categoria`, así que no hizo falta tocar las reglas.
+
+`AdminContabilidad.agruparMovimientos` agrupa `'Evento'` y `'Pago Artista'`
+por `eventoId` en la misma fila: `totalArtista` (lo que se le debe, viene de
+las entradas) menos `totalPagadoArtista` (suma de `'Pago Artista'` en valor
+absoluto) da `pendienteArtista`. La card "Caja Eventos" resta esos pagos de
+su bruto — es la caja física del evento después de liquidar. `montoCaja()`
+no necesita caso especial para `'Pago Artista'`: al no ser `'Evento'`, ya
+devuelve `monto` tal cual (negativo).
 
 **Fuente autoritativa de la recaudación de un evento**: `finanzas` filtrada
 por `eventoId` (y `categoria == 'Evento'` en cliente, para no requerir índice

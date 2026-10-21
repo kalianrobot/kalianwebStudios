@@ -2,7 +2,7 @@ import { db } from '../firebase';
 import { collection, addDoc, serverTimestamp, Timestamp, setDoc, doc } from 'firebase/firestore';
 import { APORTACION_KALIAN_DEFAULT, VariantePrecio } from './constants';
 
-export type CategoriaIngreso = 'Socio' | 'Curso' | 'Evento' | 'Aportación Socio Local' | 'Cierre Aportación Curso';
+export type CategoriaIngreso = 'Socio' | 'Curso' | 'Evento' | 'Aportación Socio Local' | 'Cierre Aportación Curso' | 'Pago Artista';
 export type MetodoPago = 'Efectivo' | 'Tarjeta' | 'Transferencia';
 
 export interface IngresoData {

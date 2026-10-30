@@ -140,7 +140,7 @@ Acceso vía `/staff/login` con email/contraseña. Solo `role == 'admin'` o maste
 | Contabilidad | `/staff/contabilidad` | Filtros por mes/año, drilldown por socio, purga de residuos. |
 | Reservas | `/staff/reservas` | Vista de reservas (socios + invitados). |
 | Galería | `/staff/galeria` | Gestión de exposiciones. |
-| Config | `/staff/config` | Identidad, donaciones, configuración pública. |
+| Config / Identidad | `/staff/config` y `/staff/identidad` (misma pantalla) | Identidad, donaciones, configuración pública. Las imágenes (logo, portada, galería y Hub) se cambian subiendo un archivo nuevo; la del Hub también se puede **quitar** para que la sección vuelva al fondo liso. Subir o quitar solo se publica al pulsar **GUARDAR CAMBIOS**. |
 | Traducir EU | `/staff/traducir-eu` | Asistente para rellenar campos `*_eu`. |
 
 ### 3.1 Reparto Kalian/artista y cierre de un evento

@@ -11,6 +11,21 @@ y Cloud Function, un invariante de seguridad, o un artefacto operativo
 No crees cambio para bugfixes triviales, refactors internos, ajustes de
 copy o dependencias.
 
+## Flujo con quien pide el cambio
+
+Los cambios los puede pedir el gerente, que no es informático. Orden:
+
+1. Escribe `proposal.md`, `tasks.md` y el delta de spec.
+2. Explícale la propuesta en el chat en lenguaje sencillo: qué verá
+   distinto el usuario, qué no cambia, qué riesgos hay. Nada de rutas,
+   colecciones ni RFC 2119 en esa explicación (eso queda en los
+   ficheros).
+3. No implementes hasta que diga que sí. Si corrige algo, actualiza la
+   propuesta y vuelve a explicarla.
+4. Implementa en la misma rama y abre un único PR contra `test` con la
+   propuesta y el código. En la descripción del PR, enlaza
+   `openspec/changes/<change-id>/proposal.md`.
+
 ## Estructura mínima de un cambio
 
 ```
@@ -135,7 +150,9 @@ Reglas:
 
 ## Archivado
 
-Cuando el cambio se implementa, se mergea a `main` y se despliega:
+Cuando el cambio ha pasado de `test` a `main` y está desplegado en
+producción (lo pide el responsable técnico), en un PR
+`docs(openspec): archivar <change-id>` contra `test`:
 
 1. Copia el delta a `openspec/specs/<capability>/spec.md`
    (creando la spec base si no existía, aplicando ADDED / MODIFIED /

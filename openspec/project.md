@@ -40,9 +40,12 @@ openspec/
             └── <capability>/spec.md  # delta ADDED / MODIFIED / REMOVED
 ```
 
-Cuando un cambio se implementa y se mergea a `main`, su delta se
+Flujo de ramas: la propuesta y su implementación viajan juntas en un PR
+contra `test` (web de pruebas). Cuando el responsable técnico pasa
+`test` a `main` y el cambio se despliega en producción, su delta se
 consolida en `openspec/specs/<capability>/spec.md` y el directorio
-`changes/<change-id>/` se archiva bajo `openspec/changes/archive/YYYY-MM-DD-<change-id>/`.
+`changes/<change-id>/` se archiva bajo `openspec/changes/archive/YYYY-MM-DD-<change-id>/`
+(PR `docs(openspec): archivar <change-id>` contra `test`).
 
 ## Convenciones específicas del repo
 

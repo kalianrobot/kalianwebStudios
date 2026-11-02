@@ -1,0 +1,72 @@
+name: Deploy TEST
+
+# Cada merge en la rama `test` (cuando CI pasa) se despliega en el proyecto
+# Firebase de TEST, en su URL fija (canal live). Nunca toca producción.
+
+on:
+  workflow_run:
+    workflows: ['CI']
+    branches: [test]
+    types: [completed]
+
+permissions:
+  contents: read
+
+# Comparte grupo con preview.yml y copiar-prod-a-test.yml: un despliegue a la vez en test.
+concurrency:
+  group: preview-test-env
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    if: ${{ github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push' }}
+    runs-on: ubuntu-latest
+
+    env:
+      TEST_PROJECT_ID: ${{ vars.FIREBASE_TEST_PROJECT_ID }}
+
+    steps:
+      # Seguro: branches:[test] + event == 'push' descarta disparos desde PRs/forks.
+      - uses: actions/checkout@v4 # nosemgrep: yaml.github-actions.security.workflow-run-target-code-checkout.workflow-run-target-code-checkout
+        with:
+          ref: ${{ github.event.workflow_run.head_sha }}
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: 'npm'
+
+      - name: Instalar dependencias (raíz)
+        run: npm ci
+
+      - name: Instalar dependencias (functions)
+        working-directory: functions
+        run: npm ci
+
+      - name: Build front apuntando a TEST
+        env:
+          VITE_FIREBASE_API_KEY: ${{ secrets.TEST_VITE_FIREBASE_API_KEY }}
+          VITE_FIREBASE_AUTH_DOMAIN: ${{ secrets.TEST_VITE_FIREBASE_AUTH_DOMAIN }}
+          VITE_FIREBASE_PROJECT_ID: ${{ vars.FIREBASE_TEST_PROJECT_ID }}
+          VITE_FIREBASE_STORAGE_BUCKET: ${{ secrets.TEST_VITE_FIREBASE_STORAGE_BUCKET }}
+          VITE_FIREBASE_MESSAGING_SENDER_ID: ${{ secrets.TEST_VITE_FIREBASE_MESSAGING_SENDER_ID }}
+          VITE_FIREBASE_APP_ID: ${{ secrets.TEST_VITE_FIREBASE_APP_ID }}
+          VITE_FIREBASE_MEASUREMENT_ID: ${{ secrets.TEST_VITE_FIREBASE_MEASUREMENT_ID }}
+        run: npm run build
+
+      - name: Auth Firebase TEST (Service Account)
+        env:
+          SA_TEST: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_TEST }}
+        run: |
+          printf '%s' "$SA_TEST" > "$RUNNER_TEMP/sa.json"
+          echo "GOOGLE_APPLICATION_CREDENTIALS=$RUNNER_TEMP/sa.json" >> "$GITHUB_ENV"
+
+      - name: Deploy a TEST (hosting live + functions + reglas)
+        run: >
+          npx firebase-tools deploy
+          --project "$TEST_PROJECT_ID"
+          --non-interactive --force
+
+      - name: Borrar credenciales
+        if: always()
+        run: rm -f "$RUNNER_TEMP/sa.json"

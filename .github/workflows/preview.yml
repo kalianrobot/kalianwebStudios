@@ -7,7 +7,7 @@ name: Preview (entorno de test)
 
 on:
   pull_request:
-    branches: [main]
+    branches: [main, test]
     types: [opened, synchronize, reopened]
 
 permissions:

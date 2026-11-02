@@ -1,0 +1,76 @@
+name: Preview (entorno de test)
+
+# Cada Pull Request contra main se despliega en el proyecto Firebase de TEST
+# (nunca en producción) y deja la URL de prueba como comentario en el PR.
+# - Hosting: canal de preview propio por PR (caduca a los 7 días).
+# - Functions + reglas: se despliegan en el proyecto de test (entorno compartido).
+
+on:
+  pull_request:
+    branches: [main]
+    types: [opened, synchronize, reopened]
+
+permissions:
+  contents: read
+  pull-requests: write # comentar la URL en el PR
+  checks: write
+
+# Un único despliegue de functions/reglas a la vez en el proyecto de test.
+concurrency:
+  group: preview-test-env
+  cancel-in-progress: false
+
+env:
+  TEST_PROJECT_ID: ${{ vars.FIREBASE_TEST_PROJECT_ID }}
+
+jobs:
+  preview:
+    # Solo PRs del propio repo (no forks: no deben ver los secretos de test).
+    if: github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: 'npm'
+
+      - name: Instalar dependencias (raíz)
+        run: npm ci
+
+      - name: Instalar dependencias (functions)
+        working-directory: functions
+        run: npm ci
+
+      - name: Build front apuntando a TEST
+        env:
+          VITE_FIREBASE_API_KEY: ${{ secrets.TEST_VITE_FIREBASE_API_KEY }}
+          VITE_FIREBASE_AUTH_DOMAIN: ${{ secrets.TEST_VITE_FIREBASE_AUTH_DOMAIN }}
+          VITE_FIREBASE_PROJECT_ID: ${{ vars.FIREBASE_TEST_PROJECT_ID }}
+          VITE_FIREBASE_STORAGE_BUCKET: ${{ secrets.TEST_VITE_FIREBASE_STORAGE_BUCKET }}
+          VITE_FIREBASE_MESSAGING_SENDER_ID: ${{ secrets.TEST_VITE_FIREBASE_MESSAGING_SENDER_ID }}
+          VITE_FIREBASE_APP_ID: ${{ secrets.TEST_VITE_FIREBASE_APP_ID }}
+          VITE_FIREBASE_MEASUREMENT_ID: ${{ secrets.TEST_VITE_FIREBASE_MEASUREMENT_ID }}
+        run: npm run build
+
+      - name: Auth Firebase TEST (Service Account)
+        run: |
+          printf '%s' '${{ secrets.FIREBASE_SERVICE_ACCOUNT_TEST }}' > "$RUNNER_TEMP/sa.json"
+          echo "GOOGLE_APPLICATION_CREDENTIALS=$RUNNER_TEMP/sa.json" >> "$GITHUB_ENV"
+
+      - name: Deploy functions + reglas a TEST
+        run: >
+          npx firebase-tools deploy
+          --only functions,firestore:rules,storage
+          --project "$TEST_PROJECT_ID"
+          --non-interactive --force
+
+      - name: Deploy hosting a canal de preview + comentario en el PR
+        uses: FirebaseExtended/action-hosting-deploy@v0
+        with:
+          repoToken: ${{ secrets.GITHUB_TOKEN }}
+          firebaseServiceAccount: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_TEST }}
+          projectId: ${{ vars.FIREBASE_TEST_PROJECT_ID }}
+          expires: 7d

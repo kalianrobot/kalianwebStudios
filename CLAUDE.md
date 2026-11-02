@@ -18,6 +18,8 @@ Reglas operativas para Claude Code en este repo. Se carga automáticamente en ca
 
 - Rama designada por sesión: respeta la que el entorno indica (típicamente `claude/...`). No crees ramas paralelas salvo que se pida.
 - **Nunca push a `main`** sin permiso explícito del usuario.
+- **Los PR se abren contra `test`, no contra `main`.** Cada PR a `test` genera una URL de preview en el proyecto Firebase de test; al mergear, se despliega la web de pruebas fija. El paso `test` → `main` (producción) lo hace el responsable técnico con un PR propio. Si no te lo pide él explícitamente, no abras PR contra `main`.
+- Quien te pide cambios puede ser el gerente, que no es informático: explica en lenguaje sencillo, sin jerga, y dale siempre el enlace del PR y el de su preview.
 - Nunca `--no-verify`, `--amend` o `push --force` sin pedirlo.
 - Formato de commits: `tipo(scope): mensaje en castellano`. Tipos: `feat`, `fix`, `docs`, `refactor`, `chore`. Ejemplo: `feat(newsletter): doble opt-in nativo Brevo`.
 - Un commit = una intención. Si el trabajo abarca docs + feature, dos commits.
@@ -37,6 +39,16 @@ Reglas operativas para Claude Code en este repo. Se carga automáticamente en ca
 Los edits van en **el mismo PR** del cambio funcional, no después.
 
 Si la decisión es "no impacta a ningún doc", escríbelo igualmente — así queda explícito que se ha pensado.
+
+### OpenSpec (desarrollo guiado por especificación)
+
+Si el cambio entra en el alcance de `openspec/project.md` (funcionalidad nueva, regla de negocio o de seguridad, modelo de datos, contrato cliente–Functions), **antes de tocar código**:
+
+1. Crea `openspec/changes/<change-id>/` siguiendo `openspec/AGENTS.md` (proposal, tasks, delta de spec).
+2. Explica la propuesta a quien te la pidió en lenguaje sencillo: qué va a cambiar para el usuario, qué no cambia y qué riesgos hay. Sin rutas de ficheros ni términos técnicos.
+3. Espera su "sí" (o sus correcciones) y solo entonces implementa, marcando las tasks según avanzas. Propuesta e implementación van en el mismo PR a `test`.
+
+Textos, traducciones, estilos y fallos pequeños no llevan OpenSpec: basta un commit descriptivo. El archivado del cambio se hace cuando llega a `main` (ver `openspec/AGENTS.md` → Archivado).
 
 ---
 

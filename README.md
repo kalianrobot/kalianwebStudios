@@ -27,6 +27,8 @@ Crea un `.env.local` con las variables de Firebase necesarias (ver `.env.example
 | `firebase emulators:start` | Emuladores locales (Firestore :8080, Storage :9199) |
 | `firebase deploy` | Despliegue completo manual (hosting + functions + reglas) — solo emergencia |
 
+> **Flujo de cambios**: rama de trabajo (`claude/...`) → PR contra `test` (CI + URL de preview en el proyecto de test) → merge en `test` (despliega la web de pruebas fija) → PR `test` → `main` aprobado por el responsable técnico → CD a producción. Los cambios funcionales llevan propuesta OpenSpec (`openspec/project.md`).
+>
 > **Producción**: el deploy es automático vía CI/CD. Cada merge a `main` dispara el CI, y al pasar arranca el workflow CD que despliega los 4 targets. Ver [Setup del CD](#setup-del-cd-administradores) abajo.
 
 ## Estructura
@@ -88,13 +90,12 @@ En `Settings → Secrets and variables → Actions`, añadir:
 | `VITE_FIREBASE_APP_ID` | idem |
 | `VITE_FIREBASE_MEASUREMENT_ID` | idem |
 
-### 3. (Opcional pero recomendado) Branch protection en `main`
+### 3. Reglas de rama (`Settings → Rules → Rulesets`)
 
-En `Settings → Branches → Add rule` para `main`:
-- Require status checks to pass before merging → marcar **CI**.
-- Require pull request before merging.
+- **protect-main** (`main`): sin borrado ni force-push, check `test` del CI obligatorio y al día, PR obligatorio con 1 aprobación. Bypass: *Repository admin*, solo vía PR.
+- **protect-test** (`test`): sin borrado ni force-push, PR obligatorio sin aprobaciones, check `test` del CI obligatorio.
 
-Así nada llega a `main` sin pasar tests, y por tanto nada se despliega sin pasarlos.
+Así nada llega a `main` sin pasar tests y sin aprobación, y por tanto nada se despliega en producción sin ambas cosas. Las reglas solo se aplican gratis porque el repo es público; en privado harían falta GitHub Pro.
 
 ### 4. Rotación de la key
 

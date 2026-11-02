@@ -489,7 +489,9 @@ firebase emulators:start
 ```
 
 **Entorno de test** (proyecto Firebase separado, `vars.FIREBASE_TEST_PROJECT_ID`):
-- Preview por PR (`.github/workflows/preview.yml`): cada PR contra `main` despliega functions + reglas al proyecto de test y el front a un canal de preview de Hosting (URL comentada en el PR, caduca a los 7 días). Secretos: `FIREBASE_SERVICE_ACCOUNT_TEST`, `TEST_VITE_FIREBASE_*`. Los secretos de Brevo del proyecto de test tienen valores ficticios: en test no se envían emails.
+- Flujo de ramas: los cambios entran por PR contra `test`; el responsable técnico pasa `test` a `main` con otro PR aprobado.
+- Web de pruebas fija (`.github/workflows/deploy-test.yml`): tras CI verde en un push a `test`, despliega hosting (canal live) + functions + reglas al proyecto de test. Comparte el grupo de concurrencia `preview-test-env` con preview y copia de datos.
+- Preview por PR (`.github/workflows/preview.yml`): cada PR contra `main` o `test` despliega functions + reglas al proyecto de test y el front a un canal de preview de Hosting (URL comentada en el PR, caduca a los 7 días). Secretos: `FIREBASE_SERVICE_ACCOUNT_TEST`, `TEST_VITE_FIREBASE_*`. Los secretos de Brevo del proyecto de test tienen valores ficticios: en test no se envían emails.
 - Datos (`.github/workflows/copiar-prod-a-test.yml`, manual): copia Firestore de producción a test con `scripts/copiar-prod-a-test.cjs`. Producción solo se lee; test se vacía y se rellena. Datos personales (DNI, emails, nombres, teléfonos, direcciones, cuentas, fotos, textos libres) anonimizados de forma consistente, también dentro de IDs. Clave de puerta de test: `test1234`. Parámetro `admins` para dar rol admin en test.
 
 CSP y cabeceras de seguridad: definidas en `firebase.json` (HSTS, X-Frame DENY, CSP estricta con whitelist de Brevo, Google, Firebase, ipify, mymemory).

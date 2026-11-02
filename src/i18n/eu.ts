@@ -517,6 +517,7 @@ const eu: Record<string, string> = {
   'month.10': 'Urria',
   'month.11': 'Azaroa',
   'month.12': 'Abendua',
+  'landing.testBanner': 'Kalian TEST',
 };
 
 export default eu;

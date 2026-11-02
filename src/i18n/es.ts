@@ -517,6 +517,7 @@ const es: Record<string, string> = {
   'month.10': 'Octubre',
   'month.11': 'Noviembre',
   'month.12': 'Diciembre',
+  'landing.testBanner': 'Kalian TEST',
 };
 
 export default es;

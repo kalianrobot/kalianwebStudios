@@ -61,6 +61,11 @@ const LandingPage = () => {
 
       {/* Content */}
       <div className="relative z-10 text-center space-y-12 px-6 max-w-4xl">
+        {/* PRUEBA: rótulo del entorno de test (PR de prueba, no mergear) */}
+        <div className="bg-red-600 text-white font-black uppercase tracking-widest text-5xl md:text-7xl py-6 px-10 rounded-3xl shadow-2xl -rotate-2">
+          {t('landing.testBanner')}
+        </div>
+
         {/* Official Logo */}
         <div className="flex justify-center mb-8">
           <KalianLogo size="lg" />

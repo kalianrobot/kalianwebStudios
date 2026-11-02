@@ -1,0 +1,78 @@
+name: Copiar datos de producción a test
+
+# Lanzamiento manual: Actions → "Copiar datos de producción a test" → Run workflow.
+# Lee Firestore de producción (solo lectura), anonimiza los datos personales,
+# VACÍA Firestore de test y escribe la copia. Producción no se modifica.
+# Ver scripts/copiar-prod-a-test.cjs.
+
+on:
+  workflow_dispatch:
+    inputs:
+      confirmar:
+        description: 'Escribe el ID del proyecto de test para confirmar (se vaciará entero)'
+        required: true
+      simular:
+        description: 'Solo simular: lee y muestra el resumen sin escribir nada'
+        type: boolean
+        default: true
+      admins:
+        description: 'Emails separados por comas que serán admin en test (deben haber entrado antes en la web de test)'
+        required: false
+
+permissions:
+  contents: read
+
+concurrency:
+  group: preview-test-env
+  cancel-in-progress: false
+
+jobs:
+  copiar:
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Comprobar confirmación
+        env:
+          CONFIRMAR: ${{ inputs.confirmar }}
+          TEST_PROJECT: ${{ vars.FIREBASE_TEST_PROJECT_ID }}
+        run: |
+          if [ -z "$TEST_PROJECT" ] || [ "$CONFIRMAR" != "$TEST_PROJECT" ]; then
+            echo "::error::La confirmación no coincide con el proyecto de test ($TEST_PROJECT)."
+            exit 1
+          fi
+
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: 'npm'
+          cache-dependency-path: functions/package-lock.json
+
+      - name: Instalar firebase-admin (functions)
+        working-directory: functions
+        run: npm ci
+
+      - name: Credenciales
+        env:
+          SA_PROD: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
+          SA_TEST: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_TEST }}
+        run: |
+          printf '%s' "$SA_PROD" > "$RUNNER_TEMP/prod.json"
+          printf '%s' "$SA_TEST" > "$RUNNER_TEMP/test.json"
+
+      - name: Copiar y anonimizar
+        env:
+          NODE_PATH: functions/node_modules
+          SOURCE_PROJECT: kalianhkg-886a6
+          SOURCE_CREDENTIALS: ${{ runner.temp }}/prod.json
+          TARGET_PROJECT: ${{ vars.FIREBASE_TEST_PROJECT_ID }}
+          TARGET_CREDENTIALS: ${{ runner.temp }}/test.json
+          SIMULAR: ${{ inputs.simular }}
+          ADMINS: ${{ inputs.admins }}
+        run: node scripts/copiar-prod-a-test.cjs
+
+      - name: Borrar credenciales
+        if: always()
+        run: rm -f "$RUNNER_TEMP/prod.json" "$RUNNER_TEMP/test.json"

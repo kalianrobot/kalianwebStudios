@@ -68,8 +68,8 @@ const AdminConfig = () => {
       await uploadBytes(storageRef, file);
       const url = await getDownloadURL(storageRef);
       setConfig(prev => ({ ...prev, [field]: url }));
-      setMsg(`✅ Imagen cargada para ${String(field)}`);
-      setTimeout(() => setMsg(''), 3000);
+      setMsg(`✅ Imagen cargada para ${String(field)}. Pulsa GUARDAR CAMBIOS para publicarla en la web.`);
+      setTimeout(() => setMsg(''), 6000);
     } catch (err: any) {
       console.error("Storage Error:", err);
       if (err.message?.includes('insufficient permissions')) {
@@ -79,6 +79,14 @@ const AdminConfig = () => {
       }
     }
     setSaving(false);
+  };
+
+  // Quitar una imagen deja el campo vacío y la web vuelve al fondo liso. Como la
+  // subida, solo cambia el estado local: se publica al pulsar GUARDAR CAMBIOS.
+  const quitarImagen = (field: 'hubImageUrl') => {
+    setConfig(prev => ({ ...prev, [field]: '' }));
+    setMsg('Imagen quitada. Pulsa GUARDAR CAMBIOS para aplicarlo en la web.');
+    setTimeout(() => setMsg(''), 6000);
   };
 
   const saveConfig = async () => {
@@ -208,7 +216,18 @@ const AdminConfig = () => {
                 <div className="w-20 h-20 bg-white/5 rounded-xl border border-kalian-gold/10 flex items-center justify-center overflow-hidden">
                   {config.hubImageUrl ? <img src={config.hubImageUrl} className="w-full h-full object-contain" /> : '🏢'}
                 </div>
-                <input type="file" onChange={e => handleUpload(e, 'hubImageUrl')} className="text-xs text-kalian-gold/40" />
+                <div className="flex flex-col items-start gap-2">
+                  <input type="file" accept="image/*" onChange={e => handleUpload(e, 'hubImageUrl')} className="text-xs text-kalian-gold/40" />
+                  {config.hubImageUrl && (
+                    <button
+                      type="button"
+                      onClick={() => quitarImagen('hubImageUrl')}
+                      className="text-[10px] font-black uppercase tracking-widest text-red-400 hover:text-red-300 transition-colors"
+                    >
+                      Quitar imagen
+                    </button>
+                  )}
+                </div>
               </div>
             </div>
           </div>

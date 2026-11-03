@@ -1,0 +1,48 @@
+name: Aviso de documentación
+
+# Aviso (no bloquea): si un PR cambia código en src/ o functions/ y no toca
+# ninguna doc (*.md de la raíz) ni openspec/, deja un comentario en el PR.
+# Textos (src/i18n/) y tests no cuentan como código para este aviso.
+
+on:
+  pull_request:
+    branches: [main, test]
+    types: [opened, synchronize, reopened]
+
+permissions:
+  contents: read
+  pull-requests: write # comentar el aviso
+
+jobs:
+  docs:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Revisar ficheros del PR
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          REPO: ${{ github.repository }}
+          PR: ${{ github.event.pull_request.number }}
+          SAME_REPO: ${{ github.event.pull_request.head.repo.full_name == github.repository }}
+        run: |
+          files=$(gh api "repos/$REPO/pulls/$PR/files" --paginate --jq '.[].filename')
+          code=$(printf '%s\n' "$files" | grep -E '^(src|functions/src)/' | grep -vE '^src/i18n/|\.test\.|\.spec\.' || true)
+          docs=$(printf '%s\n' "$files" | grep -E '^[^/]+\.md$|^openspec/' || true)
+
+          if [ -z "$code" ] || [ -n "$docs" ]; then
+            echo "Documentación OK (o el PR no cambia código)." >> "$GITHUB_STEP_SUMMARY"
+            exit 0
+          fi
+
+          msg="Este PR cambia código pero no toca ninguna documentación (SPEC.md, DOCUMENTATION.md, SECURITY_SPEC.md, README.md, CLAUDE.md) ni openspec/. Si el cambio afecta a cómo funciona algo, actualiza la doc en este mismo PR. Si es solo un ajuste menor, ignora este aviso."
+          echo "::warning title=Documentación::$msg"
+          echo "$msg" >> "$GITHUB_STEP_SUMMARY"
+
+          # Un solo comentario por PR (los forks no tienen permiso de escritura).
+          if [ "$SAME_REPO" = "true" ]; then
+            marker='<!-- aviso-docs -->'
+            existing=$(gh api "repos/$REPO/issues/$PR/comments" --paginate --jq "[.[] | select(.body | contains(\"$marker\"))] | length")
+            if [ "$existing" = "0" ]; then
+              gh api "repos/$REPO/issues/$PR/comments" -f body="$marker
+          **Aviso de documentación**: $msg"
+            fi
+          fi

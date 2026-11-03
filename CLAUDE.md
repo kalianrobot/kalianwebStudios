@@ -40,6 +40,8 @@ Los edits van en **el mismo PR** del cambio funcional, no después.
 
 Si la decisión es "no impacta a ningún doc", escríbelo igualmente — así queda explícito que se ha pensado.
 
+El workflow `aviso-docs.yml` comenta en el PR si cambia código en `src/` o `functions/src/` sin tocar ninguna doc ni `openspec/`. Es un aviso, no bloquea: si salta y el cambio sí afecta a cómo funciona algo, actualiza la doc en el mismo PR.
+
 ### OpenSpec (desarrollo guiado por especificación)
 
 Si el cambio entra en el alcance de `openspec/project.md` (funcionalidad nueva, regla de negocio o de seguridad, modelo de datos, contrato cliente–Functions), **antes de tocar código**:

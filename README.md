@@ -27,7 +27,7 @@ Crea un `.env.local` con las variables de Firebase necesarias (ver `.env.example
 | `firebase emulators:start` | Emuladores locales (Firestore :8080, Storage :9199) |
 | `firebase deploy` | Despliegue completo manual (hosting + functions + reglas) — solo emergencia |
 
-> **Flujo de cambios**: rama de trabajo (`claude/...`) → PR contra `test` (CI + URL de preview en el proyecto de test) → merge en `test` (despliega la web de pruebas fija) → PR `test` → `main` aprobado por el responsable técnico → CD a producción. Los cambios funcionales llevan propuesta OpenSpec (`openspec/project.md`).
+> **Flujo de cambios**: rama de trabajo (`claude/...`) → PR contra `test` (CI + URL de preview en el proyecto de test) → merge en `test` (despliega la web de pruebas fija) → PR `test` → `main` (lo puede abrir el gerente o su IA; lo aprueba y mergea solo el responsable técnico) → CD a producción. Los cambios funcionales llevan propuesta OpenSpec (`openspec/project.md`).
 >
 > **Producción**: el deploy es automático vía CI/CD. Cada merge a `main` dispara el CI, y al pasar arranca el workflow CD que despliega los 4 targets. Ver [Setup del CD](#setup-del-cd-administradores) abajo.
 

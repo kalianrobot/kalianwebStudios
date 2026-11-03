@@ -18,7 +18,8 @@ Reglas operativas para Claude Code en este repo. Se carga automáticamente en ca
 
 - Rama designada por sesión: respeta la que el entorno indica (típicamente `claude/...`). No crees ramas paralelas salvo que se pida.
 - **Nunca push a `main`** sin permiso explícito del usuario.
-- **Los PR se abren contra `test`, no contra `main`.** Cada PR a `test` genera una URL de preview en el proyecto Firebase de test; al mergear, se despliega la web de pruebas fija. El paso `test` → `main` (producción) lo hace el responsable técnico con un PR propio. Si no te lo pide él explícitamente, no abras PR contra `main`.
+- **Los PR se abren contra `test`, no contra `main`.** Cada PR a `test` genera una URL de preview en el proyecto Firebase de test; al mergear, se despliega la web de pruebas fija. Las ramas de trabajo salen siempre de la última versión de `test` (`claude/...` o `gerente/...`).
+- **Paso a producción (`test` → `main`)**: abre un PR con `head: test` y `base: main` solo cuando el gerente (o el responsable técnico) lo pida y confirme que la web de pruebas fija está bien. En la descripción, lista en lenguaje sencillo cada cambio incluido con el enlace a su PR a `test`. **Nunca lo mergees**: lo aprueba el responsable técnico. Si GitHub dice que la rama no está al día o hay conflictos, no lo arregles tú; avisa. Ningún otro PR va contra `main`.
 - Quien te pide cambios puede ser el gerente, que no es informático: explica en lenguaje sencillo, sin jerga, y dale siempre el enlace del PR y el de su preview.
 - Nunca `--no-verify`, `--amend` o `push --force` sin pedirlo.
 - Formato de commits: `tipo(scope): mensaje en castellano`. Tipos: `feat`, `fix`, `docs`, `refactor`, `chore`. Ejemplo: `feat(newsletter): doble opt-in nativo Brevo`.

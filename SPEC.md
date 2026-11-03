@@ -489,7 +489,7 @@ firebase emulators:start
 ```
 
 **Entorno de test** (proyecto Firebase separado, `vars.FIREBASE_TEST_PROJECT_ID`):
-- Flujo de ramas: los cambios entran por PR contra `test`; el responsable técnico pasa `test` a `main` con otro PR aprobado.
+- Flujo de ramas: los cambios entran por PR contra `test`; el paso a producción es un PR `test` → `main` que puede abrir el gerente (o su IA) y que solo aprueba y mergea el responsable técnico.
 - Web de pruebas fija (`.github/workflows/deploy-test.yml`): tras CI verde en un push a `test`, despliega hosting (canal live) + functions + reglas al proyecto de test. Comparte el grupo de concurrencia `preview-test-env` con preview y copia de datos.
 - Aviso de documentación (`.github/workflows/aviso-docs.yml`): en PR contra `main` o `test`, si cambia `src/` o `functions/src/` (sin contar `src/i18n/` ni tests) y no cambia ningún `*.md` de la raíz ni `openspec/`, emite un warning y un único comentario en el PR. No bloquea el merge.
 - Preview por PR (`.github/workflows/preview.yml`): cada PR contra `main` o `test` despliega functions + reglas al proyecto de test y el front a un canal de preview de Hosting (URL comentada en el PR, caduca a los 7 días). Secretos: `FIREBASE_SERVICE_ACCOUNT_TEST`, `TEST_VITE_FIREBASE_*`. Los secretos de Brevo del proyecto de test tienen valores ficticios: en test no se envían emails.

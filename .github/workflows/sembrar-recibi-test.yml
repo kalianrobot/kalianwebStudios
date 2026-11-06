@@ -40,7 +40,7 @@ jobs:
           NODE_PATH: functions/node_modules
           TARGET_PROJECT: ${{ vars.FIREBASE_TEST_PROJECT_ID }}
           TARGET_CREDENTIALS: ${{ runner.temp }}/test.json
-        run: node scripts/sembrar-evento-recibi-test.cjs
+        run: node scripts/crear-admin-test.cjs
 
       - name: Borrar credenciales
         if: always()

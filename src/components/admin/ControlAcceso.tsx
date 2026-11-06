@@ -6,7 +6,7 @@ import { useAuth } from '../../context/AuthContext';
 import { useNavigate } from 'react-router-dom';
 import { Html5Qrcode } from 'html5-qrcode';
 import { Camera, X, Users, Ticket, UserPlus, LogOut, CreditCard, Banknote, Landmark, Calculator, FileDown } from 'lucide-react';
-import { registrarIngreso, resolverVariantePrecio, resolverAportacionKalian, calcularReparto, MetodoPago } from '../../lib/finanzas';
+import { registrarIngreso, resolverVariantePrecio, resolverAportacionKalian, calcularReparto, precioSlotEnPuerta, MetodoPago } from '../../lib/finanzas';
 import { normalizeDni } from '../../lib/dni';
 import { jsPDF } from 'jspdf';
 import autoTable from 'jspdf-autotable';
@@ -182,9 +182,13 @@ const ControlAcceso = ({ isPuertaMode = false }: { isPuertaMode?: boolean }) => 
     return () => unsubscribe();
   }, [eventoSeleccionado, user]);
 
-  // Construye slots virtuales para reservas legacy sin el campo `slots`
-  const slotsDesdeReserva = (r: any) => {
-    if (Array.isArray(r.slots) && r.slots.length > 0) return r.slots;
+  // Construye slots virtuales para reservas legacy sin el campo `slots`, y
+  // corrige el precio del titular con cupón en reservas anteriores al arreglo
+  // de ReservaForm (ver `precioSlotEnPuerta`).
+  const slotsDesdeReserva = (r: any, evento: any) => {
+    if (Array.isArray(r.slots) && r.slots.length > 0) {
+      return r.slots.map((s: any) => ({ ...s, precio: precioSlotEnPuerta(s, r, evento) }));
+    }
     const total = 1 + (r.acompañantes || 0);
     const precioBase = r.precioPorPersona || r.totalPagado / Math.max(1, total) || 0;
     const titular = {
@@ -232,7 +236,7 @@ const ControlAcceso = ({ isPuertaMode = false }: { isPuertaMode?: boolean }) => 
           if (eventoSeleccionado?.id !== eventoDeReserva.id) {
             setEventoSeleccionado(eventoDeReserva);
           }
-          const slots = slotsDesdeReserva(encontrada);
+          const slots = slotsDesdeReserva(encontrada, eventoDeReserva);
           if (slots.every((s: any) => s.ingresado)) {
             setMsg("❌ CUPO COMPLETO: Ya han entrado todos los asistentes de esta reserva");
           } else {
@@ -254,7 +258,7 @@ const ControlAcceso = ({ isPuertaMode = false }: { isPuertaMode?: boolean }) => 
           r.uidTitular === raw
         );
         if (encontrada) {
-          const slots = slotsDesdeReserva(encontrada);
+          const slots = slotsDesdeReserva(encontrada, eventoSeleccionado);
           if (slots.every((s: any) => s.ingresado)) {
             setMsg("❌ CUPO COMPLETO: Ya han entrado todos los asistentes de esta reserva");
           } else {
@@ -447,7 +451,9 @@ const ControlAcceso = ({ isPuertaMode = false }: { isPuertaMode?: boolean }) => 
           return null; // Ya ingresado: no duplicar
         }
 
-        slotsServidor[slotIdx] = { ...slotsServidor[slotIdx], ingresado: true };
+        // Persistimos el precio cobrado (puede venir corregido por cupón) para
+        // que la reserva cuadre con lo registrado en asistencia y finanzas.
+        slotsServidor[slotIdx] = { ...slotsServidor[slotIdx], ingresado: true, precio: slot.precio || 0 };
         const nuevosIngresados = slotsServidor.filter((s: any) => s.ingresado).length;
         const total = slotsServidor.length;
 
@@ -771,7 +777,7 @@ const ControlAcceso = ({ isPuertaMode = false }: { isPuertaMode?: boolean }) => 
         const slots = Array.isArray(r.slots) ? r.slots : [];
         const precioBase = Number(eventoSeleccionado.precio_estandar) || 0;
 
-        const precioTitular = Number(slots[0]?.precio ?? precioBase);
+        const precioTitular = slots[0] ? precioSlotEnPuerta(slots[0], r, eventoSeleccionado) : precioBase;
         const filaTitular = [
           r.nombreTitular || 'N/A',
           r.dniTitular || 'N/A',

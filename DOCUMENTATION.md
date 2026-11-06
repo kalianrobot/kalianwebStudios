@@ -56,6 +56,8 @@ En `finanzas` cada documento tiene `categoria` ∈ `'Socio' | 'Curso' | 'Evento'
 - En un **evento**, el DNI es **opcional**: solo sirve para comprobar si quien reserva es socio y aplicarle el descuento/apertura anticipada correspondiente. Sin DNI, la reserva se completa igual como invitado sin descuento.
 - En un **curso**, el DNI (junto con nombre y email) es obligatorio — el alta al curso implica alta de socio.
 - Si se introduce, el DNI debe tener ≥7 caracteres (lo exige `firestore.rules`); por debajo de eso se avisa en el propio formulario antes de enviar, sin llegar a tocar el servidor.
+- **Descuentos no acumulables**: el titular paga el mejor precio entre el de socio y el de cupón; los acompañantes pagan siempre el precio estándar. El precio aplicado queda guardado en la entrada del titular, y el cupón solo se anota en la reserva si llegó a aplicarse. Así, en puerta se cobra lo mismo que se prometió al reservar y la entrada cuenta como "Cupón" en el reparto con el artista.
+- Las reservas hechas antes de noviembre de 2026 guardaban al titular con cupón a precio estándar. El control de acceso lo corrige al abrirlas: si la reserva trae el cupón vigente del evento y el titular está pendiente de pago, cobra el precio del cupón y lo deja guardado.
 - Un invitado anónimo no puede leer la colección `reservas` (solo admin/portero/el propio titular logueado, ver SECURITY_SPEC.md invariante #6), así que la comprobación de "¿ya tengo una reserva para este evento?" y el cálculo del precio con descuento de socio se resuelven mediante Cloud Functions (`comprobarReservaDuplicada`, `calcularPrecioReserva`), no consultando Firestore directamente desde el navegador.
 
 ### 2.5 Newsletter y doble opt-in

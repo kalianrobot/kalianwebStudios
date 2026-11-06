@@ -44,7 +44,7 @@ vi.mock('firebase/firestore', () => ({
   }),
 }));
 
-import { construirCierreEvento } from '../../src/lib/informeCierreEvento';
+import { construirCierreEvento, construirRecibiArtista } from '../../src/lib/informeCierreEvento';
 
 const fecha = (isoMs: number) => new FakeTimestamp(isoMs);
 
@@ -181,5 +181,131 @@ describe('construirCierreEvento', () => {
     const cierre = await construirCierreEvento('evt-1');
 
     expect(cierre.totales.descuadre).toBe(60); // reproduce el caso del 19-sep-2026
+  });
+});
+
+describe('construirRecibiArtista', () => {
+  const evento = { precio_estandar: 16, precio_descuento: 12, precioCupon: 8 };
+  const ingreso = (variantePrecio: any, bruto: number, kalian: number, extra: any = {}) => ({
+    id: Math.random().toString(36), monto: kalian, montoBruto: bruto, montoArtista: bruto - kalian,
+    variantePrecio, metodo: 'Efectivo' as const, fecha: null, esFallbackHistorico: false, ...extra,
+  });
+  const repetir = <T,>(n: number, f: () => T) => Array.from({ length: n }, f);
+
+  it('resume por variante con descuentos de socio y cupón', () => {
+    const ingresosFinanzas = [
+      ...repetir(10, () => ingreso('estandar', 16, 5)),
+      ...repetir(4, () => ingreso('descuento_socio', 12, 5)),
+      ...repetir(2, () => ingreso('cupon', 8, 5)),
+    ];
+    const asistencias = repetir(16, () => ({ precio: 1, fecha: null }));
+
+    const r = construirRecibiArtista({ evento, ingresosFinanzas, asistencias, pagosArtista: [] });
+
+    expect(r.resumen).toEqual([
+      { variante: 'estandar', numEntradas: 10, precioMin: 16, precioMax: 16, bruto: 160, kalian: 50, artista: 110 },
+      { variante: 'descuento_socio', numEntradas: 4, precioMin: 12, precioMax: 12, bruto: 48, kalian: 20, artista: 28 },
+      { variante: 'cupon', numEntradas: 2, precioMin: 8, precioMax: 8, bruto: 16, kalian: 10, artista: 6 },
+    ]);
+    expect(r.totales).toEqual({ numEntradas: 16, bruto: 224, kalian: 80, artista: 144 });
+    expect(r.avisos).toEqual([]);
+  });
+
+  it('cuenta las entradas gratuitas desde asistencia', () => {
+    const r = construirRecibiArtista({
+      evento,
+      ingresosFinanzas: [],
+      asistencias: repetir(3, () => ({ precio: 0, fecha: null })),
+      pagosArtista: [],
+    });
+
+    expect(r.resumen).toEqual([
+      { variante: 'gratis', numEntradas: 3, precioMin: 0, precioMax: 0, bruto: 0, kalian: 0, artista: 0 },
+    ]);
+    expect(r.entradas).toHaveLength(3);
+  });
+
+  it('liquidación sin pagos previos: el pendiente es el total del artista', () => {
+    const r = construirRecibiArtista({
+      evento, ingresosFinanzas: [ingreso('estandar', 16, 5)], asistencias: [{ precio: 16, fecha: null }], pagosArtista: [],
+    });
+    expect(r.liquidacion).toEqual({ totalArtista: 11, pagado: 0, pendiente: 11 });
+  });
+
+  it('liquidación con pago previo: descuenta lo ya entregado', () => {
+    const ingresosFinanzas = repetir(16, () => ingreso('estandar', 14, 5)); // artista 9 × 16 = 144
+    const r = construirRecibiArtista({
+      evento: {},
+      ingresosFinanzas,
+      asistencias: repetir(16, () => ({ precio: 14, fecha: null })),
+      pagosArtista: [{ id: 'p1', importe: 100, metodo: 'Efectivo', fecha: null }],
+    });
+    expect(r.liquidacion).toEqual({ totalArtista: 144, pagado: 100, pendiente: 44 });
+    expect(r.avisos).toEqual([]);
+  });
+
+  it('avisa si se ha pagado más de lo que corresponde, sin pendiente negativo', () => {
+    const r = construirRecibiArtista({
+      evento: {},
+      ingresosFinanzas: [ingreso('estandar', 16, 5)],
+      asistencias: [{ precio: 16, fecha: null }],
+      pagosArtista: [{ id: 'p1', importe: 20, metodo: 'Efectivo', fecha: null }],
+    });
+    expect(r.liquidacion.pendiente).toBe(0);
+    expect(r.avisos.some(a => a.includes('superan lo que le corresponde'))).toBe(true);
+  });
+
+  it('avisa de entradas cobradas a un precio distinto del configurado', () => {
+    const r = construirRecibiArtista({
+      evento,
+      ingresosFinanzas: repetir(2, () => ingreso('cupon', 16, 5)),
+      asistencias: repetir(2, () => ({ precio: 16, fecha: null })),
+      pagosArtista: [],
+    });
+    expect(r.avisos).toEqual([
+      'Cupón: 2 entradas cobradas a un precio distinto del configurado en el evento (8.00€).',
+    ]);
+  });
+
+  it('no avisa de precio en movimientos históricos', () => {
+    const r = construirRecibiArtista({
+      evento,
+      ingresosFinanzas: [ingreso('estandar', 20, 20, { esFallbackHistorico: true })],
+      asistencias: [{ precio: 20, fecha: null }],
+      pagosArtista: [],
+    });
+    expect(r.avisos).toEqual([]);
+  });
+
+  it('avisa de diferencia entre entradas de pago en puerta y cobros en contabilidad', () => {
+    const r = construirRecibiArtista({
+      evento: {},
+      ingresosFinanzas: repetir(19, () => ingreso('estandar', 16, 5)),
+      asistencias: repetir(20, () => ({ precio: 16, fecha: null })),
+      pagosArtista: [],
+    });
+    expect(r.avisos).toEqual([
+      'En puerta constan 20 entradas de pago y en contabilidad 19 cobros (diferencia de 1). Revisar antes de firmar.',
+    ]);
+  });
+});
+
+describe('construirCierreEvento → recibí', () => {
+  it('lee los pagos al artista (en positivo) y excluye los borrados', async () => {
+    state.asistencia = [
+      { id: 'a1', data: { eventoId: 'evt-1', tipo: 'reserva', precio: 16, fecha: fecha(1) } },
+      { id: 'a2', data: { eventoId: 'evt-1', tipo: 'walk-in', precio: 0, fecha: fecha(2) } },
+    ];
+    state.finanzas = [
+      { id: 'f1', data: { eventoId: 'evt-1', categoria: 'Evento', monto: 5, monto_bruto: 16, monto_artista: 11, variante_precio: 'estandar', metodo: 'Efectivo', fecha: fecha(1) } },
+      { id: 'p1', data: { eventoId: 'evt-1', categoria: 'Pago Artista', monto: -6, metodo: 'Efectivo', fecha: fecha(3) } },
+      { id: 'p2', data: { eventoId: 'evt-1', categoria: 'Pago Artista', monto: -5, metodo: 'Efectivo', fecha: fecha(4), deletedAt: fecha(5) } },
+    ];
+
+    const cierre = await construirCierreEvento('evt-1');
+
+    expect(cierre.pagosArtista).toEqual([{ id: 'p1', importe: 6, metodo: 'Efectivo', fecha: new Date(3) }]);
+    expect(cierre.recibi.liquidacion).toEqual({ totalArtista: 11, pagado: 6, pendiente: 5 });
+    expect(cierre.recibi.resumen.map(f => [f.variante, f.numEntradas])).toEqual([['estandar', 1], ['gratis', 1]]);
   });
 });

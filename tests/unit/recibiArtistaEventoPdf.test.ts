@@ -36,6 +36,14 @@ function cierreBase(overrides: Partial<CierreEvento> = {}): CierreEvento {
     entradasWalkIn: [],
     reservasNoShow: [],
     ingresosFinanzas: [],
+    pagosArtista: [],
+    recibi: {
+      entradas: [],
+      resumen: [],
+      totales: { numEntradas: 0, bruto: 0, kalian: 0, artista: 0 },
+      liquidacion: { totalArtista: 0, pagado: 0, pendiente: 0 },
+      avisos: [],
+    },
     totales: {
       porMetodo: {},
       totalCaja: 0,
@@ -76,14 +84,77 @@ describe('generarRecibiArtistaEventoPdf', () => {
     expect(linea?.[0]).toBe('Artista: Los Improbables');
   });
 
-  it('muestra los totales bruto/kalian/artista', () => {
+  it('muestra la liquidación y rellena el recibí con el pendiente', () => {
     generarRecibiArtistaEventoPdf(cierreBase({
-      totales: { porMetodo: {}, totalCaja: 1152, totalAsistencia: 72, descuadre: 0, totalBruto: 1152, totalKalian: 360, totalArtista: 792, hayHistoricoFallback: false },
+      recibi: {
+        entradas: [],
+        resumen: [],
+        totales: { numEntradas: 0, bruto: 0, kalian: 0, artista: 0 },
+        liquidacion: { totalArtista: 144, pagado: 100, pendiente: 44 },
+        avisos: [],
+      },
     }));
 
-    expect(mockDoc.text).toHaveBeenCalledWith('Bruto total: 1152.00€', 14, expect.any(Number));
-    expect(mockDoc.text).toHaveBeenCalledWith('Kalian total: 360.00€', 14, expect.any(Number));
-    expect(mockDoc.text).toHaveBeenCalledWith('Artista total: 792.00€', 14, expect.any(Number));
+    expect(mockDoc.text).toHaveBeenCalledWith('Total que corresponde al artista: 144.00€', 14, expect.any(Number));
+    expect(mockDoc.text).toHaveBeenCalledWith('Pagos ya entregados: 100.00€', 14, expect.any(Number));
+    expect(mockDoc.text).toHaveBeenCalledWith('Pendiente de pago: 44.00€', 14, expect.any(Number));
+    expect(mockDoc.splitTextToSize).toHaveBeenCalledWith(
+      'Recibí de Kalian HKG la cantidad de 44.00€ en concepto de caché del evento "Jazz Night".',
+      expect.any(Number)
+    );
+  });
+
+  it('pinta la tabla resumen por tipo con fila de totales', async () => {
+    const autoTable = (await import('jspdf-autotable')).default as unknown as ReturnType<typeof vi.fn>;
+    generarRecibiArtistaEventoPdf(cierreBase({
+      recibi: {
+        entradas: [],
+        resumen: [
+          { variante: 'descuento_socio', numEntradas: 4, precioMin: 12, precioMax: 12, bruto: 48, kalian: 20, artista: 28 },
+          { variante: 'cupon', numEntradas: 2, precioMin: 8, precioMax: 16, bruto: 24, kalian: 10, artista: 14 },
+        ],
+        totales: { numEntradas: 6, bruto: 72, kalian: 30, artista: 42 },
+        liquidacion: { totalArtista: 42, pagado: 0, pendiente: 42 },
+        avisos: [],
+      },
+    }));
+
+    const opciones = autoTable.mock.calls[0][1];
+    expect(opciones.body).toEqual([
+      ['Soci@', '4', '12.00€', '48.00€', '20.00€', '28.00€'],
+      ['Cupón', '2', '8.00€ – 16.00€', '24.00€', '10.00€', '14.00€'],
+    ]);
+    expect(opciones.foot).toEqual([['Total', '6', '', '72.00€', '30.00€', '42.00€']]);
+  });
+
+  it('muestra los avisos de control solo cuando los hay', () => {
+    generarRecibiArtistaEventoPdf(cierreBase());
+    expect(mockDoc.text).not.toHaveBeenCalledWith('Avisos de control', 14, expect.any(Number));
+
+    vi.clearAllMocks();
+    generarRecibiArtistaEventoPdf(cierreBase({
+      recibi: {
+        entradas: [],
+        resumen: [],
+        totales: { numEntradas: 0, bruto: 0, kalian: 0, artista: 0 },
+        liquidacion: { totalArtista: 0, pagado: 0, pendiente: 0 },
+        avisos: ['Cupón: 2 entradas cobradas a un precio distinto del configurado en el evento (8.00€).'],
+      },
+    }));
+    expect(mockDoc.text).toHaveBeenCalledWith('Avisos de control', 14, expect.any(Number));
+  });
+
+  it('no incluye nombres ni DNIs de asistentes', () => {
+    generarRecibiArtistaEventoPdf(cierreBase({
+      entradasQR: [{ id: 'a1', nombre: 'Ana Pérez', dni: '12345678Z', tipo: 'reserva', precio: 16, fecha: null }],
+      reservasNoShow: [{ reservaId: 'r1', slotIdx: 0, nombre: 'Luis Gómez', dni: '87654321X', tipo: 'titular', canal: 'invitado', precio: 16, estimado: false }],
+    }));
+
+    const textos = JSON.stringify([...mockDoc.text.mock.calls, ...mockDoc.splitTextToSize.mock.calls]);
+    expect(textos).not.toContain('Ana Pérez');
+    expect(textos).not.toContain('12345678Z');
+    expect(textos).not.toContain('Luis Gómez');
+    expect(textos).not.toContain('87654321X');
   });
 
   it('añade el aviso de datos históricos cuando hayHistoricoFallback es true', () => {
@@ -111,14 +182,26 @@ describe('generarRecibiArtistaEventoPdf', () => {
     expect(mockDoc.text).toHaveBeenCalledWith('DNI del artista', 110, expect.any(Number));
   });
 
-  it('etiqueta la variante de precio en la fila de cada entrada', () => {
+  it('incluye el anexo con cada entrada, también las gratuitas', async () => {
+    const autoTable = (await import('jspdf-autotable')).default as unknown as ReturnType<typeof vi.fn>;
     generarRecibiArtistaEventoPdf(cierreBase({
-      ingresosFinanzas: [
-        { id: 'f1', monto: 5, montoBruto: 16, montoArtista: 11, variantePrecio: 'descuento_socio', metodo: 'Efectivo', fecha: null, esFallbackHistorico: false },
-      ],
+      recibi: {
+        entradas: [
+          { fecha: null, variante: 'descuento_socio', bruto: 12, kalian: 5, artista: 7, esFallbackHistorico: false },
+          { fecha: null, variante: 'gratis', bruto: 0, kalian: 0, artista: 0, esFallbackHistorico: false },
+        ],
+        resumen: [],
+        totales: { numEntradas: 2, bruto: 12, kalian: 5, artista: 7 },
+        liquidacion: { totalArtista: 7, pagado: 0, pendiente: 7 },
+        avisos: [],
+      },
     }));
 
-    // jspdf-autotable está mockeado; comprobamos que se generó el body vía el mock de autotable importado.
-    expect(mockDoc.lastAutoTable.finalY).toBeGreaterThan(40);
+    expect(mockDoc.text).toHaveBeenCalledWith('Anexo: detalle de entradas', 14, 20);
+    const anexo = autoTable.mock.calls[1][1];
+    expect(anexo.body).toEqual([
+      ['—', 'Soci@', '12.00€', '5.00€', '7.00€'],
+      ['—', 'Gratis', '0.00€', '0.00€', '0.00€'],
+    ]);
   });
 });

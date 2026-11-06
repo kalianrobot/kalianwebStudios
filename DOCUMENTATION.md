@@ -161,9 +161,23 @@ dos botones:
   descuadre (caja ≠ suma de precios de asistencia), lo resalta para que se
   investigue antes de liquidar con el artista. Incluye DNIs de no-shows —
   no se comparte con nadie fuera del staff.
-- **Recibí para el artista**: PDF para firmar con el artista. Desglose
-  entrada a entrada (fecha, variante, bruto, Kalian, artista) y totales, sin
-  ningún dato personal de asistentes. Trae al final la línea de firma y DNI.
+- **Recibí para el artista**: PDF para firmar con el artista, sin ningún
+  dato personal de asistentes. Contiene:
+  - **Resumen por tipo de entrada** (estándar, soci@, cupón, puerta, puerta
+    soci@, gratis): cuántas entradas, a qué precio, bruto, parte Kalian y
+    parte del artista, con totales. Las invitaciones y entradas gratis
+    también cuentan.
+  - **Liquidación**: total del artista, pagos ya entregados y pendiente. La
+    frase "Recibí la cantidad de…" sale con el pendiente. Para que sea
+    correcto, **cada pago al artista se apunta con "+ Pago artista"** en
+    Contabilidad (ver abajo). Orden habitual: descargar el Recibí, pagar,
+    que firme y apuntar el pago.
+  - **Avisos de control**, solo si algo no cuadra: entradas cobradas a un
+    precio distinto del de la ficha del evento, diferencia entre las
+    entradas de pago registradas en puerta y los cobros en contabilidad, o
+    pagos al artista por encima de lo que le corresponde. Revísalos antes
+    de firmar.
+  - Firma y DNI del artista, y un **anexo** con todas las entradas una a una.
 
 **Contabilidad** (`/staff/contabilidad`) ya muestra, en la fila de cada
 evento y en cada entrada expandida, el desglose `Bruto · Kalian · Artista`.

@@ -264,8 +264,16 @@ Dos PDFs client-side (`src/lib/informeCierreEventoPdf.ts`,
 - **Informe de cierre** (interno, staff): reconcilia asistencia QR, no-shows,
   walk-in y caja por método de pago; señala el descuadre si lo hay. Contiene
   datos personales (DNI de no-shows).
-- **Recibí del artista** (externo, para firmar): desglose bruto/Kalian/
-  artista por entrada y totales, sin datos personales de asistentes.
+- **Recibí del artista** (externo, para firmar), datos en
+  `construirRecibiArtista()`: resumen por variante de precio (nº, precio
+  unitario o rango, bruto, Kalian, artista + totales), liquidación (total
+  artista − pagos `'Pago Artista'` del evento = pendiente, que rellena la
+  frase de recibí), avisos de control (precio cobrado distinto del
+  configurado para la variante; nº de entradas de pago en
+  `asistencia_eventos` ≠ nº de movimientos `'Evento'` en `finanzas`; pagos
+  que superan lo debido) y anexo entrada a entrada. Las entradas a 0 € no
+  generan `finanzas`, así que se cuentan como `gratis` desde
+  `asistencia_eventos` (`precio == 0`). Sin datos personales de asistentes.
 
 ---
 

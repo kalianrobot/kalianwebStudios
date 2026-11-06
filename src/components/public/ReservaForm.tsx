@@ -289,11 +289,16 @@ const ReservaForm = ({ item, alCerrar }: ReservaFormProps) => {
 
       // 2. VERIFICACIÓN DE SOCIO (Ya calculada en precioCalculado)
       const esSocioReal = precioCalculado.esSocio;
+      const aplicadoCupon = precioCalculado.esClave;
 
       // 3. CÁLCULO DE SLOTS
+      // El titular lleva el precio del descuento que realmente se le aplicó
+      // (socio o cupón, no acumulables). Antes el cupón no se guardaba aquí y en
+      // puerta se cobraba el precio estándar.
       const slots = [];
       const precioSocio = item.tiene_descuento ? Number(item.precio_descuento) : 0;
-      const precioTitular = esSocioReal ? precioSocio : precioBase;
+      const precioCupon = Number(item.precioCupon) || 0;
+      const precioTitular = esSocioReal ? precioSocio : aplicadoCupon ? precioCupon : precioBase;
 
       slots.push({
         dni: dniUpper || 'INVITADO',
@@ -358,7 +363,9 @@ const ReservaForm = ({ item, alCerrar }: ReservaFormProps) => {
         esCurso: esCurso,
         acompañantes: Number(form.acompañantes),
         asistentes_ingresados: 0,
-        cuponUsado: claveValida ? claveInput : null,
+        // Solo si el cupón llegó a aplicarse: si el precio de socio era mejor, o el
+        // evento no tiene precio de cupón, la entrada no es de variante 'cupon'.
+        cuponUsado: aplicadoCupon ? claveInput : null,
         esSocio: esSocioReal,
         precioVerificado
       };

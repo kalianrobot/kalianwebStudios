@@ -1,0 +1,47 @@
+name: Sembrar evento de prueba del Recibí (TEST)
+
+# Temporal: se ejecuta al hacer push a esta rama y escribe SOLO en el proyecto
+# de test. No se mergea. Ver scripts/sembrar-evento-recibi-test.cjs.
+
+on:
+  push:
+    branches: [claude/sembrar-recibi-test]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: preview-test-env
+  cancel-in-progress: false
+
+jobs:
+  sembrar:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: 'npm'
+          cache-dependency-path: functions/package-lock.json
+
+      - name: Instalar firebase-admin (functions)
+        working-directory: functions
+        run: npm ci
+
+      - name: Credenciales TEST
+        env:
+          SA_TEST: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_TEST }}
+        run: printf '%s' "$SA_TEST" > "$RUNNER_TEMP/test.json"
+
+      - name: Sembrar
+        env:
+          NODE_PATH: functions/node_modules
+          TARGET_PROJECT: ${{ vars.FIREBASE_TEST_PROJECT_ID }}
+          TARGET_CREDENTIALS: ${{ runner.temp }}/test.json
+        run: node scripts/sembrar-evento-recibi-test.cjs
+
+      - name: Borrar credenciales
+        if: always()
+        run: rm -f "$RUNNER_TEMP/test.json"

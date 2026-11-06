@@ -161,7 +161,199 @@ async function main() {
   });
 
   await batch.commit();
-  console.log(`Evento ${EVENTO_ID} sembrado en ${PROJECT}:`, conteo, '+1 entrada sin cobro, +1 pago artista de 50 €');
+  console.log(`Evento ${EVENTO_ID} sembrado en ${PROJECT}:`, JSON.stringify(conteo), '+1 entrada sin cobro, +1 pago artista de 50 €');
+
+  await sembrarEventoCompleto();
+}
+
+/**
+ * Evento 2: flujo completo y SIN errores, reproduciendo lo que escriben
+ * ReservaForm (reservas con slots) y ControlAcceso (asistencia + finanzas).
+ * El Recibí debe salir sin avisos y el cierre sin descuadre.
+ */
+const EVENTO2_ID = '2026-11-05-prueba-recibi-completo';
+const INICIO2 = new Date('2026-11-05T21:00:00+01:00');
+const ts2 = (min) => Timestamp.fromDate(new Date(INICIO2.getTime() + min * 60000));
+
+const evento2 = {
+  titulo: 'PRUEBA 2 - Noche de jazz inventada',
+  descripcion: 'Evento de prueba para el Recibí del artista. No es real.',
+  fecha: '2026-11-05T21:00',
+  fecha_fin: '2026-11-05T23:30',
+  hora_fin: '23:30',
+  categoria: 'musica',
+  sala: 'Kalian Hub',
+  artista: 'Trío Ficticio',
+  aforo_maximo: 50,
+  max_acompanantes: 3,
+  precio_estandar: 15,
+  tiene_descuento: true,
+  precio_descuento: 10,
+  cupon: 'JAZZ',
+  precioCupon: 9,
+  fechaCupon: '2026-10-15T00:00',
+  aportacion_kalian_estandar: 6,
+  aportacion_kalian_descuento: 4,
+  aportacion_kalian_cupon: 3,
+  imagenUrl: '',
+};
+
+const APORT2 = { estandar: 6, walkin_estandar: 6, descuento_socio: 4, walkin_socio: 4, cupon: 3 };
+
+// Reservas: [id, ticket, cupón, método, slots[{tipo, estado, precio, entra}]]
+const reservas2 = [
+  ['r1', 'PRB001', null, 'Tarjeta', [
+    { tipo: 'titular', estado: 'pendiente', precio: 15, entra: true },
+    { tipo: 'acompañante', estado: 'pendiente', precio: 15, entra: true },
+    { tipo: 'acompañante', estado: 'pendiente', precio: 15, entra: true },
+  ]],
+  ['r2', 'PRB002', 'JAZZ', 'Efectivo', [
+    { tipo: 'titular', estado: 'pendiente', precio: 9, entra: true },
+    { tipo: 'acompañante', estado: 'pendiente', precio: 15, entra: true },
+  ]],
+  ['r3', 'PRB003', null, 'Efectivo', [
+    { tipo: 'titular', estado: 'validado_socio', precio: 10, entra: true },
+    { tipo: 'acompañante', estado: 'pendiente', precio: 15, entra: true },
+  ]],
+  ['r4', 'PRB004', 'JAZZ', 'Transferencia', [
+    { tipo: 'titular', estado: 'pendiente', precio: 9, entra: true },
+  ]],
+  ['r5', 'PRB005', null, 'Tarjeta', [
+    { tipo: 'titular', estado: 'validado_socio', precio: 10, entra: true },
+  ]],
+  ['r6', 'PRB006', null, 'Efectivo', [
+    { tipo: 'titular', estado: 'pendiente', precio: 15, entra: false },
+  ]],
+  ['r7', 'PRB007', null, 'Efectivo', [
+    { tipo: 'titular', estado: 'pendiente', precio: 15, entra: true },
+    { tipo: 'acompañante', estado: 'pendiente', precio: 15, entra: false },
+  ]],
+  // Invitación: reserva a 0 €
+  ['r8', 'PRB008', null, 'Efectivo', [
+    { tipo: 'titular', estado: 'pendiente', precio: 0, entra: true },
+  ]],
+];
+
+const variante2 = ({ precio, origen, esSocio, esCupon }) => {
+  if (precio <= 0) return 'gratis';
+  if (origen === 'walkin') return esSocio ? 'walkin_socio' : 'walkin_estandar';
+  if (esSocio) return 'descuento_socio';
+  if (origen === 'reserva' && esCupon) return 'cupon';
+  return 'estandar';
+};
+
+async function sembrarEventoCompleto() {
+  for (const col of ['asistencia_eventos', 'finanzas', 'reservas']) {
+    const snap = await db.collection(col).where('eventoId', '==', EVENTO2_ID).get();
+    const b = db.batch();
+    snap.docs.forEach(d => b.delete(d.ref));
+    if (!snap.empty) await b.commit();
+  }
+
+  const batch = db.batch();
+  let min = 0;
+  let aforoActual = 0;
+  let aforoReservado = 0;
+  const conteo = {};
+
+  const cobrar = (id, { precio, variante, metodo, socioId, concepto }) => {
+    conteo[variante] = (conteo[variante] || 0) + 1;
+    if (precio <= 0) return;
+    const kalian = Math.min(APORT2[variante], precio);
+    batch.set(db.collection('finanzas').doc(id), {
+      eventoId: EVENTO2_ID, categoria: 'Evento', concepto,
+      monto: kalian, monto_bruto: precio, monto_artista: precio - kalian, variante_precio: variante,
+      metodo, socio_id: socioId || 'anonimo', staff_id: 'script-prueba', fecha: ts2(min), deletedAt: null,
+    });
+  };
+
+  reservas2.forEach(([rid, ticket, cupon, metodo, slots], ri) => {
+    const reservaId = `prueba2-${rid}`;
+    const slotsGuardados = slots.map((s, si) => {
+      const esTitular = si === 0;
+      const nombre = esTitular ? `Titular prueba ${ri + 1}` : `Acompañante ${si} prueba ${ri + 1}`;
+      const dni = esTitular ? `PRUEBA${String(ri + 1).padStart(2, '0')}` : null;
+      const socioId = s.estado === 'validado_socio' ? `SOCIOPRB${ri + 1}` : null;
+      if (s.entra) {
+        min++;
+        aforoActual++;
+        const id = `prueba2-${rid}-s${si}`;
+        const esSocio = s.estado === 'validado_socio';
+        batch.set(db.collection('asistencia_eventos').doc(id), {
+          eventoId: EVENTO2_ID, reservaId, ticketID: ticket, slotTipo: s.tipo,
+          slotNombre: nombre, slotDni: dni, socioId, fecha: ts2(min), precio: s.precio,
+          tipo: esSocio ? 'reserva_socio' : 'reserva',
+        });
+        cobrar(id, {
+          precio: s.precio,
+          variante: variante2({ precio: s.precio, origen: 'reserva', esSocio, esCupon: esTitular && !!cupon }),
+          metodo, socioId,
+          concepto: `Entrada Evento: ${evento2.titulo} (${s.tipo}${esSocio ? ' Soci@' : ''})`,
+        });
+      } else {
+        aforoReservado++;
+      }
+      return {
+        tipo: s.tipo, estado: s.estado, precio: s.precio, ingresado: s.entra,
+        ...(esTitular ? { nombre, dni, email: `prueba${ri + 1}@example.com` } : {}),
+        ...(socioId ? { socio_id: socioId, socio_nombre: nombre } : {}),
+      };
+    });
+    const ingresados = slotsGuardados.filter(s => s.ingresado).length;
+    batch.set(db.collection('reservas').doc(reservaId), {
+      eventoId: EVENTO2_ID, eventoTitulo: evento2.titulo, categoria: 'musica',
+      uidTitular: 'invitado', dniTitular: `PRUEBA${String(ri + 1).padStart(2, '0')}`,
+      nombreTitular: `Titular prueba ${ri + 1}`, emailTitular: `prueba${ri + 1}@example.com`,
+      ticketID: ticket, numPersonas: slots.length,
+      totalPagar: slots.reduce((acc, s) => acc + s.precio, 0),
+      totalPendiente: slotsGuardados.reduce((acc, s) => acc + (!s.ingresado && s.estado === 'pendiente' ? s.precio : 0), 0),
+      fechaReserva: '2026-10-25T10:00:00.000Z', fechaActividad: evento2.fecha,
+      slots: slotsGuardados, esCurso: false, acompañantes: slots.length - 1,
+      asistentes_ingresados: ingresados, estado: ingresados >= slots.length ? 'validado' : 'pendiente',
+      cuponUsado: cupon, esSocio: slots[0].estado === 'validado_socio', precioVerificado: true,
+    });
+  });
+
+  // Socios que entran con el carnet (sin reserva): precio de socio.
+  for (let i = 1; i <= 2; i++) {
+    min++; aforoActual++;
+    const id = `prueba2-carnet-${i}`;
+    batch.set(db.collection('asistencia_eventos').doc(id), {
+      eventoId: EVENTO2_ID, socioId: `SOCIOCARNET${i}`, nombre: `Socio carnet prueba ${i}`,
+      fecha: ts2(min), precio: 10, tipo: 'socio_carnet',
+    });
+    cobrar(id, { precio: 10, variante: 'descuento_socio', metodo: 'Efectivo', socioId: `SOCIOCARNET${i}`, concepto: `Entrada Evento: ${evento2.titulo} (Soci@)` });
+  }
+
+  // Puerta sin reserva: 3 normales, 2 socios, 2 invitaciones gratis.
+  const walkins = [
+    [15, false, 'Efectivo'], [15, false, 'Tarjeta'], [15, false, 'Efectivo'],
+    [10, true, 'Efectivo'], [10, true, 'Tarjeta'],
+    [0, false, null], [0, false, null],
+  ];
+  walkins.forEach(([precio, esSocio, metodo], i) => {
+    min++; aforoActual++;
+    const id = `prueba2-puerta-${i + 1}`;
+    batch.set(db.collection('asistencia_eventos').doc(id), {
+      eventoId: EVENTO2_ID, tipo: 'walk-in', fecha: ts2(min), staff: 'portero', precio,
+      ...(esSocio ? { socioId: `SOCIOPUERTA${i}`, nombre: `Socio puerta prueba ${i}` } : {}),
+    });
+    cobrar(id, {
+      precio, variante: variante2({ precio, origen: 'walkin', esSocio }), metodo,
+      socioId: esSocio ? `SOCIOPUERTA${i}` : null,
+      concepto: `Entrada Puerta: ${evento2.titulo} (Walk-in${esSocio ? ' Soci@' : ''})`,
+    });
+  });
+
+  // Adelanto de 30 € al artista.
+  batch.set(db.collection('finanzas').doc('prueba2-pago-artista'), {
+    eventoId: EVENTO2_ID, categoria: 'Pago Artista', concepto: `Pago artista: ${evento2.titulo}`,
+    monto: -30, metodo: 'Efectivo', staff_id: 'script-prueba', fecha: ts2(300), deletedAt: null,
+  });
+
+  batch.set(db.collection('eventos').doc(EVENTO2_ID), { ...evento2, aforo_actual: aforoActual, aforo_reservado: aforoReservado });
+  await batch.commit();
+  console.log(`Evento ${EVENTO2_ID} sembrado:`, JSON.stringify(conteo), `aforo_actual=${aforoActual} aforo_reservado=${aforoReservado}`);
 }
 
 main().catch(err => { console.error(err); process.exit(1); });

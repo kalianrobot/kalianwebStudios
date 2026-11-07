@@ -1,0 +1,34 @@
+name: Diagnóstico evento producción (solo lectura)
+
+# Temporal: recuentos agregados sin datos personales. No se mergea.
+on:
+  push:
+    branches: [claude/diagnostico-evento-prod]
+
+permissions:
+  contents: read
+
+jobs:
+  diagnostico:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: 'npm'
+          cache-dependency-path: functions/package-lock.json
+      - working-directory: functions
+        run: npm ci
+      - name: Credenciales
+        env:
+          SA_PROD: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
+        run: printf '%s' "$SA_PROD" > "$RUNNER_TEMP/prod.json"
+      - name: Diagnóstico
+        env:
+          NODE_PATH: functions/node_modules
+          SOURCE_CREDENTIALS: ${{ runner.temp }}/prod.json
+        run: node scripts/diagnostico-evento-prod.cjs
+      - name: Borrar credenciales
+        if: always()
+        run: rm -f "$RUNNER_TEMP/prod.json"

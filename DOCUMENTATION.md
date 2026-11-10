@@ -285,6 +285,19 @@ Firestore en `europe-west1`. Se recomienda configurar **exportaciones programada
 - Los residuos de pagos sin socio aparecen en Contabilidad → botón Purgar.
 - La integridad referencial entre `socios.cursos[]` y `cursos.alumnos[]` se valida en `AdminCursos` y `AdminSocios`.
 
+### 7.6 Pruebas en la web de test (QA)
+
+Para probar sin tocar datos reales, se pueden crear eventos y reservas de prueba en la web de test. La forma sencilla es pedírselo a Claude ("prepárame una prueba de puerta"): usa el agente `qa` / la skill `qa-pruebas` del repo y devuelve los tickets, qué hacer con cada uno y las cifras que deben salir en caja, cierre y Recibí.
+
+También se puede lanzar a mano: GitHub → Actions → "QA - preparar pruebas en test" → Run workflow, eligiendo el escenario. El resultado aparece en la página de la ejecución.
+
+| Escenario | Para qué |
+|---|---|
+| `puerta` | Evento de hoy con precio normal, socio y cupón y 4 reservas sin validar (incluida una de socio y una para dejar como no presentada). Sirve para probar Control de Acceso y, al día siguiente, el PDF de cierre y el Recibí del artista. |
+| `limpiar` | Borra todos los eventos de prueba (`qa-…`) con sus reservas, entradas y movimientos de caja. Los totales mensuales de la vista rápida de puerta no se revierten. |
+
+Solo escribe en el proyecto de test; nunca en producción. Los eventos de prueba se reconocen porque su título empieza por "QA" y sus tickets por "Q".
+
 ---
 
 ## 8. Glosario

@@ -1,3 +1,4 @@
+import { tieneDescuentoSocio } from './descuentoSocio';
 import { onCall, onRequest, HttpsError } from 'firebase-functions/v2/https';
 import { onDocumentDeleted } from 'firebase-functions/v2/firestore';
 import { onSchedule } from 'firebase-functions/v2/scheduler';
@@ -821,11 +822,10 @@ async function calcularPrecioInterno(params: {
     if (socioSnap.exists) {
       const hoy = new Date().toISOString().split('T')[0];
       const membresias = (socioSnap.data()?.membresias || {}) as Record<string, string>;
-      if (categoria === 'musica') {
-        esSocio = (membresias['musica'] || '') >= hoy || (membresias['local'] || '') >= hoy;
-      } else {
-        esSocio = (membresias[categoria] || '') >= hoy;
-      }
+      // Cursos: membresía de la academia del curso. Eventos: academias marcadas en el evento.
+      esSocio = esCurso
+        ? (membresias[categoria] || '') >= hoy
+        : tieneDescuentoSocio(membresias, evento, hoy);
     }
   }
 

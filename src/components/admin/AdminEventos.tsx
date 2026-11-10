@@ -6,6 +6,7 @@ import { Link, useSearchParams } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
 import { normalizeToSlug } from '../../lib/slug';
 import { APORTACION_KALIAN_DEFAULT } from '../../lib/constants';
+import { academiasDescuentoDeEvento, ACADEMIA_LOCAL } from '../../lib/descuentoSocio';
 import { construirCierreEvento } from '../../lib/informeCierreEvento';
 import { generarInformeCierreEventoPdf } from '../../lib/informeCierreEventoPdf';
 import { generarRecibiArtistaEventoPdf } from '../../lib/recibiArtistaEventoPdf';
@@ -29,6 +30,7 @@ ENTRADA HASTA LAS 00:00. RESERVAS DISPONIBLES HASTA COMPLETAR AFORO.`;
     sala: 'SALA GRANDE',
     precio_estandar: '',
     categoria: 'musica',
+    academias_descuento: academiasDescuentoDeEvento({ categoria: 'musica' }) as string[],
     aforo_maximo: '50',
     aforo_reservado: 0,
     aforo_actual: 0,
@@ -56,6 +58,24 @@ ENTRADA HASTA LAS 00:00. RESERVAS DISPONIBLES HASTA COMPLETAR AFORO.`;
   const [editando, setEditando] = useState<string | null>(null);
   const [msg, setMsg] = useState('');
   const { user } = useAuth();
+  const [academias, setAcademias] = useState<string[]>([]);
+
+  useEffect(() => {
+    getDocs(query(collection(db, "academias"), orderBy("orden", "asc")))
+      .then(snap => setAcademias(snap.docs.map(d => String(d.data().nombre || '')).filter(Boolean)))
+      .catch(() => setAcademias([]));
+  }, []);
+
+  // Casillas de "descuento soci@s de": academias existentes + local + cualquier
+  // valor ya guardado en el evento que no coincida con una academia actual.
+  const opcionesDescuento = Array.from(new Set([...academias, ...form.academias_descuento.filter(a => a !== ACADEMIA_LOCAL), ACADEMIA_LOCAL]));
+  const toggleAcademiaDescuento = (nombre: string) => {
+    const marcado = form.academias_descuento.includes(nombre);
+    setForm({
+      ...form,
+      academias_descuento: marcado ? form.academias_descuento.filter(a => a !== nombre) : [...form.academias_descuento, nombre],
+    });
+  };
   const [conflictos, setConflictos] = useState<{fecha: string, motivo: string}[]>([]);
   const [isCheckingConflictos, setIsCheckingConflictos] = useState(false);
   const [generandoPdf, setGenerandoPdf] = useState<string | null>(null);
@@ -122,6 +142,7 @@ ENTRADA HASTA LAS 00:00. RESERVAS DISPONIBLES HASTA COMPLETAR AFORO.`;
           sala: ev.sala === 'SALA' || ev.sala === 'Toda la Sala' ? 'SALA GRANDE' : (ev.sala || 'SALA GRANDE'),
           precio_estandar: ev.precio_estandar?.toString() || '',
           categoria: ev.categoria || 'musica',
+          academias_descuento: academiasDescuentoDeEvento(ev),
           aforo_maximo: ev.aforo_maximo?.toString() || '50',
           aforo_reservado: ev.aforo_reservado || 0,
           aforo_actual: ev.aforo_actual || 0,
@@ -279,6 +300,7 @@ ENTRADA HASTA LAS 00:00. RESERVAS DISPONIBLES HASTA COMPLETAR AFORO.`;
         sala: 'SALA GRANDE',
         precio_estandar: '',
         categoria: 'musica',
+        academias_descuento: academiasDescuentoDeEvento({ categoria: 'musica' }),
         aforo_maximo: '50',
         aforo_reservado: 0,
         aforo_actual: 0,
@@ -571,12 +593,34 @@ ENTRADA HASTA LAS 00:00. RESERVAS DISPONIBLES HASTA COMPLETAR AFORO.`;
               <input type="number" placeholder="MÁX ACOMP." className="w-full p-5 bg-kalian-gold/5 rounded-2xl outline-none border border-kalian-gold/10 focus:border-kalian-gold transition-all text-kalian-cream font-bold" value={form.max_acompanantes} onChange={e => setForm({...form, max_acompanantes: e.target.value})} required />
             </div>
             <div className="space-y-2">
-              <label className="text-[9px] font-black uppercase text-kalian-gold/80 ml-4 tracking-widest">Descuento Soci@s</label>
+              <label className="text-[9px] font-black uppercase text-kalian-gold/80 ml-4 tracking-widest">Tipo de evento</label>
               <select className="w-full p-5 bg-kalian-gold/5 rounded-2xl font-black uppercase border border-kalian-gold/10 focus:border-kalian-gold transition-all text-kalian-gold" value={form.categoria} onChange={e => setForm({...form, categoria: e.target.value})}>
-                <option value="musica">Descuento Soci@s Music Is Cool</option>
-                <option value="danza">Descuento Soci@s Club De Baile</option>
-                <option value="ninguno">Ninguno (sin descuento)</option>
+                <option value="musica">Música</option>
+                <option value="danza">Danza / baile</option>
+                <option value="ninguno">Otro</option>
               </select>
+            </div>
+            <div className="space-y-2 md:col-span-4">
+              <label className="text-[9px] font-black uppercase text-kalian-gold/80 ml-4 tracking-widest">Descuento soci@s de</label>
+              <div className="flex flex-wrap gap-2 p-3 bg-kalian-gold/5 rounded-2xl border border-kalian-gold/10">
+                {opcionesDescuento.map(nombre => {
+                  const marcado = form.academias_descuento.includes(nombre);
+                  return (
+                    <button
+                      key={nombre}
+                      type="button"
+                      onClick={() => toggleAcademiaDescuento(nombre)}
+                      className={`px-4 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${marcado ? 'bg-kalian-gold text-black' : 'bg-black/20 text-kalian-gold/60 border border-kalian-gold/10'}`}
+                    >
+                      {marcado ? '✓ ' : ''}{nombre === ACADEMIA_LOCAL ? 'Local de ensayo' : nombre}
+                    </button>
+                  );
+                })}
+              </div>
+              <p className="text-[9px] text-kalian-cream/40 ml-4">
+                Soci@s con curso en vigor en las academias marcadas (o con local, si está marcado) pagan el precio soci@.
+                {!form.tiene_descuento && ' Activa "CON DESCUENTO" para que se aplique.'}
+              </p>
             </div>
             <div className="space-y-2">
               <label className="text-[9px] font-black uppercase text-kalian-gold/80 ml-4 tracking-widest">Aforo Reservado (Manual)</label>
@@ -602,6 +646,7 @@ ENTRADA HASTA LAS 00:00. RESERVAS DISPONIBLES HASTA COMPLETAR AFORO.`;
                     hora_fin: '',
                     precio_estandar: '', 
                     categoria: 'musica', 
+                    academias_descuento: academiasDescuentoDeEvento({ categoria: 'musica' }),
                     aforo_max: '50', 
                     tiene_descuento: false, 
                     precio_descuento: '', 
@@ -664,6 +709,7 @@ ENTRADA HASTA LAS 00:00. RESERVAS DISPONIBLES HASTA COMPLETAR AFORO.`;
                             sala: ev.sala === 'SALA' || ev.sala === 'Toda la Sala' ? 'SALA GRANDE' : (ev.sala || 'SALA GRANDE'),
                             precio_estandar: ev.precio_estandar?.toString() || '',
                             categoria: ev.categoria || 'musica',
+                            academias_descuento: academiasDescuentoDeEvento(ev),
                             aforo_maximo: ev.aforo_maximo?.toString() || '50',
                             aforo_reservado: ev.aforo_reservado || 0,
                             aforo_actual: ev.aforo_actual || 0,
@@ -708,6 +754,7 @@ ENTRADA HASTA LAS 00:00. RESERVAS DISPONIBLES HASTA COMPLETAR AFORO.`;
                             sala: ev.sala === 'SALA' || ev.sala === 'Toda la Sala' ? 'SALA GRANDE' : (ev.sala || 'SALA GRANDE'),
                             precio_estandar: ev.precio_estandar?.toString() || '',
                             categoria: ev.categoria || 'musica',
+                            academias_descuento: academiasDescuentoDeEvento(ev),
                             aforo_maximo: ev.aforo_maximo?.toString() || '50',
                             aforo_reservado: 0,
                             aforo_actual: 0,
@@ -795,6 +842,7 @@ ENTRADA HASTA LAS 00:00. RESERVAS DISPONIBLES HASTA COMPLETAR AFORO.`;
                             sala: ev.sala === 'SALA' || ev.sala === 'Toda la Sala' ? 'SALA GRANDE' : (ev.sala || 'SALA GRANDE'),
                             precio_estandar: ev.precio_estandar?.toString() || '',
                             categoria: ev.categoria || 'musica',
+                            academias_descuento: academiasDescuentoDeEvento(ev),
                             aforo_maximo: ev.aforo_maximo?.toString() || '50',
                             aforo_reservado: 0,
                             aforo_actual: 0,

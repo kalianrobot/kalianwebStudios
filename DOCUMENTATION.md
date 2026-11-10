@@ -51,11 +51,21 @@ En `finanzas` cada documento tiene `categoria` ∈ `'Socio' | 'Curso' | 'Evento'
 - Las reglas de Firestore solo permiten incrementos acotados (`+20` máximo por update, nunca superando `aforo_maximo`) → ver `firestore.rules → isSafeAforoUpdate()`.
 - El portero (rol `portero`) puede actualizar `aforo_actual` y `aforo_reservado` desde la tablet de puerta.
 
+### 2.4ter Descuento de socio en eventos
+
+- En la ficha de cada evento (`/staff/eventos`), "Descuento soci@s de" muestra una casilla por academia (Music is Cool, SBK CLUB, Club Flamenco…) y "Local de ensayo". Al crear un evento vienen marcadas Music is Cool y Local de ensayo; se marcan o desmarcan según el evento. El descuento solo se aplica si además el evento está "CON DESCUENTO".
+- Un socio paga el precio soci@ si tiene un curso en vigor en alguna academia marcada, o local de ensayo si esa casilla está marcada. La cuota mensual no influye.
+- La misma regla se aplica al reservar en la web, al pasar el carnet en puerta y al verificar a un socio en puerta (con reserva o sin ella). Si el socio no tiene derecho, el aviso de puerta indica qué academias dan descuento en ese evento.
+- Eventos creados antes de este cambio: los de música dan descuento a Music is Cool y local; los de danza, a SBK CLUB y local.
+- Si se cambia el nombre de una academia, las fichas de sus socios conservan el nombre anterior y dejan de coincidir: hay que marcar también ese nombre en el evento o corregir las fichas.
+
 ### 2.4bis Reserva pública (invitado, sin cuenta)
 
 - En un **evento**, el DNI es **opcional**: solo sirve para comprobar si quien reserva es socio y aplicarle el descuento/apertura anticipada correspondiente. Sin DNI, la reserva se completa igual como invitado sin descuento.
 - En un **curso**, el DNI (junto con nombre y email) es obligatorio — el alta al curso implica alta de socio.
 - Si se introduce, el DNI debe tener ≥7 caracteres (lo exige `firestore.rules`); por debajo de eso se avisa en el propio formulario antes de enviar, sin llegar a tocar el servidor.
+- **Descuentos no acumulables**: el titular paga el mejor precio entre el de socio y el de cupón; los acompañantes pagan siempre el precio estándar. El precio aplicado queda guardado en la entrada del titular, y el cupón solo se anota en la reserva si llegó a aplicarse. Así, en puerta se cobra lo mismo que se prometió al reservar y la entrada cuenta como "Cupón" en el reparto con el artista.
+- Las reservas hechas antes de noviembre de 2026 guardaban al titular con cupón a precio estándar. El control de acceso lo corrige al abrirlas: si la reserva trae el cupón vigente del evento y el titular está pendiente de pago, cobra el precio del cupón y lo deja guardado.
 - Un invitado anónimo no puede leer la colección `reservas` (solo admin/portero/el propio titular logueado, ver SECURITY_SPEC.md invariante #6), así que la comprobación de "¿ya tengo una reserva para este evento?" y el cálculo del precio con descuento de socio se resuelven mediante Cloud Functions (`comprobarReservaDuplicada`, `calcularPrecioReserva`), no consultando Firestore directamente desde el navegador.
 
 ### 2.5 Newsletter y doble opt-in
@@ -161,9 +171,23 @@ dos botones:
   descuadre (caja ≠ suma de precios de asistencia), lo resalta para que se
   investigue antes de liquidar con el artista. Incluye DNIs de no-shows —
   no se comparte con nadie fuera del staff.
-- **Recibí para el artista**: PDF para firmar con el artista. Desglose
-  entrada a entrada (fecha, variante, bruto, Kalian, artista) y totales, sin
-  ningún dato personal de asistentes. Trae al final la línea de firma y DNI.
+- **Recibí para el artista**: PDF para firmar con el artista, sin ningún
+  dato personal de asistentes. Contiene:
+  - **Resumen por tipo de entrada** (estándar, soci@, cupón, puerta, puerta
+    soci@, gratis): cuántas entradas, a qué precio, bruto, parte Kalian y
+    parte del artista, con totales. Las invitaciones y entradas gratis
+    también cuentan.
+  - **Liquidación**: total del artista, pagos ya entregados y pendiente. La
+    frase "Recibí la cantidad de…" sale con el pendiente. Para que sea
+    correcto, **cada pago al artista se apunta con "+ Pago artista"** en
+    Contabilidad (ver abajo). Orden habitual: descargar el Recibí, pagar,
+    que firme y apuntar el pago.
+  - **Avisos de control**, solo si algo no cuadra: entradas cobradas a un
+    precio distinto del de la ficha del evento, diferencia entre las
+    entradas de pago registradas en puerta y los cobros en contabilidad, o
+    pagos al artista por encima de lo que le corresponde. Revísalos antes
+    de firmar.
+  - Firma y DNI del artista, y un **anexo** con todas las entradas una a una.
 
 **Contabilidad** (`/staff/contabilidad`) ya muestra, en la fila de cada
 evento y en cada entrada expandida, el desglose `Bruto · Kalian · Artista`.

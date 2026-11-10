@@ -164,6 +164,12 @@ Convenciones:
 }
 ```
 
+### Descuento de socio en `eventos`
+
+`eventos.academias_descuento?: string[]` — nombres de academia (y `'local'` para socios con local de ensayo) cuyos socios pagan `precio_descuento`. Un socio tiene descuento si alguna clave de `socios.membresias` con fecha ≥ hoy coincide (sin mayúsculas ni espacios sobrantes) con una de la lista. Las membresías se guardan con el nombre de la academia del curso (`cursos.categoria`) al aprobar la inscripción. Si el evento no tiene el campo: `categoria 'musica'` → Music is Cool + local; `'danza'` → SBK CLUB/Club de Baile + local; otro → nadie. Claves antiguas `musica`/`danza` equivalen a Music is Cool / SBK CLUB.
+
+La regla vive en `src/lib/descuentoSocio.ts` y en su copia `functions/src/descuentoSocio.ts` (las Functions no importan de `src/`); `tests/unit/descuentoSocio.test.ts` prueba las dos. La usan `ReservaForm`, `calcularPrecioInterno` y las tres validaciones de socio de `ControlAcceso`. Los cursos siguen usando la membresía de su propia academia.
+
 ### Reparto Kalian/artista en `eventos` y `finanzas`
 
 De cada entrada de evento cobrada, Kalian retiene una **aportación** (€) y el
@@ -264,8 +270,16 @@ Dos PDFs client-side (`src/lib/informeCierreEventoPdf.ts`,
 - **Informe de cierre** (interno, staff): reconcilia asistencia QR, no-shows,
   walk-in y caja por método de pago; señala el descuadre si lo hay. Contiene
   datos personales (DNI de no-shows).
-- **Recibí del artista** (externo, para firmar): desglose bruto/Kalian/
-  artista por entrada y totales, sin datos personales de asistentes.
+- **Recibí del artista** (externo, para firmar), datos en
+  `construirRecibiArtista()`: resumen por variante de precio (nº, precio
+  unitario o rango, bruto, Kalian, artista + totales), liquidación (total
+  artista − pagos `'Pago Artista'` del evento = pendiente, que rellena la
+  frase de recibí), avisos de control (precio cobrado distinto del
+  configurado para la variante; nº de entradas de pago en
+  `asistencia_eventos` ≠ nº de movimientos `'Evento'` en `finanzas`; pagos
+  que superan lo debido) y anexo entrada a entrada. Las entradas a 0 € no
+  generan `finanzas`, así que se cuentan como `gratis` desde
+  `asistencia_eventos` (`precio == 0`). Sin datos personales de asistentes.
 
 ---
 
@@ -490,6 +504,7 @@ firebase emulators:start
 
 **Entorno de test** (proyecto Firebase separado, `vars.FIREBASE_TEST_PROJECT_ID`):
 - Flujo de ramas: los cambios entran por PR contra `test`; el paso a producción es un PR `test` → `main` que puede abrir el gerente (o su IA) y que solo aprueba y mergea el responsable técnico.
+- Configuración del cliente: `src/lib/firebaseConfig.ts` usa las variables `VITE_FIREBASE_*` del build cuando vienen informadas (test y preview inyectan las del proyecto de test) y, si no, `firebase-applet-config.json` (producción). Antes el cliente ignoraba esas variables y la web de test y las previews leían y escribían en la base de datos de producción.
 - Web de pruebas fija (`.github/workflows/deploy-test.yml`): tras CI verde en un push a `test`, despliega hosting (canal live) + functions + reglas al proyecto de test. Comparte el grupo de concurrencia `preview-test-env` con preview y copia de datos.
 - Aviso de documentación (`.github/workflows/aviso-docs.yml`): en PR contra `main` o `test`, si cambia `src/` o `functions/src/` (sin contar `src/i18n/` ni tests) y no cambia ningún `*.md` de la raíz ni `openspec/`, emite un warning y un único comentario en el PR. No bloquea el merge.
 - Preview por PR (`.github/workflows/preview.yml`): cada PR contra `main` o `test` despliega functions + reglas al proyecto de test y el front a un canal de preview de Hosting (URL comentada en el PR, caduca a los 7 días). Secretos: `FIREBASE_SERVICE_ACCOUNT_TEST`, `TEST_VITE_FIREBASE_*`. Los secretos de Brevo del proyecto de test tienen valores ficticios: en test no se envían emails.

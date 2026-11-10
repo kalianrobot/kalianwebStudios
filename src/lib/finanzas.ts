@@ -63,6 +63,26 @@ export const resolverVariantePrecio = (opts: {
   return 'estandar';
 };
 
+/**
+ * Precio que debe cobrarse en puerta por un slot de reserva.
+ *
+ * Las reservas creadas antes de corregir `ReservaForm` guardaban al titular con
+ * el precio estándar aunque se le había aplicado el cupón (el `totalPagar` sí lo
+ * reflejaba). Si el titular sigue pendiente, la reserva trae el cupón vigente del
+ * evento y su precio es menor que el guardado, se cobra el precio del cupón.
+ * En cualquier otro caso devuelve el precio guardado en el slot.
+ */
+export const precioSlotEnPuerta = (slot: any, reserva: any, evento: any): number => {
+  const precioGuardado = Number(slot?.precio) || 0;
+  if (slot?.tipo !== 'titular' || slot?.estado !== 'pendiente') return precioGuardado;
+  const cuponReserva = String(reserva?.cuponUsado || '').trim().toUpperCase();
+  const cuponEvento = String(evento?.cupon || '').trim().toUpperCase();
+  if (!cuponReserva || cuponReserva !== cuponEvento) return precioGuardado;
+  const precioCupon = Number(evento?.precioCupon);
+  if (!Number.isFinite(precioCupon) || precioCupon < 0) return precioGuardado;
+  return Math.min(precioCupon, precioGuardado);
+};
+
 export const registrarIngreso = async (data: IngresoData) => {
   try {
     const { categoria, socio_id, mes, anio } = data;

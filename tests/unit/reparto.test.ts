@@ -4,6 +4,7 @@ import {
   resolverAportacionKalian,
   resolverVariantePrecio,
   segmentoDeVariante,
+  precioSlotEnPuerta,
 } from '../../src/lib/finanzas';
 import { APORTACION_KALIAN_DEFAULT } from '../../src/lib/constants';
 
@@ -120,5 +121,38 @@ describe('integración: reparto completo por variante', () => {
     const { kalian, artista } = calcularReparto(4, resolverAportacionKalian(variante, evento));
     expect(kalian).toBe(4);
     expect(artista).toBe(0);
+  });
+});
+
+describe('precioSlotEnPuerta', () => {
+  const evento = { cupon: 'TXEMA', precioCupon: 8, precio_estandar: 16 };
+  const titular = { tipo: 'titular', estado: 'pendiente', precio: 16 };
+
+  it('reserva antigua con cupón y titular a precio estándar → precio del cupón', () => {
+    expect(precioSlotEnPuerta(titular, { cuponUsado: 'txema ' }, evento)).toBe(8);
+  });
+
+  it('reserva nueva ya guardada con precio de cupón → sin cambios', () => {
+    expect(precioSlotEnPuerta({ ...titular, precio: 8 }, { cuponUsado: 'TXEMA' }, evento)).toBe(8);
+  });
+
+  it('sin cupón en la reserva → precio guardado', () => {
+    expect(precioSlotEnPuerta(titular, { cuponUsado: null }, evento)).toBe(16);
+  });
+
+  it('cupón que ya no coincide con el del evento → precio guardado', () => {
+    expect(precioSlotEnPuerta(titular, { cuponUsado: 'OTRO' }, evento)).toBe(16);
+  });
+
+  it('acompañante nunca lleva cupón', () => {
+    expect(precioSlotEnPuerta({ ...titular, tipo: 'acompañante' }, { cuponUsado: 'TXEMA' }, evento)).toBe(16);
+  });
+
+  it('titular validado como socio → precio guardado (descuento de socio)', () => {
+    expect(precioSlotEnPuerta({ ...titular, estado: 'validado_socio', precio: 12 }, { cuponUsado: 'TXEMA' }, evento)).toBe(12);
+  });
+
+  it('precio de cupón mayor que el guardado → no sube el precio', () => {
+    expect(precioSlotEnPuerta(titular, { cuponUsado: 'TXEMA' }, { cupon: 'TXEMA', precioCupon: 20 })).toBe(16);
   });
 });

@@ -115,6 +115,7 @@ service cloud.firestore {
           && (!data.keys().hasAny(['titulo_eu'])      || (data.titulo_eu is string      && data.titulo_eu.size() <= 200))
           && (!data.keys().hasAny(['descripcion_eu']) || (data.descripcion_eu is string && data.descripcion_eu.size() <= 2000))
           && (!data.keys().hasAny(['reglas_eu'])      || (data.reglas_eu is string      && data.reglas_eu.size() <= 2000))
+          && (!data.keys().hasAny(['academias_descuento']) || (data.academias_descuento is list && data.academias_descuento.size() <= 20))
           && isValidAportacionKalian(data, 'aportacion_kalian_estandar', 'precio_estandar')
           && isValidAportacionKalian(data, 'aportacion_kalian_descuento', 'precio_descuento')
           && isValidAportacionKalian(data, 'aportacion_kalian_cupon', 'precioCupon');

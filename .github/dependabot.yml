@@ -2,6 +2,8 @@ version: 2
 updates:
   - package-ecosystem: npm
     directory: /
+    # Los cambios entran por test (web de pruebas) y pasan a main con el PR test → main.
+    target-branch: test
     schedule:
       interval: weekly
     open-pull-requests-limit: 5
@@ -15,6 +17,7 @@ updates:
 
   - package-ecosystem: npm
     directory: /functions
+    target-branch: test
     schedule:
       interval: weekly
     open-pull-requests-limit: 5

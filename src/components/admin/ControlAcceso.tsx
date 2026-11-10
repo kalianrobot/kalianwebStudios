@@ -6,6 +6,7 @@ import { useAuth } from '../../context/AuthContext';
 import { useNavigate } from 'react-router-dom';
 import { Html5Qrcode } from 'html5-qrcode';
 import { Camera, X, Users, Ticket, UserPlus, LogOut, CreditCard, Banknote, Landmark, Calculator, FileDown } from 'lucide-react';
+import { tieneDescuentoSocio, academiasDescuentoDeEvento, ACADEMIA_LOCAL } from '../../lib/descuentoSocio';
 import { registrarIngreso, resolverVariantePrecio, resolverAportacionKalian, calcularReparto, precioSlotEnPuerta, MetodoPago } from '../../lib/finanzas';
 import { normalizeDni } from '../../lib/dni';
 import { jsPDF } from 'jspdf';
@@ -313,14 +314,7 @@ const ControlAcceso = ({ isPuertaMode = false }: { isPuertaMode?: boolean }) => 
     setCargando(true);
     try {
       const hoy = new Date().toISOString().split('T')[0];
-      const expData = socioEncontrado.membresias || {};
-      let tieneDescuento = false;
-
-      if (eventoSeleccionado.categoria === 'musica') {
-        tieneDescuento = (expData['musica'] || '') >= hoy || (expData['local'] || '') >= hoy;
-      } else if (eventoSeleccionado.categoria === 'danza') {
-        tieneDescuento = (expData['danza'] || '') >= hoy;
-      }
+      const tieneDescuento = tieneDescuentoSocio(socioEncontrado.membresias, eventoSeleccionado, hoy);
 
       const precio = tieneDescuento ? (eventoSeleccionado.precio_descuento || 0) : (eventoSeleccionado.precio_estandar || 0);
 
@@ -396,15 +390,11 @@ const ControlAcceso = ({ isPuertaMode = false }: { isPuertaMode?: boolean }) => 
       }
       const sData: any = socioSnap.data();
       const hoy = new Date().toISOString().split('T')[0];
-      const exp = sData.membresias || {};
-      const cat = eventoSeleccionado.categoria;
-      let activo = false;
-      if (cat === 'musica') activo = (exp['musica'] || '') >= hoy || (exp['local'] || '') >= hoy;
-      else if (cat === 'danza') activo = (exp['danza'] || '') >= hoy;
-      else activo = Object.values(exp).some((f: any) => (f || '') >= hoy);
+      const academias = academiasDescuentoDeEvento(eventoSeleccionado).map(a => a === ACADEMIA_LOCAL ? 'Local' : a).join(', ') || 'ninguna';
+      const activo = tieneDescuentoSocio(sData.membresias, eventoSeleccionado, hoy);
 
       if (!activo) {
-        alert(`⚠️ Soci@ ${sData.nombre} sin membresía activa para ${cat}. No se aplica descuento.`);
+        alert(`⚠️ Soci@ ${sData.nombre} sin membresía en vigor en las academias con descuento de este evento (${academias}). No se aplica descuento.`);
         setCargando(false);
         return;
       }
@@ -576,15 +566,11 @@ const ControlAcceso = ({ isPuertaMode = false }: { isPuertaMode?: boolean }) => 
       }
       const sData: any = socioSnap.data();
       const hoy = new Date().toISOString().split('T')[0];
-      const exp = sData.membresias || {};
-      const cat = eventoSeleccionado.categoria;
-      let activo = false;
-      if (cat === 'musica') activo = (exp['musica'] || '') >= hoy || (exp['local'] || '') >= hoy;
-      else if (cat === 'danza') activo = (exp['danza'] || '') >= hoy;
-      else activo = Object.values(exp).some((f: any) => (f || '') >= hoy);
+      const academias = academiasDescuentoDeEvento(eventoSeleccionado).map(a => a === ACADEMIA_LOCAL ? 'Local' : a).join(', ') || 'ninguna';
+      const activo = tieneDescuentoSocio(sData.membresias, eventoSeleccionado, hoy);
 
       if (!activo) {
-        alert(`⚠️ Soci@ ${sData.nombre} sin membresía activa para ${cat}. No se aplica descuento.`);
+        alert(`⚠️ Soci@ ${sData.nombre} sin membresía en vigor en las academias con descuento de este evento (${academias}). No se aplica descuento.`);
         setCargando(false);
         return;
       }
@@ -1155,14 +1141,17 @@ const ControlAcceso = ({ isPuertaMode = false }: { isPuertaMode?: boolean }) => 
                     </div>
 
                     <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mb-8">
-                      {['musica', 'danza', 'local'].map(cat => {
+                      {Object.keys(socioEncontrado.membresias || {}).length === 0 && (
+                        <p className="sm:col-span-3 text-center text-[10px] font-bold text-red-600 uppercase">Sin membresías</p>
+                      )}
+                      {Object.keys(socioEncontrado.membresias || {}).map(cat => {
                         const exp = socioEncontrado.membresias?.[cat];
                         const hoy = new Date().toISOString().split('T')[0];
                         const activo = exp && exp >= hoy;
                         return (
                           <div key={cat} className={`p-4 rounded-2xl border text-center ${activo ? 'bg-emerald-50 border-emerald-200' : 'bg-red-50 border-red-200'}`}>
                             <p className="text-[8px] font-black uppercase tracking-widest text-black/40 mb-1">{cat}</p>
-                            <p className={`text-[10px] font-bold ${activo ? 'text-emerald-600' : 'text-red-600'}`}>{activo ? 'ACTIVO' : 'CADUCADO'}</p>
+                            <p className={`text-[10px] font-bold ${activo ? 'text-emerald-600' : 'text-red-600'}`}>{activo ? `ACTIVO hasta ${exp}` : 'CADUCADO'}</p>
                           </div>
                         );
                       })}

@@ -51,6 +51,14 @@ En `finanzas` cada documento tiene `categoria` ∈ `'Socio' | 'Curso' | 'Evento'
 - Las reglas de Firestore solo permiten incrementos acotados (`+20` máximo por update, nunca superando `aforo_maximo`) → ver `firestore.rules → isSafeAforoUpdate()`.
 - El portero (rol `portero`) puede actualizar `aforo_actual` y `aforo_reservado` desde la tablet de puerta.
 
+### 2.4ter Descuento de socio en eventos
+
+- En la ficha de cada evento (`/staff/eventos`), "Descuento soci@s de" muestra una casilla por academia (Music is Cool, SBK CLUB, Club Flamenco…) y "Local de ensayo". Al crear un evento vienen marcadas Music is Cool y Local de ensayo; se marcan o desmarcan según el evento. El descuento solo se aplica si además el evento está "CON DESCUENTO".
+- Un socio paga el precio soci@ si tiene un curso en vigor en alguna academia marcada, o local de ensayo si esa casilla está marcada. La cuota mensual no influye.
+- La misma regla se aplica al reservar en la web, al pasar el carnet en puerta y al verificar a un socio en puerta (con reserva o sin ella). Si el socio no tiene derecho, el aviso de puerta indica qué academias dan descuento en ese evento.
+- Eventos creados antes de este cambio: los de música dan descuento a Music is Cool y local; los de danza, a SBK CLUB y local.
+- Si se cambia el nombre de una academia, las fichas de sus socios conservan el nombre anterior y dejan de coincidir: hay que marcar también ese nombre en el evento o corregir las fichas.
+
 ### 2.4bis Reserva pública (invitado, sin cuenta)
 
 - En un **evento**, el DNI es **opcional**: solo sirve para comprobar si quien reserva es socio y aplicarle el descuento/apertura anticipada correspondiente. Sin DNI, la reserva se completa igual como invitado sin descuento.

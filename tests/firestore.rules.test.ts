@@ -113,6 +113,18 @@ describe('eventos', () => {
     }));
   });
 
+  it('admin puede guardar academias_descuento como lista', async () => {
+    await assertSucceeds(setDoc(doc(db(adminCtx()), 'eventos', 'evt-academias-ok'), {
+      titulo: 'Concierto', aforo_maximo: 50, academias_descuento: ['Music is Cool', 'local'],
+    }));
+  });
+
+  it('admin NO puede guardar academias_descuento como texto', async () => {
+    await assertFails(setDoc(doc(db(adminCtx()), 'eventos', 'evt-academias-ko'), {
+      titulo: 'Concierto', aforo_maximo: 50, academias_descuento: 'Music is Cool',
+    }));
+  });
+
   it('cualquiera puede actualizar solo aforo_reservado (para reservas)', async () => {
     await assertSucceeds(updateDoc(doc(db(anonCtx()), 'eventos', 'evt-1'), {
       aforo_reservado: 2,

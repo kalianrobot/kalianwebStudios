@@ -1,3 +1,4 @@
+import { tieneDescuentoSocio } from '../../lib/descuentoSocio';
 import React, { useState, useEffect } from 'react';
 import { db, auth } from '../../firebase';
 import { collection, doc, DocumentData, runTransaction, increment } from 'firebase/firestore';
@@ -61,16 +62,12 @@ const ReservaForm = ({ item, alCerrar }: ReservaFormProps) => {
     const timer = setTimeout(async () => {
       let socio = false;
 
-      // Lógica de Descuentos Cruzados (Arquitecto):
-      if (categoriaActividad === 'musica') {
-        // Music Is Cool se aplica si tiene musica O local
-        socio = esSocioActivo('musica') || esSocioActivo('local');
-      } else if (categoriaActividad === 'danza') {
-        // Club de Baile solo si tiene danza
-        socio = esSocioActivo('danza');
-      } else {
-        // Otros casos (ej. local o ninguno)
+      // Cursos: membresía de la academia del curso. Eventos: academias marcadas
+      // en el evento (ver src/lib/descuentoSocio.ts).
+      if (esCurso) {
         socio = esSocioActivo(categoriaActividad);
+      } else {
+        socio = tieneDescuentoSocio(socioData?.membresias, item, new Date().toISOString().split('T')[0]);
       }
 
       const dniUpper = form.dni.trim().toUpperCase();
@@ -159,7 +156,7 @@ const ReservaForm = ({ item, alCerrar }: ReservaFormProps) => {
     }, 400);
 
     return () => { cancelado = true; clearTimeout(timer); };
-  }, [form.dni, form.acompañantes, claveInput, socioData, esCurso, categoriaActividad, precioBase, item.id, item.tiene_descuento, item.precio_descuento, item.cupon, item.precioCupon, item.fechaCupon, item.apertura_general]);
+  }, [form.dni, form.acompañantes, claveInput, socioData, esCurso, categoriaActividad, precioBase, item.id, item.tiene_descuento, item.precio_descuento, item.cupon, item.precioCupon, item.fechaCupon, item.apertura_general, item.academias_descuento, item.categoria]);
 
   const handleFirestoreError = (error: unknown, operationType: string, path: string | null) => {
     const errInfo = {

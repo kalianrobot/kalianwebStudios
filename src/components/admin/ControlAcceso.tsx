@@ -7,6 +7,7 @@ import { useNavigate } from 'react-router-dom';
 import { Html5Qrcode } from 'html5-qrcode';
 import { Camera, X, Users, Ticket, UserPlus, LogOut, CreditCard, Banknote, Landmark, Calculator, FileDown } from 'lucide-react';
 import { tieneDescuentoSocio, academiasDescuentoDeEvento, ACADEMIA_LOCAL } from '../../lib/descuentoSocio';
+import { ajustarSlotsAcompanantes } from '../../lib/reservaInvitado';
 import { registrarIngreso, resolverVariantePrecio, resolverAportacionKalian, calcularReparto, precioSlotEnPuerta, MetodoPago } from '../../lib/finanzas';
 import { normalizeDni } from '../../lib/dni';
 import { jsPDF } from 'jspdf';
@@ -183,12 +184,21 @@ const ControlAcceso = ({ isPuertaMode = false }: { isPuertaMode?: boolean }) => 
     return () => unsubscribe();
   }, [eventoSeleccionado, user]);
 
+  const plazasAcompanantes = (r: any): number => {
+    if (typeof r.acompañantes === 'number') return r.acompañantes;
+    if (typeof r.numPersonas === 'number') return Math.max(0, r.numPersonas - 1);
+    return Math.max(0, (Array.isArray(r.slots) ? r.slots.length : 1) - 1);
+  };
+
   // Construye slots virtuales para reservas legacy sin el campo `slots`, y
   // corrige el precio del titular con cupón en reservas anteriores al arreglo
   // de ReservaForm (ver `precioSlotEnPuerta`).
   const slotsDesdeReserva = (r: any, evento: any) => {
     if (Array.isArray(r.slots) && r.slots.length > 0) {
-      return r.slots.map((s: any) => ({ ...s, precio: precioSlotEnPuerta(s, r, evento) }));
+      // Reservas cuyos acompañantes se cambiaron antes de que se ajustaran las
+      // plazas: la puerta muestra tantas plazas como personas tiene la reserva.
+      const plazas = ajustarSlotsAcompanantes(r.slots, plazasAcompanantes(r), Number(evento?.precio_estandar) || 0);
+      return plazas.map((s: any) => ({ ...s, precio: precioSlotEnPuerta(s, r, evento) }));
     }
     const total = 1 + (r.acompañantes || 0);
     const precioBase = r.precioPorPersona || r.totalPagado / Math.max(1, total) || 0;
@@ -318,15 +328,28 @@ const ControlAcceso = ({ isPuertaMode = false }: { isPuertaMode?: boolean }) => 
 
       const precio = tieneDescuento ? (eventoSeleccionado.precio_descuento || 0) : (eventoSeleccionado.precio_estandar || 0);
 
-      // Registrar asistencia
-      await addDoc(collection(db, "asistencia_eventos"), {
-        eventoId: eventoSeleccionado.id,
-        socioId: socioEncontrado.id,
-        nombre: socioEncontrado.nombre,
-        fecha: serverTimestamp(),
-        precio: precio,
-        tipo: 'socio_carnet'
+      // Registrar asistencia con ID fijo evento_socio: un mismo carnet solo puede
+      // entrar una vez por evento (antes se usaba un ID aleatorio y la
+      // comprobación de "carnet ya utilizado" nunca encontraba nada).
+      const asistenciaRef = doc(db, "asistencia_eventos", `${eventoSeleccionado.id}_${socioEncontrado.id}`);
+      const nueva = await runTransaction(db, async (tx) => {
+        if ((await tx.get(asistenciaRef)).exists()) return false;
+        tx.set(asistenciaRef, {
+          eventoId: eventoSeleccionado.id,
+          socioId: socioEncontrado.id,
+          nombre: socioEncontrado.nombre,
+          fecha: serverTimestamp(),
+          precio: precio,
+          tipo: 'socio_carnet'
+        });
+        return true;
       });
+      if (!nueva) {
+        setMsg("❌ ERROR: Carnet ya utilizado para este evento");
+        setSocioEncontrado(null);
+        setCargando(false);
+        return;
+      }
 
       // Sumar a caja
       const mesAnio = new Date().toISOString().substring(0, 7);
@@ -436,7 +459,10 @@ const ControlAcceso = ({ isPuertaMode = false }: { isPuertaMode?: boolean }) => 
         const rSnap = await tx.get(rRef);
         if (!rSnap.exists()) throw new Error("La reserva ya no existe");
 
-        const slotsServidor = [...(rSnap.data().slots || [])];
+        const rServidor = rSnap.data();
+        const slotsServidor = ajustarSlotsAcompanantes(
+          [...(rServidor.slots || [])], plazasAcompanantes(rServidor), Number(eventoSeleccionado.precio_estandar) || 0
+        );
         if (!slotsServidor[slotIdx] || slotsServidor[slotIdx].ingresado) {
           return null; // Ya ingresado: no duplicar
         }

@@ -1,0 +1,30 @@
+name: Diagnóstico acceso puerta (TEST, temporal)
+on:
+  push:
+    branches: [claude/diag-puerta-test]
+permissions:
+  contents: read
+jobs:
+  logs:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Credenciales TEST
+        env:
+          SA_TEST: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_TEST }}
+        run: printf '%s' "$SA_TEST" > "$RUNNER_TEMP/test.json"
+      - uses: google-github-actions/setup-gcloud@v2
+      - name: Logs de validatePuertaAccess
+        env:
+          PROJECT: ${{ vars.FIREBASE_TEST_PROJECT_ID }}
+        run: |
+          gcloud auth activate-service-account --key-file="$RUNNER_TEMP/test.json" --quiet
+          echo "== Errores de la function (últimas 24 h)"
+          gcloud logging read 'resource.type="cloud_run_revision" AND resource.labels.service_name="validatepuertaaccess" AND severity>=WARNING' \
+            --project "$PROJECT" --freshness=1d --limit=10 --format='value(timestamp,severity,textPayload,jsonPayload.message)' || true
+          echo "== APIs relevantes habilitadas"
+          gcloud services list --enabled --project "$PROJECT" --format='value(config.name)' | grep -E 'iamcredentials|identitytoolkit|cloudfunctions|run.googleapis' || true
+          echo "== Function desplegada"
+          gcloud functions describe validatePuertaAccess --region europe-west1 --project "$PROJECT" --format='value(state,serviceConfig.serviceAccountEmail)' || true
+      - name: Borrar credenciales
+        if: always()
+        run: rm -f "$RUNNER_TEMP/test.json"

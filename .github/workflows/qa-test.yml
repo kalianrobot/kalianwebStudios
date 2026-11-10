@@ -12,8 +12,9 @@ on:
         description: 'Qué preparar'
         type: choice
         required: true
-        default: puerta
+        default: puerta-auto
         options:
+          - puerta-auto
           - puerta
           - limpiar
       fecha:
@@ -38,11 +39,14 @@ jobs:
         with:
           node-version: '22'
           cache: 'npm'
-          cache-dependency-path: functions/package-lock.json
+          cache-dependency-path: |
+            package-lock.json
+            functions/package-lock.json
 
-      - name: Instalar firebase-admin (functions)
-        working-directory: functions
-        run: npm ci
+      - name: Instalar dependencias (raíz para tsx, functions para firebase-admin)
+        run: |
+          npm ci --ignore-scripts
+          npm --prefix functions ci
 
       - name: Credenciales TEST
         env:
@@ -56,15 +60,16 @@ jobs:
           TARGET_CREDENTIALS: ${{ runner.temp }}/test.json
           ESCENARIO: ${{ inputs.escenario }}
           FECHA: ${{ inputs.fecha }}
-        run: node scripts/qa/sembrar.cjs
+        run: node --import tsx scripts/qa/sembrar.cjs
 
       - name: Guardar resultado
-        if: success()
+        if: always()
         uses: actions/upload-artifact@v4
         with:
           name: qa-resultado
           path: qa-resultado.json
           retention-days: 14
+          if-no-files-found: ignore
 
       - name: Borrar credenciales
         if: always()

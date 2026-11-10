@@ -7,7 +7,11 @@
  * workflow .github/workflows/qa-test.yml.
  *
  * Uso: TARGET_PROJECT=<id-test> TARGET_CREDENTIALS=<sa.json> ESCENARIO=puerta [FECHA=YYYY-MM-DD] \
- *      NODE_PATH=functions/node_modules node scripts/qa/sembrar.cjs
+ *      NODE_PATH=functions/node_modules node --import tsx scripts/qa/sembrar.cjs
+ * (tsx hace falta para los escenarios que cargan módulos TypeScript de src/lib).
+ *
+ * Si el escenario devuelve `ok: false` (alguna comprobación falla), el proceso
+ * termina con código 1 y la ejecución del workflow sale en rojo.
  *
  * Salida: resumen legible en consola, qa-resultado.json y, en GitHub Actions,
  * el mismo resumen en la página de la ejecución ($GITHUB_STEP_SUMMARY).
@@ -72,6 +76,17 @@ function aMarkdown(r) {
     for (const e of r.eventos) l.push(`- ${e.eventoId} (${e.titulo}): ${JSON.stringify(e.borrados)}`);
     l.push('');
   }
+  if (r.comprobaciones?.length) {
+    l.push(r.ok ? '### Resultado: TODO CUADRA' : '### Resultado: HAY FALLOS', '');
+    l.push('| Comprobación | Esperado | Obtenido | |', '|---|---|---|---|');
+    for (const c of r.comprobaciones) l.push(`| ${c.que} | ${c.esperado} | ${c.obtenido} | ${c.ok ? 'OK' : '**FALLO**'} |`);
+    l.push('');
+  }
+  if (r.registro?.length) {
+    l.push('<details><summary>Qué se ha simulado en la puerta</summary>', '');
+    r.registro.forEach(x => l.push(`- ${x}`));
+    l.push('', '</details>', '');
+  }
   if (r.pasos?.length) { l.push('**Pasos:**'); r.pasos.forEach((p, i) => l.push(`${i + 1}. ${p}`)); l.push(''); }
   if (r.avisos?.length) { l.push('**Avisos:**'); r.avisos.forEach(a => l.push(`- ${a}`)); }
   return l.join('\n');
@@ -93,6 +108,10 @@ async function main() {
   console.log(md);
   console.log('\n--- QA-RESULTADO-JSON ---\n' + JSON.stringify(resultado) + '\n--- FIN ---');
   if (process.env.GITHUB_STEP_SUMMARY) fs.appendFileSync(process.env.GITHUB_STEP_SUMMARY, md + '\n');
+  if (resultado.ok === false) {
+    console.error('\nQA: hay comprobaciones en FALLO.');
+    process.exitCode = 1;
+  }
 }
 
 main().catch(err => { console.error(err); process.exit(1); });

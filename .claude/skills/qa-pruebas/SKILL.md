@@ -1,6 +1,6 @@
 ---
 name: qa-pruebas
-description: Prepara datos de prueba en la web de TEST de Kalian (eventos, reservas, tickets) con el workflow de QA y devuelve los tickets, los pasos y las cifras esperadas de caja, cierre y Recibí. Úsala cuando pidan "prepárame una prueba", "crea un evento de prueba con reservas", "quiero probar la puerta / la entrada / la contabilidad en test" o "limpia las pruebas".
+description: Prueba la web de TEST de Kalian con el workflow de QA, de forma automática (simula la puerta y comprueba caja, cierre y Recibí) o preparando tickets para probar a mano. Úsala cuando pidan "prueba la puerta / la entrada / la contabilidad", "prepárame una prueba", "crea un evento de prueba con reservas", "¿cuadra todo?" o "limpia las pruebas".
 ---
 
 # QA: preparar pruebas en la web de test
@@ -18,6 +18,7 @@ Quien lo pide suele ser el gerente, que no es informático. Habla sin jerga: tic
 
 | Escenario | Qué hace |
 |---|---|
+| `puerta-auto` | **Por defecto.** Crea el mismo evento que `puerta` y simula la noche entera con la misma lógica que la web (`src/lib/puerta.ts`): entran todas las reservas menos una, un socio con carnet, una entrada en puerta y una invitación. Después calcula el cierre con `src/lib/cierreEvento.ts` y comprueba caja, Kalian, artista, descuadre, avisos del Recibí, no presentados, aforo y estado de las reservas. Si algo falla, la ejecución sale en rojo. No prueba la pantalla ni `firestore.rules` (usa el Admin SDK). |
 | `puerta` | Evento del día (19:00–23:59) con precio normal 15 €, socio 10 € y cupón `QAPUERTA` 8 €; aportación Kalian 5/4/3. Cuatro reservas sin validar: invitado + 2 acompañantes, cupón + 1, una para dejar como "no presentado" y un socio real con descuento + 1. Propone además entradas en puerta sin reserva (normal, socio con carnet, invitación). |
 | `limpiar` | Borra todos los eventos `qa-*` con sus reservas, asistencias y finanzas. No revierte `caja_eventos` (totales mensuales de la vista rápida de puerta). |
 
@@ -25,15 +26,15 @@ Si piden algo que ningún escenario cubre, ver "Añadir un escenario".
 
 ## Cómo lanzarlo
 
-1. Elige escenario y fecha (`YYYY-MM-DD`; vacío = hoy en Madrid). Para probar la puerta el evento tiene que ser **hoy**: Control de Acceso solo muestra eventos del día o en curso.
+1. Elige escenario y fecha (`YYYY-MM-DD`; vacío = hoy en Madrid). Si piden "probar" sin más, usa `puerta-auto`. Usa `puerta` solo si quieren hacerlo ellos a mano en la pantalla; entonces el evento tiene que ser **hoy**, porque Control de Acceso solo muestra eventos del día o en curso.
 2. Lanza el workflow (debe existir en `main`; usa `--ref main` salvo que pidan probar la versión de `test`):
    ```bash
-   gh workflow run qa-test.yml --ref main -f escenario=puerta -f fecha=
+   gh workflow run qa-test.yml --ref main -f escenario=puerta-auto -f fecha=
    ```
 3. Espera a que termine:
    ```bash
    sleep 5; RUN=$(gh run list --workflow=qa-test.yml -L 1 --json databaseId -q '.[0].databaseId')
-   gh run watch "$RUN" --exit-status
+   gh run watch "$RUN" --exit-status   # sale con error si alguna comprobación de puerta-auto falla
    ```
 4. Lee el resultado (JSON entre marcas) o descarga el artefacto:
    ```bash
@@ -46,7 +47,9 @@ Si `gh` no tiene acceso o el workflow aún no está en `main`, dilo claramente y
 
 ## Qué entregar
 
-En lenguaje sencillo, en este orden:
+**Con `puerta-auto`:** primero el veredicto ("todo cuadra" o "falla X"). Si falla, di qué cifra se esperaba, cuál salió y la causa probable, y propón arreglarlo con un PR a `test`. Después, en una línea, qué se simuló (cuántas entradas, total cobrado). No hace falta dar tickets salvo que los pidan.
+
+**Con `puerta` (a mano):** en lenguaje sencillo, en este orden:
 
 1. Nombre del evento, hora y precios.
 2. Tabla de tickets: código, titular, personas, precio de cada entrada y qué hacer con cada uno (p. ej. "este déjalo sin entrar").
@@ -66,6 +69,7 @@ Cuando cuenten qué hicieron y qué ven, compáralo con lo esperado:
 
 1. Crea `scripts/qa/escenarios/<id>.cjs` exportando `{ id, descripcion, sembrar(db, { fecha }) }`. Usa las utilidades de `scripts/qa/comun.cjs` (prefijo `qa-`, tickets únicos, socios con descuento, reparto, borrado).
 2. Devuelve un resumen con los campos que entiende `scripts/qa/sembrar.cjs` (`evento`, `reservas`, `puertaSinReserva`, `esperado`, `pasos`, `avisos`).
-3. Reproduce exactamente lo que escribe la web (mira `ReservaForm.tsx` y `ControlAcceso.tsx`), no inventes campos.
-4. Añade el `id` a `options` en `.github/workflows/qa-test.yml` y una fila a la tabla de escenarios de esta skill.
-5. Va por PR a `test` como cualquier cambio; el workflow solo se puede lanzar con lo que haya en `main`.
+3. Reproduce exactamente lo que escribe la web. Si la lógica vive en un módulo puro de `src/lib` (como `puerta.ts`, `cierreEvento.ts`, `reparto.ts`, `slots.ts`), cárgalo con `import()` como hace `puerta-auto.cjs` (el workflow ejecuta con `tsx`) en vez de copiarla. Si está metida en una pantalla, primero sácala a `src/lib` con sus unit tests (PR aparte) y luego úsala aquí. No inventes campos.
+4. Para pruebas automáticas devuelve `ok` y `comprobaciones: [{ que, esperado, obtenido, ok }]`: `sembrar.cjs` las pinta y pone la ejecución en rojo si alguna falla.
+5. Añade el `id` a `options` en `.github/workflows/qa-test.yml` y una fila a la tabla de escenarios de esta skill.
+6. Va por PR a `test` como cualquier cambio; el workflow solo se puede lanzar con lo que haya en `main`.

@@ -14,6 +14,8 @@ const ACADEMIAS = ['Music is Cool', 'local'];
 
 module.exports = {
   id: 'puerta',
+  PRECIOS,
+  APORTACION,
   descripcion: 'Evento de hoy con reservas sin validar para probar la entrada en puerta y la caja',
 
   async sembrar(db, { fecha }) {
@@ -92,7 +94,7 @@ module.exports = {
         esSocio: d.tipo === 'socio', precioVerificado: true,
         qa: true,
       });
-      reservas.push({ ticket, qr: qrUrl(ticket), titular: d.nombre, tipo: d.tipo, personas: slots.length, entradas, nota: d.nota });
+      reservas.push({ id: `${eventoId}-r${i + 1}`, ticket, qr: qrUrl(ticket), titular: d.nombre, tipo: d.tipo, personas: slots.length, entradas, nota: d.nota });
     }
     batch.set(db.collection('eventos').doc(eventoId), { ...evento, aforo_reservado: plazas });
     await batch.commit();
@@ -118,6 +120,7 @@ module.exports = {
         si_entran_todas_las_reservas: total(todas),
         si_entran_todas_menos_el_no_presentado: total(sinNoShow),
       },
+      socioCarnet: socios[1] ? { id: socios[1].id, nombre: socios[1].nombre || '', dni: String(socios[1].dni).toUpperCase() } : null,
       avisos: socios[0] ? [] : ['No hay socios activos con descuento en test: no se ha creado la reserva de socio.'],
       pasos: [
         `Control de Acceso: elige "${evento.titulo}" y valida los tickets (escribe el código o escanea su QR).`,

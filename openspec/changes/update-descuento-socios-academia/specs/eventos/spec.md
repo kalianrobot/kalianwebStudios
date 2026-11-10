@@ -9,9 +9,13 @@ Un socio DEBE recibir el precio de socio en un evento con `tiene_descuento == tr
 - su fecha es igual o posterior a la fecha actual.
 
 Si el evento no tiene `academias_descuento`, el sistema DEBE usar la equivalencia:
-- `categoria == 'musica'` → `['Music is Cool', 'local', 'musica']`
-- `categoria == 'danza'` → `['SBK CLUB', 'danza']`
+- `categoria == 'musica'` → `['Music is Cool', 'local']`
+- `categoria == 'danza'` → `['SBK CLUB', 'Club de Baile', 'local']`
 - cualquier otro valor → sin descuento.
+
+Las claves antiguas de membresía `musica` y `danza` DEBEN tratarse como `Music is Cool` y `SBK CLUB`/`Club de Baile` respectivamente.
+
+Al crear un evento, el formulario DEBE proponer marcadas Music is Cool y "Local de ensayo"; el admin PUEDE desmarcar cualquiera.
 
 La cuota mensual NO DEBE influir en el descuento.
 
@@ -34,6 +38,10 @@ La misma regla DEBE aplicarse al calcular el precio de una reserva (cliente y `c
 #### Scenario: Evento antiguo sin el campo nuevo
 - **WHEN** un evento con `categoria = 'musica'` y sin `academias_descuento` recibe la entrada de un socio con `membresias["Music is Cool"]` en vigor
 - **THEN** se aplica el precio de socio
+
+#### Scenario: Socio de local con la casilla desmarcada
+- **WHEN** un socio solo con `membresias.local` en vigor reserva un evento con `academias_descuento = ["Music is Cool"]`
+- **THEN** paga el precio estándar
 
 #### Scenario: Diferencias de mayúsculas y espacios
 - **WHEN** la membresía del socio está guardada como `"music is cool "` y el evento marca `"Music is Cool"`

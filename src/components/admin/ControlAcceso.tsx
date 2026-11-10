@@ -38,6 +38,7 @@ const ControlAcceso = ({ isPuertaMode = false }: { isPuertaMode?: boolean }) => 
   const scannerRef = useRef<Html5Qrcode | null>(null);
   // Verificación de socio por slot
   const [verificarSocioSlot, setVerificarSocioSlot] = useState<number | null>(null);
+  const [titularSocioSugerido, setTitularSocioSugerido] = useState<{ nombre: string; precio: number } | null>(null);
   const [verifDni, setVerifDni] = useState('');
   const [verifMostrarScanner, setVerifMostrarScanner] = useState(false);
   // Walk-in con verificación de socio
@@ -183,6 +184,29 @@ const ControlAcceso = ({ isPuertaMode = false }: { isPuertaMode?: boolean }) => 
 
     return () => unsubscribe();
   }, [eventoSeleccionado, user]);
+
+  // Si el titular reservó con el DNI de un socio con descuento en este evento y
+  // la reserva no lo refleja (p. ej. reservó antes de tener el curso, o antes de
+  // que el descuento tuviera en cuenta las academias), se ofrece aplicarlo.
+  useEffect(() => {
+    setTitularSocioSugerido(null);
+    const r = reservaEncontrada;
+    const titular = r?.slots?.[0];
+    const dni = String(r?.dniTitular || '').trim().toUpperCase();
+    if (!r || !eventoSeleccionado || !titular || titular.ingresado || titular.estado !== 'pendiente' || !dni || dni === 'INVITADO') return;
+    const precioSocio = Number(eventoSeleccionado.precio_descuento);
+    if (!eventoSeleccionado.tiene_descuento || !(precioSocio < Number(titular.precio))) return;
+    let cancelado = false;
+    getDoc(doc(db, "socios", dni)).then(snap => {
+      if (cancelado || !snap.exists()) return;
+      const hoy = new Date().toISOString().split('T')[0];
+      if (tieneDescuentoSocio(snap.data().membresias, eventoSeleccionado, hoy)) {
+        setTitularSocioSugerido({ nombre: snap.data().nombre || r.nombreTitular, precio: precioSocio });
+      }
+    }).catch(() => {});
+    return () => { cancelado = true; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [reservaEncontrada?.id, reservaEncontrada?.slots?.[0]?.estado, eventoSeleccionado?.id]);
 
   const plazasAcompanantes = (r: any): number => {
     if (typeof r.acompañantes === 'number') return r.acompañantes;
@@ -1066,7 +1090,7 @@ const ControlAcceso = ({ isPuertaMode = false }: { isPuertaMode?: boolean }) => 
                         <p className="text-[10px] font-black text-kalian-gold mt-2 uppercase tracking-widest">{reservaEncontrada.eventoTitulo} • {reservaEncontrada.fechaActividad}</p>
                       </div>
                       <div className="text-right">
-                        <p className="text-[10px] font-black text-black/40 uppercase tracking-widest mb-1">Total</p>
+                        <p className="text-[10px] font-black text-black/40 uppercase tracking-widest mb-1">Personas</p>
                         <p className="text-6xl kalian-poster-text text-kalian-gold">{reservaEncontrada.slots.length}</p>
                       </div>
                     </div>
@@ -1081,6 +1105,32 @@ const ControlAcceso = ({ isPuertaMode = false }: { isPuertaMode?: boolean }) => 
                              style={{ width: `${(reservaEncontrada.slots.filter((s: any) => s.ingresado).length / reservaEncontrada.slots.length) * 100}%` }}></div>
                       </div>
                     </div>
+
+                    {titularSocioSugerido && (
+                      <div className="mb-6 rounded-2xl border-2 border-indigo-300 bg-indigo-50 p-4 flex flex-wrap items-center justify-between gap-3">
+                        <p className="text-xs font-bold text-indigo-900">
+                          El titular es soci@ con descuento en este evento ({titularSocioSugerido.nombre}). Le corresponden {titularSocioSugerido.precio}€.
+                        </p>
+                        <button
+                          onClick={() => verificarSlotComoSocio(0, reservaEncontrada.dniTitular)}
+                          disabled={cargando}
+                          className="bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-3 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all"
+                        >
+                          Aplicar precio soci@
+                        </button>
+                      </div>
+                    )}
+
+                    {(() => {
+                      const pendientes = reservaEncontrada.slots.filter((s: any) => !s.ingresado);
+                      const importe = pendientes.reduce((acc: number, s: any) => acc + (Number(s.precio) || 0), 0);
+                      return pendientes.length > 0 ? (
+                        <div className="mb-6 flex items-end justify-between rounded-2xl bg-black text-kalian-gold px-6 py-4">
+                          <span className="text-[10px] font-black uppercase tracking-widest">A cobrar si entran los {pendientes.length} pendientes</span>
+                          <span className="text-4xl kalian-poster-text">{importe}€</span>
+                        </div>
+                      ) : null;
+                    })()}
 
                     <div className="space-y-3 mb-6">
                       {reservaEncontrada.slots.map((slot: any, idx: number) => {
@@ -1121,7 +1171,7 @@ const ControlAcceso = ({ isPuertaMode = false }: { isPuertaMode?: boolean }) => 
                                       disabled={cargando}
                                       className="bg-black hover:bg-emerald-600 text-kalian-gold hover:text-white px-5 py-3 rounded-xl kalian-poster-text text-lg transition-all"
                                     >
-                                      ENTRAR
+                                      ENTRAR · {(slot.precio || 0)}€
                                     </button>
                                   </>
                                 )}
@@ -1139,16 +1189,25 @@ const ControlAcceso = ({ isPuertaMode = false }: { isPuertaMode?: boolean }) => 
                       >
                         Cancelar
                       </button>
-                      {reservaEncontrada.slots.some((s: any) => !s.ingresado) && (
-                        <button
-                          onClick={entrarTodosPendientes}
-                          disabled={cargando}
-                          className="flex-[3] bg-black text-kalian-gold py-6 rounded-2xl kalian-poster-text text-2xl hover:bg-emerald-600 hover:text-white transition-all shadow-2xl"
-                        >
-                          ENTRAR TODOS LOS PENDIENTES
-                        </button>
-                      )}
+                      {reservaEncontrada.slots.some((s: any) => !s.ingresado) && (() => {
+                        const pendientes = reservaEncontrada.slots.filter((s: any) => !s.ingresado);
+                        const importe = pendientes.reduce((acc: number, s: any) => acc + (Number(s.precio) || 0), 0);
+                        return (
+                          <button
+                            onClick={entrarTodosPendientes}
+                            disabled={cargando}
+                            className="flex-[3] bg-black text-kalian-gold py-6 rounded-2xl kalian-poster-text text-2xl hover:bg-emerald-600 hover:text-white transition-all shadow-2xl"
+                          >
+                            ENTRAN {pendientes.length} · COBRAR {importe}€
+                          </button>
+                        );
+                      })()}
                     </div>
+                    {reservaEncontrada.slots.filter((s: any) => !s.ingresado).length > 1 && (
+                      <p className="mt-4 text-center text-[10px] font-bold uppercase tracking-widest text-black/50">
+                        ¿No han venido todos? Da entrada uno a uno con ENTRAR. Quien no entre queda como no presentado en el cierre y no se cobra.
+                      </p>
+                    )}
                   </div>
                 )}
 

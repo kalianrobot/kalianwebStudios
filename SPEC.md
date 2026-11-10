@@ -349,6 +349,8 @@ Clase utilitaria global: `kalian-poster-text` para títulos grandes.
 │       └── admin/         # Admin* (gestores)
 ├── functions/             # Cloud Functions (TypeScript, Node 22)
 │   └── src/index.ts       # todas las funciones
+├── scripts/               # copiar-prod-a-test.cjs, qa/ (escenarios de datos de prueba para test)
+├── .claude/               # agents/qa.md, skills/qa-pruebas/ (QA en la web de test)
 ├── firestore.rules        # reglas de seguridad
 ├── storage.rules
 ├── firebase.json          # hosting + functions + emulators + CSP
@@ -509,6 +511,7 @@ firebase emulators:start
 - Aviso de documentación (`.github/workflows/aviso-docs.yml`): en PR contra `main` o `test`, si cambia `src/` o `functions/src/` (sin contar `src/i18n/` ni tests) y no cambia ningún `*.md` de la raíz ni `openspec/`, emite un warning y un único comentario en el PR. No bloquea el merge.
 - Preview por PR (`.github/workflows/preview.yml`): cada PR contra `main` o `test` despliega functions + reglas al proyecto de test y el front a un canal de preview de Hosting (URL comentada en el PR, caduca a los 7 días). Secretos: `FIREBASE_SERVICE_ACCOUNT_TEST`, `TEST_VITE_FIREBASE_*`. Los secretos de Brevo del proyecto de test tienen valores ficticios: en test no se envían emails.
 - Datos (`.github/workflows/copiar-prod-a-test.yml`, manual): copia Firestore de producción a test con `scripts/copiar-prod-a-test.cjs`. Producción solo se lee; test se vacía y se rellena. Datos personales (DNI, emails, nombres, teléfonos, direcciones, cuentas, fotos, textos libres) anonimizados de forma consistente, también dentro de IDs. Clave de puerta de test: `test1234`. Parámetro `admins` para dar rol admin en test.
+- QA (`.github/workflows/qa-test.yml`, manual, solo desde `main` o `test`): prepara datos de prueba en test con `scripts/qa/sembrar.cjs` según un escenario (`scripts/qa/escenarios/<id>.cjs`: `puerta`, `limpiar`). No vacía nada: crea docs con ID `qa-…` y `qa: true` (eventos, reservas con el mismo esquema que `ReservaForm`) y `limpiar` los borra junto con `asistencia_eventos`/`finanzas` del mismo `eventoId`. Devuelve tickets y cifras esperadas en el resumen de la ejecución y en el artefacto `qa-resultado`. Lo usa el agente `.claude/agents/qa.md` mediante la skill `.claude/skills/qa-pruebas/`; para añadir escenarios ver esa skill.
 
 CSP y cabeceras de seguridad: definidas en `firebase.json` (HSTS, X-Frame DENY, CSP estricta con whitelist de Brevo, Google, Firebase, ipify, mymemory).
 

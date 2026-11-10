@@ -321,7 +321,12 @@ const ControlAcceso = ({ isPuertaMode = false }: { isPuertaMode?: boolean }) => 
         const sData = socioSnap.data();
         const asistenciaRef = doc(db, "asistencia_eventos", `${eventoSeleccionado.id}_${socioSnap.id}`);
         const asistenciaSnap = await getDoc(asistenciaRef);
-        if (asistenciaSnap.exists()) {
+        const entroConReserva = !asistenciaSnap.exists() && !(await getDocs(query(
+          collection(db, "asistencia_eventos"),
+          where("eventoId", "==", eventoSeleccionado.id),
+          where("socioId", "==", socioSnap.id)
+        ))).empty;
+        if (asistenciaSnap.exists() || entroConReserva) {
           setMsg("❌ ERROR: Carnet ya utilizado para este evento");
         } else {
           setSocioEncontrado({ id: socioSnap.id, ...sData });
@@ -446,6 +451,19 @@ const ControlAcceso = ({ isPuertaMode = false }: { isPuertaMode?: boolean }) => 
         return;
       }
 
+      // Un mismo socio no puede cubrir dos plazas ni entrar también con su carnet.
+      const yaEnOtraPlaza = reservaEncontrada.slots.some((s: any, i: number) => i !== slotIdx && s.socio_id === socioSnap.id);
+      const yaEntroEnEvento = !yaEnOtraPlaza && !(await getDocs(query(
+        collection(db, "asistencia_eventos"),
+        where("eventoId", "==", eventoSeleccionado.id),
+        where("socioId", "==", socioSnap.id)
+      ))).empty;
+      if (yaEnOtraPlaza || yaEntroEnEvento) {
+        alert(`⚠️ ${sData.nombre} ya ${yaEnOtraPlaza ? 'está en otra plaza de esta reserva' : 'ha entrado en este evento'}. No se puede aplicar el descuento de nuevo.`);
+        setCargando(false);
+        return;
+      }
+
       const precioDescuento = eventoSeleccionado.precio_descuento || 0;
       const nuevosSlots = [...reservaEncontrada.slots];
       nuevosSlots[slotIdx] = {
@@ -493,7 +511,15 @@ const ControlAcceso = ({ isPuertaMode = false }: { isPuertaMode?: boolean }) => 
 
         // Persistimos el precio cobrado (puede venir corregido por cupón) para
         // que la reserva cuadre con lo registrado en asistencia y finanzas.
-        slotsServidor[slotIdx] = { ...slotsServidor[slotIdx], ingresado: true, precio: slot.precio || 0 };
+        slotsServidor[slotIdx] = {
+          ...slotsServidor[slotIdx],
+          ingresado: true,
+          precio: slot.precio || 0,
+          // Si se verificó como socio en puerta, la reserva lo guarda también.
+          ...(slot.estado === 'validado_socio'
+            ? { estado: 'validado_socio', socio_id: slot.socio_id || null, socio_nombre: slot.socio_nombre || null }
+            : {}),
+        };
         const nuevosIngresados = slotsServidor.filter((s: any) => s.ingresado).length;
         const total = slotsServidor.length;
 

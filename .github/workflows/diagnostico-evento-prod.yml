@@ -28,7 +28,7 @@ jobs:
         env:
           NODE_PATH: functions/node_modules
           SOURCE_CREDENTIALS: ${{ runner.temp }}/prod.json
-        run: node scripts/diagnostico2-prod.cjs
+        run: node scripts/simular-correccion-3110.cjs
       - name: Borrar credenciales
         if: always()
         run: rm -f "$RUNNER_TEMP/prod.json"

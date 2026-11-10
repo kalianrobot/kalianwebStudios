@@ -164,6 +164,12 @@ Convenciones:
 }
 ```
 
+### Descuento de socio en `eventos`
+
+`eventos.academias_descuento?: string[]` — nombres de academia (y `'local'` para socios con local de ensayo) cuyos socios pagan `precio_descuento`. Un socio tiene descuento si alguna clave de `socios.membresias` con fecha ≥ hoy coincide (sin mayúsculas ni espacios sobrantes) con una de la lista. Las membresías se guardan con el nombre de la academia del curso (`cursos.categoria`) al aprobar la inscripción. Si el evento no tiene el campo: `categoria 'musica'` → Music is Cool + local; `'danza'` → SBK CLUB/Club de Baile + local; otro → nadie. Claves antiguas `musica`/`danza` equivalen a Music is Cool / SBK CLUB.
+
+La regla vive en `src/lib/descuentoSocio.ts` y en su copia `functions/src/descuentoSocio.ts` (las Functions no importan de `src/`); `tests/unit/descuentoSocio.test.ts` prueba las dos. La usan `ReservaForm`, `calcularPrecioInterno` y las tres validaciones de socio de `ControlAcceso`. Los cursos siguen usando la membresía de su propia academia.
+
 ### Reparto Kalian/artista en `eventos` y `finanzas`
 
 De cada entrada de evento cobrada, Kalian retiene una **aportación** (€) y el

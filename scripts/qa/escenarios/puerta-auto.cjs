@@ -14,6 +14,7 @@ const path = require('path');
 const { pathToFileURL } = require('url');
 const { FieldValue, Timestamp } = require('firebase-admin/firestore');
 const puerta = require('./puerta.cjs');
+const { borrarEvento } = require('../comun.cjs');
 
 const SRC = path.join(__dirname, '..', '..', '..', 'src', 'lib');
 const cargar = (m) => import(pathToFileURL(path.join(SRC, `${m}.ts`)).href);
@@ -132,6 +133,10 @@ module.exports = {
     ].map(([que, esp, obt]) => ({ que, esperado: esp, obtenido: obt, ok: esp === obt }));
 
     const ok = comprobaciones.every(c => c.ok);
+
+    // Ejecución automática (push a test): si todo cuadra, no dejamos el evento.
+    const borrado = ok && process.env.QA_BORRAR_SI_OK === '1';
+    if (borrado) await borrarEvento(db, eventoId);
     return {
       ...base,
       // En modo automático no hay nada que hacer a mano: fuera las instrucciones manuales.
@@ -145,7 +150,9 @@ module.exports = {
       cierre: { porMetodo: cierre.totales.porMetodo, avisosRecibi: cierre.recibi.avisos },
       pasos: [
         ok ? 'Todo cuadra: no hay que hacer nada.' : 'Algo no cuadra: revisa las comprobaciones en FALLO.',
-        `Si quieres verlo con tus ojos: en Staff > Eventos, "${base.evento.titulo}" (mañana ya podrás descargar el PDF de cierre y el Recibí).`,
+        borrado
+          ? 'El evento de prueba se ha borrado al terminar (ejecución automática).'
+          : `Si quieres verlo con tus ojos: en Staff > Eventos, "${base.evento.titulo}" (mañana ya podrás descargar el PDF de cierre y el Recibí).`,
       ],
       avisos: [...(base.avisos || []), 'No se ha tocado caja_eventos (vista rápida mensual de puerta).'],
     };

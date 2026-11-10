@@ -289,7 +289,7 @@ Firestore en `europe-west1`. Se recomienda configurar **exportaciones programada
 
 Para probar sin tocar datos reales, se pueden crear eventos y reservas de prueba en la web de test. La forma sencilla es pedírselo a Claude ("prueba la puerta", "¿cuadra la caja?"): usa el agente `qa` / la skill `qa-pruebas` del repo. Por defecto hace la prueba **automática**: simula la noche en la puerta con la misma lógica que la web y comprueba que caja, reparto Kalian/artista, no presentados y aforo cuadran, y responde "todo cuadra" o qué falla. Si se quiere probar la pantalla a mano, devuelve los tickets, qué hacer con cada uno y las cifras que deben salir.
 
-También se puede lanzar a mano: GitHub → Actions → "QA - preparar pruebas en test" → Run workflow, eligiendo el escenario. El resultado aparece en la página de la ejecución.
+La prueba automática también se ejecuta sola cada vez que entra un cambio en `test`; si todo cuadra borra su evento, y si algo falla la ejecución sale en rojo en GitHub → Actions y deja el evento para revisarlo. También se puede lanzar a mano: GitHub → Actions → "QA - preparar pruebas en test" → Run workflow, eligiendo el escenario (el botón aparece cuando el cambio está en `main`). El resultado aparece en la página de la ejecución.
 
 | Escenario | Para qué |
 |---|---|

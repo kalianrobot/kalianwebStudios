@@ -1,11 +1,18 @@
 name: QA - preparar pruebas en test
 
-# Lanzamiento manual: Actions → "QA - preparar pruebas en test" → Run workflow.
+# Dos formas de lanzarlo:
+# - Automático: en cada push a `test` ejecuta `puerta-auto` y, si todo cuadra,
+#   borra el evento que ha creado (si falla, lo deja para poder mirarlo).
+# - Manual: Actions → "QA - preparar pruebas en test" → Run workflow. GitHub
+#   solo muestra este botón cuando el fichero está en `main` (rama por defecto);
+#   después se puede ejecutar contra `test` con `--ref test`.
 # Escribe SOLO en el proyecto de test. Ver scripts/qa/sembrar.cjs y la skill
 # .claude/skills/qa-pruebas/. El resumen (tickets, cifras esperadas, pasos)
 # aparece en la página de la ejecución y en el artefacto qa-resultado.
 
 on:
+  push:
+    branches: [test]
   workflow_dispatch:
     inputs:
       escenario:
@@ -58,8 +65,10 @@ jobs:
           NODE_PATH: functions/node_modules
           TARGET_PROJECT: ${{ vars.FIREBASE_TEST_PROJECT_ID }}
           TARGET_CREDENTIALS: ${{ runner.temp }}/test.json
-          ESCENARIO: ${{ inputs.escenario }}
+          ESCENARIO: ${{ inputs.escenario || 'puerta-auto' }}
           FECHA: ${{ inputs.fecha }}
+          # En la ejecución automática no se acumulan eventos de prueba.
+          QA_BORRAR_SI_OK: ${{ github.event_name == 'push' && '1' || '' }}
         run: node --import tsx scripts/qa/sembrar.cjs
 
       - name: Guardar resultado

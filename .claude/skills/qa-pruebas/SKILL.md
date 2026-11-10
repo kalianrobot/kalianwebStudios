@@ -26,10 +26,12 @@ Si piden algo que ningún escenario cubre, ver "Añadir un escenario".
 
 ## Cómo lanzarlo
 
+`puerta-auto` ya se ejecuta solo en cada push a `test` (y borra su evento si todo cuadra). Para ver la última: `gh run list --workflow=qa-test.yml --branch test -L 1`. Lo de abajo es para lanzarlo a demanda.
+
 1. Elige escenario y fecha (`YYYY-MM-DD`; vacío = hoy en Madrid). Si piden "probar" sin más, usa `puerta-auto`. Usa `puerta` solo si quieren hacerlo ellos a mano en la pantalla; entonces el evento tiene que ser **hoy**, porque Control de Acceso solo muestra eventos del día o en curso.
-2. Lanza el workflow (debe existir en `main`; usa `--ref main` salvo que pidan probar la versión de `test`):
+2. Lanza el workflow contra `test` (el lanzamiento manual exige que el fichero exista también en `main`; si aún no está, dilo y ofrece ver la última ejecución automática):
    ```bash
-   gh workflow run qa-test.yml --ref main -f escenario=puerta-auto -f fecha=
+   gh workflow run qa-test.yml --ref test -f escenario=puerta-auto -f fecha=
    ```
 3. Espera a que termine:
    ```bash

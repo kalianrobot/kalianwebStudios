@@ -66,6 +66,7 @@ En `finanzas` cada documento tiene `categoria` ∈ `'Socio' | 'Curso' | 'Evento'
 - Si se introduce, el DNI debe tener ≥7 caracteres (lo exige `firestore.rules`); por debajo de eso se avisa en el propio formulario antes de enviar, sin llegar a tocar el servidor.
 - **Descuentos no acumulables**: el titular paga el mejor precio entre el de socio y el de cupón; los acompañantes pagan siempre el precio estándar. El precio aplicado queda guardado en la entrada del titular, y el cupón solo se anota en la reserva si llegó a aplicarse. Así, en puerta se cobra lo mismo que se prometió al reservar y la entrada cuenta como "Cupón" en el reparto con el artista.
 - Las reservas hechas antes de noviembre de 2026 guardaban al titular con cupón a precio estándar. El control de acceso lo corrige al abrirlas: si la reserva trae el cupón vigente del evento y el titular está pendiente de pago, cobra el precio del cupón y lo deja guardado.
+- **Cambiar los acompañantes** (desde el enlace del invitado o desde `/staff/reservas`) ajusta también las plazas que ve la puerta: se quitan plazas pendientes o se añaden nuevas a precio estándar. Las plazas ya ingresadas no se tocan. Antes solo cambiaba el total y la puerta seguía mostrando las plazas antiguas (en el concierto del 31/10/2026 entró y se cobró una plaza que el titular había quitado). Las reservas que quedaron así se corrigen solas al abrirlas en puerta.
 - Un invitado anónimo no puede leer la colección `reservas` (solo admin/portero/el propio titular logueado, ver SECURITY_SPEC.md invariante #6), así que la comprobación de "¿ya tengo una reserva para este evento?" y el cálculo del precio con descuento de socio se resuelven mediante Cloud Functions (`comprobarReservaDuplicada`, `calcularPrecioReserva`), no consultando Firestore directamente desde el navegador.
 
 ### 2.5 Newsletter y doble opt-in
@@ -245,7 +246,8 @@ Acceso vía `/control-acceso`. **No requiere cuenta de usuario** — la tablet d
 
 Desde `ControlAcceso`:
 - **Selección del evento** del día.
-- **Escaneo QR**: lee `ticketID` o `uid` del carnet digital. Verifica reserva, marca asistencia, decrementa aforo.
+- **Escaneo QR**: lee `ticketID` o `uid` del carnet digital. Verifica reserva, marca asistencia, decrementa aforo. Un mismo carnet de socio solo puede entrar una vez por evento.
+- **Reserva en puerta**: la tarjeta muestra cuántas personas tiene la reserva, el precio de cada una y el importe total pendiente de cobrar. Cada botón ENTRAR indica lo que se cobra por esa persona. Si no han venido todos, se da entrada uno a uno: quien no entra queda como no presentado en el cierre y no se cobra. El botón grande indica cuántos entran y cuánto se cobra antes de pulsarlo. Si el titular es socio con descuento en ese evento y la reserva no lo reflejaba, aparece "Aplicar precio soci@". Cada invitado de la reserva se puede verificar como socio con su DNI o su carnet ("Verificar Socio"); un mismo socio no puede cubrir dos plazas ni entrar también con su carnet.
 - **Caja del evento**: registra ingresos en efectivo/tarjeta/transferencia por método de pago.
 - **Listado de Emergencia (PDF)**: botón `descargarListadoEmergencia` en `src/components/admin/ControlAcceso.tsx:655`. Genera un PDF con DNIs y estado de pago para control manual si cae internet. Crítico durante el evento.
 

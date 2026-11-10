@@ -1,0 +1,71 @@
+name: QA - preparar pruebas en test
+
+# Lanzamiento manual: Actions → "QA - preparar pruebas en test" → Run workflow.
+# Escribe SOLO en el proyecto de test. Ver scripts/qa/sembrar.cjs y la skill
+# .claude/skills/qa-pruebas/. El resumen (tickets, cifras esperadas, pasos)
+# aparece en la página de la ejecución y en el artefacto qa-resultado.
+
+on:
+  workflow_dispatch:
+    inputs:
+      escenario:
+        description: 'Qué preparar'
+        type: choice
+        required: true
+        default: puerta
+        options:
+          - puerta
+          - limpiar
+      fecha:
+        description: 'Día del evento (YYYY-MM-DD). Vacío = hoy'
+        required: false
+
+permissions:
+  contents: read
+
+concurrency:
+  group: preview-test-env
+  cancel-in-progress: false
+
+jobs:
+  qa:
+    if: github.ref == 'refs/heads/main' || github.ref == 'refs/heads/test'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: 'npm'
+          cache-dependency-path: functions/package-lock.json
+
+      - name: Instalar firebase-admin (functions)
+        working-directory: functions
+        run: npm ci
+
+      - name: Credenciales TEST
+        env:
+          SA_TEST: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_TEST }}
+        run: printf '%s' "$SA_TEST" > "$RUNNER_TEMP/test.json"
+
+      - name: Preparar escenario
+        env:
+          NODE_PATH: functions/node_modules
+          TARGET_PROJECT: ${{ vars.FIREBASE_TEST_PROJECT_ID }}
+          TARGET_CREDENTIALS: ${{ runner.temp }}/test.json
+          ESCENARIO: ${{ inputs.escenario }}
+          FECHA: ${{ inputs.fecha }}
+        run: node scripts/qa/sembrar.cjs
+
+      - name: Guardar resultado
+        if: success()
+        uses: actions/upload-artifact@v4
+        with:
+          name: qa-resultado
+          path: qa-resultado.json
+          retention-days: 14
+
+      - name: Borrar credenciales
+        if: always()
+        run: rm -f "$RUNNER_TEMP/test.json"

@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { ajustarSlotsAcompanantes, totalPendienteSlots } from '../../lib/reservaInvitado';
 import { Link } from 'react-router-dom';
 import { db } from '../../firebase';
 import {
@@ -135,6 +136,11 @@ const AdminReservas = () => {
         const totalActual = Number(reserva.totalPagar || 0);
         const precioTitular = Math.max(0, totalActual - (actuales * precioBase));
         update.totalPagar = precioTitular + (nuevoNum * precioBase);
+        // Las plazas que ve la puerta tienen que seguir al número de personas.
+        if (Array.isArray(reserva.slots) && reserva.slots.length > 0) {
+          update.slots = ajustarSlotsAcompanantes(reserva.slots, nuevoNum, precioBase);
+          update.totalPendiente = totalPendienteSlots(update.slots);
+        }
       }
 
       const batch = writeBatch(db);

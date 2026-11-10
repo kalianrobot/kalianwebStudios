@@ -8,7 +8,7 @@ import { initializeApp } from 'firebase-admin/app';
 import { getFirestore, FieldValue, DocumentReference } from 'firebase-admin/firestore';
 import { getAuth } from 'firebase-admin/auth';
 import { timingSafeEqual } from 'crypto';
-import { safeJson, escapeHtml, maskEmail, withRetry, formatFechaLarga } from './helpers';
+import { safeJson, escapeHtml, maskEmail, withRetry, formatFechaLarga, ajustarSlotsAcompanantes, totalPendienteSlots } from './helpers';
 
 initializeApp();
 
@@ -780,6 +780,12 @@ export const gestionarReservaInvitado = onCall(
         const totalActual = Number(r.totalPagar || 0);
         const precioTitular = Math.max(0, totalActual - (actuales * precioBase));
         update.totalPagar = precioTitular + (nuevo * precioBase);
+
+        // Las plazas que ve la puerta tienen que seguir al número de personas.
+        if (Array.isArray(r.slots) && r.slots.length > 0) {
+          update.slots = ajustarSlotsAcompanantes(r.slots, nuevo, precioBase);
+          update.totalPendiente = totalPendienteSlots(update.slots);
+        }
       }
 
       tx.update(reservaRef, update);

@@ -287,12 +287,13 @@ Firestore en `europe-west1`. Se recomienda configurar **exportaciones programada
 
 ### 7.6 Pruebas en la web de test (QA)
 
-Para probar sin tocar datos reales, se pueden crear eventos y reservas de prueba en la web de test. La forma sencilla es pedírselo a Claude ("prepárame una prueba de puerta"): usa el agente `qa` / la skill `qa-pruebas` del repo y devuelve los tickets, qué hacer con cada uno y las cifras que deben salir en caja, cierre y Recibí.
+Para probar sin tocar datos reales, se pueden crear eventos y reservas de prueba en la web de test. La forma sencilla es pedírselo a Claude ("prueba la puerta", "¿cuadra la caja?"): usa el agente `qa` / la skill `qa-pruebas` del repo. Por defecto hace la prueba **automática**: simula la noche en la puerta con la misma lógica que la web y comprueba que caja, reparto Kalian/artista, no presentados y aforo cuadran, y responde "todo cuadra" o qué falla. Si se quiere probar la pantalla a mano, devuelve los tickets, qué hacer con cada uno y las cifras que deben salir.
 
-También se puede lanzar a mano: GitHub → Actions → "QA - preparar pruebas en test" → Run workflow, eligiendo el escenario. El resultado aparece en la página de la ejecución.
+La prueba automática también se ejecuta sola cada vez que entra un cambio en `test`; si todo cuadra borra su evento, y si algo falla la ejecución sale en rojo en GitHub → Actions y deja el evento para revisarlo. También se puede lanzar a mano: GitHub → Actions → "QA - preparar pruebas en test" → Run workflow, eligiendo el escenario (el botón aparece cuando el cambio está en `main`). El resultado aparece en la página de la ejecución.
 
 | Escenario | Para qué |
 |---|---|
+| `puerta-auto` | Prueba automática: crea el evento, simula las entradas (reservas, un no presentado, socio con carnet, puerta e invitación) y comprueba caja, cierre y Recibí. Si algo no cuadra, la ejecución sale en rojo y dice qué cifra falla. No prueba los botones de la pantalla. |
 | `puerta` | Evento de hoy con precio normal, socio y cupón y 4 reservas sin validar (incluida una de socio y una para dejar como no presentada). Sirve para probar Control de Acceso y, al día siguiente, el PDF de cierre y el Recibí del artista. |
 | `limpiar` | Borra todos los eventos de prueba (`qa-…`) con sus reservas, entradas y movimientos de caja. Los totales mensuales de la vista rápida de puerta no se revierten. |
 

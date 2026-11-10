@@ -1,19 +1,27 @@
 name: QA - preparar pruebas en test
 
-# Lanzamiento manual: Actions → "QA - preparar pruebas en test" → Run workflow.
+# Dos formas de lanzarlo:
+# - Automático: en cada push a `test` ejecuta `puerta-auto` y, si todo cuadra,
+#   borra el evento que ha creado (si falla, lo deja para poder mirarlo).
+# - Manual: Actions → "QA - preparar pruebas en test" → Run workflow. GitHub
+#   solo muestra este botón cuando el fichero está en `main` (rama por defecto);
+#   después se puede ejecutar contra `test` con `--ref test`.
 # Escribe SOLO en el proyecto de test. Ver scripts/qa/sembrar.cjs y la skill
 # .claude/skills/qa-pruebas/. El resumen (tickets, cifras esperadas, pasos)
 # aparece en la página de la ejecución y en el artefacto qa-resultado.
 
 on:
+  push:
+    branches: [test]
   workflow_dispatch:
     inputs:
       escenario:
         description: 'Qué preparar'
         type: choice
         required: true
-        default: puerta
+        default: puerta-auto
         options:
+          - puerta-auto
           - puerta
           - limpiar
       fecha:
@@ -38,11 +46,14 @@ jobs:
         with:
           node-version: '22'
           cache: 'npm'
-          cache-dependency-path: functions/package-lock.json
+          cache-dependency-path: |
+            package-lock.json
+            functions/package-lock.json
 
-      - name: Instalar firebase-admin (functions)
-        working-directory: functions
-        run: npm ci
+      - name: Instalar dependencias (raíz para tsx, functions para firebase-admin)
+        run: |
+          npm ci --ignore-scripts
+          npm --prefix functions ci
 
       - name: Credenciales TEST
         env:
@@ -54,17 +65,20 @@ jobs:
           NODE_PATH: functions/node_modules
           TARGET_PROJECT: ${{ vars.FIREBASE_TEST_PROJECT_ID }}
           TARGET_CREDENTIALS: ${{ runner.temp }}/test.json
-          ESCENARIO: ${{ inputs.escenario }}
+          ESCENARIO: ${{ inputs.escenario || 'puerta-auto' }}
           FECHA: ${{ inputs.fecha }}
-        run: node scripts/qa/sembrar.cjs
+          # En la ejecución automática no se acumulan eventos de prueba.
+          QA_BORRAR_SI_OK: ${{ github.event_name == 'push' && '1' || '' }}
+        run: node --import tsx scripts/qa/sembrar.cjs
 
       - name: Guardar resultado
-        if: success()
+        if: always()
         uses: actions/upload-artifact@v4
         with:
           name: qa-resultado
           path: qa-resultado.json
           retention-days: 14
+          if-no-files-found: ignore
 
       - name: Borrar credenciales
         if: always()

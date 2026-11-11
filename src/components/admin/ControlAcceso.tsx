@@ -7,8 +7,11 @@ import { useNavigate } from 'react-router-dom';
 import { Html5Qrcode } from 'html5-qrcode';
 import { Camera, X, Users, Ticket, UserPlus, LogOut, CreditCard, Banknote, Landmark, Calculator, FileDown } from 'lucide-react';
 import { tieneDescuentoSocio, academiasDescuentoDeEvento, ACADEMIA_LOCAL } from '../../lib/descuentoSocio';
-import { ajustarSlotsAcompanantes } from '../../lib/reservaInvitado';
-import { registrarIngreso, resolverVariantePrecio, resolverAportacionKalian, calcularReparto, precioSlotEnPuerta, MetodoPago } from '../../lib/finanzas';
+import { registrarIngreso, precioSlotEnPuerta, MetodoPago } from '../../lib/finanzas';
+import {
+  hoyPuerta, slotsDesdeReserva, entradaSocioCarnet, slotComoSocio, marcarSlotIngresado,
+  entradaSlotReserva, entradaWalkIn, precioWalkIn, plazasLibres, idAsistenciaCarnet,
+} from '../../lib/puerta';
 import { normalizeDni } from '../../lib/dni';
 import { jsPDF } from 'jspdf';
 import autoTable from 'jspdf-autotable';
@@ -199,7 +202,7 @@ const ControlAcceso = ({ isPuertaMode = false }: { isPuertaMode?: boolean }) => 
     let cancelado = false;
     getDoc(doc(db, "socios", dni)).then(snap => {
       if (cancelado || !snap.exists()) return;
-      const hoy = new Date().toISOString().split('T')[0];
+      const hoy = hoyPuerta();
       if (tieneDescuentoSocio(snap.data().membresias, eventoSeleccionado, hoy)) {
         setTitularSocioSugerido({ nombre: snap.data().nombre || r.nombreTitular, precio: precioSocio });
       }
@@ -208,38 +211,7 @@ const ControlAcceso = ({ isPuertaMode = false }: { isPuertaMode?: boolean }) => 
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [reservaEncontrada?.id, reservaEncontrada?.slots?.[0]?.estado, eventoSeleccionado?.id]);
 
-  const plazasAcompanantes = (r: any): number => {
-    if (typeof r.acompañantes === 'number') return r.acompañantes;
-    if (typeof r.numPersonas === 'number') return Math.max(0, r.numPersonas - 1);
-    return Math.max(0, (Array.isArray(r.slots) ? r.slots.length : 1) - 1);
-  };
-
-  // Construye slots virtuales para reservas legacy sin el campo `slots`, y
-  // corrige el precio del titular con cupón en reservas anteriores al arreglo
-  // de ReservaForm (ver `precioSlotEnPuerta`).
-  const slotsDesdeReserva = (r: any, evento: any) => {
-    if (Array.isArray(r.slots) && r.slots.length > 0) {
-      // Reservas cuyos acompañantes se cambiaron antes de que se ajustaran las
-      // plazas: la puerta muestra tantas plazas como personas tiene la reserva.
-      const plazas = ajustarSlotsAcompanantes(r.slots, plazasAcompanantes(r), Number(evento?.precio_estandar) || 0);
-      return plazas.map((s: any) => ({ ...s, precio: precioSlotEnPuerta(s, r, evento) }));
-    }
-    const total = 1 + (r.acompañantes || 0);
-    const precioBase = r.precioPorPersona || r.totalPagado / Math.max(1, total) || 0;
-    const titular = {
-      tipo: 'titular',
-      nombre: r.nombreTitular,
-      dni: r.dniTitular,
-      email: r.emailTitular,
-      estado: r.esSocio ? 'validado_socio' : 'pendiente',
-      precio: precioBase,
-      ingresado: false
-    };
-    const acomps = Array.from({ length: total - 1 }, () => ({
-      tipo: 'acompañante', estado: 'pendiente', precio: precioBase, ingresado: false
-    }));
-    return [titular, ...acomps];
-  };
+  // plazasAcompanantes / slotsDesdeReserva: ver src/lib/puerta.ts
 
   const buscarReserva = async (override?: string) => {
     const raw = (override ?? busqueda).trim();
@@ -319,7 +291,7 @@ const ControlAcceso = ({ isPuertaMode = false }: { isPuertaMode?: boolean }) => 
 
       if (socioSnap.exists()) {
         const sData = socioSnap.data();
-        const asistenciaRef = doc(db, "asistencia_eventos", `${eventoSeleccionado.id}_${socioSnap.id}`);
+        const asistenciaRef = doc(db, "asistencia_eventos", idAsistenciaCarnet(eventoSeleccionado.id, socioSnap.id));
         const asistenciaSnap = await getDoc(asistenciaRef);
         const entroConReserva = !asistenciaSnap.exists() && !(await getDocs(query(
           collection(db, "asistencia_eventos"),
@@ -352,25 +324,19 @@ const ControlAcceso = ({ isPuertaMode = false }: { isPuertaMode?: boolean }) => 
 
     setCargando(true);
     try {
-      const hoy = new Date().toISOString().split('T')[0];
-      const tieneDescuento = tieneDescuentoSocio(socioEncontrado.membresias, eventoSeleccionado, hoy);
-
-      const precio = tieneDescuento ? (eventoSeleccionado.precio_descuento || 0) : (eventoSeleccionado.precio_estandar || 0);
+      const entrada = entradaSocioCarnet({
+        evento: eventoSeleccionado, socio: socioEncontrado, hoy: hoyPuerta(),
+        metodo: metodoPago, staffId: user?.uid,
+      });
+      const precio = entrada.precio;
 
       // Registrar asistencia con ID fijo evento_socio: un mismo carnet solo puede
       // entrar una vez por evento (antes se usaba un ID aleatorio y la
       // comprobación de "carnet ya utilizado" nunca encontraba nada).
-      const asistenciaRef = doc(db, "asistencia_eventos", `${eventoSeleccionado.id}_${socioEncontrado.id}`);
+      const asistenciaRef = doc(db, "asistencia_eventos", entrada.asistenciaId);
       const nueva = await runTransaction(db, async (tx) => {
         if ((await tx.get(asistenciaRef)).exists()) return false;
-        tx.set(asistenciaRef, {
-          eventoId: eventoSeleccionado.id,
-          socioId: socioEncontrado.id,
-          nombre: socioEncontrado.nombre,
-          fecha: serverTimestamp(),
-          precio: precio,
-          tipo: 'socio_carnet'
-        });
+        tx.set(asistenciaRef, { ...entrada.asistencia, fecha: serverTimestamp() });
         return true;
       });
       if (!nueva) {
@@ -388,22 +354,7 @@ const ControlAcceso = ({ isPuertaMode = false }: { isPuertaMode?: boolean }) => 
       }, { merge: true });
 
       // Registrar en Finanzas: aportación Kalian según variante, resto para el artista
-      if (precio > 0) {
-        const variante = resolverVariantePrecio({ precio, origen: 'socio_carnet', esSocio: tieneDescuento });
-        const { kalian, artista } = calcularReparto(precio, resolverAportacionKalian(variante, eventoSeleccionado));
-        await registrarIngreso({
-          monto: kalian,
-          monto_bruto: precio,
-          monto_artista: artista,
-          variante_precio: variante,
-          concepto: `Entrada Evento: ${eventoSeleccionado.titulo} (Soci@)`,
-          categoria: 'Evento',
-          metodo: metodoPago,
-          socio_id: socioEncontrado.id,
-          staff_id: user?.uid,
-          eventoId: eventoSeleccionado.id
-        });
-      }
+      if (entrada.ingreso) await registrarIngreso(entrada.ingreso);
 
       // Incrementar aforo_actual
       await updateDoc(doc(db, "eventos", eventoSeleccionado.id), {
@@ -441,7 +392,7 @@ const ControlAcceso = ({ isPuertaMode = false }: { isPuertaMode?: boolean }) => 
         return;
       }
       const sData: any = socioSnap.data();
-      const hoy = new Date().toISOString().split('T')[0];
+      const hoy = hoyPuerta();
       const academias = academiasDescuentoDeEvento(eventoSeleccionado).map(a => a === ACADEMIA_LOCAL ? 'Local' : a).join(', ') || 'ninguna';
       const activo = tieneDescuentoSocio(sData.membresias, eventoSeleccionado, hoy);
 
@@ -466,13 +417,7 @@ const ControlAcceso = ({ isPuertaMode = false }: { isPuertaMode?: boolean }) => 
 
       const precioDescuento = eventoSeleccionado.precio_descuento || 0;
       const nuevosSlots = [...reservaEncontrada.slots];
-      nuevosSlots[slotIdx] = {
-        ...nuevosSlots[slotIdx],
-        estado: 'validado_socio',
-        precio: precioDescuento,
-        socio_id: socioSnap.id,
-        socio_nombre: sData.nombre
-      };
+      nuevosSlots[slotIdx] = slotComoSocio(nuevosSlots[slotIdx], eventoSeleccionado, { id: socioSnap.id, nombre: sData.nombre });
       setReservaEncontrada({ ...reservaEncontrada, slots: nuevosSlots });
       setVerificarSocioSlot(null);
       setVerifDni('');
@@ -501,32 +446,16 @@ const ControlAcceso = ({ isPuertaMode = false }: { isPuertaMode?: boolean }) => 
         const rSnap = await tx.get(rRef);
         if (!rSnap.exists()) throw new Error("La reserva ya no existe");
 
-        const rServidor = rSnap.data();
-        const slotsServidor = ajustarSlotsAcompanantes(
-          [...(rServidor.slots || [])], plazasAcompanantes(rServidor), Number(eventoSeleccionado.precio_estandar) || 0
-        );
-        if (!slotsServidor[slotIdx] || slotsServidor[slotIdx].ingresado) {
-          return null; // Ya ingresado: no duplicar
-        }
-
-        // Persistimos el precio cobrado (puede venir corregido por cupón) para
-        // que la reserva cuadre con lo registrado en asistencia y finanzas.
-        slotsServidor[slotIdx] = {
-          ...slotsServidor[slotIdx],
-          ingresado: true,
-          precio: slot.precio || 0,
-          // Si se verificó como socio en puerta, la reserva lo guarda también.
-          ...(slot.estado === 'validado_socio'
-            ? { estado: 'validado_socio', socio_id: slot.socio_id || null, socio_nombre: slot.socio_nombre || null }
-            : {}),
-        };
-        const nuevosIngresados = slotsServidor.filter((s: any) => s.ingresado).length;
-        const total = slotsServidor.length;
+        const marcado = marcarSlotIngresado({
+          reservaServidor: rSnap.data(), evento: eventoSeleccionado, slotIdx, slotLocal: slot,
+        });
+        if (!marcado) return null; // Ya ingresado: no duplicar
+        const { slots: slotsServidor, ingresados: nuevosIngresados, total, estado } = marcado;
 
         tx.update(rRef, {
           slots: slotsServidor,
           asistentes_ingresados: nuevosIngresados,
-          estado: nuevosIngresados >= total ? 'validado' : 'pendiente',
+          estado,
           ultimaEntrada: serverTimestamp()
         });
         tx.update(doc(db, "eventos", eventoSeleccionado.id), {
@@ -556,39 +485,15 @@ const ControlAcceso = ({ isPuertaMode = false }: { isPuertaMode?: boolean }) => 
         ultimaActualizacion: serverTimestamp()
       }, { merge: true });
 
-      // 4. Asistencia
-      await addDoc(collection(db, "asistencia_eventos"), {
-        eventoId: eventoSeleccionado.id,
-        reservaId: reservaEncontrada.id,
-        ticketID: reservaEncontrada.ticketID,
-        slotTipo: slot.tipo,
-        slotNombre: slot.nombre || null,
-        slotDni: slot.dni || null,
-        socioId: slot.socio_id || null,
-        fecha: serverTimestamp(),
-        precio: slot.precio || 0,
-        tipo: slot.estado === 'validado_socio' ? 'reserva_socio' : 'reserva'
+      const entrada = entradaSlotReserva({
+        evento: eventoSeleccionado, reserva: reservaEncontrada, slot, metodo: metodoPago, staffId: user?.uid,
       });
 
+      // 4. Asistencia
+      await addDoc(collection(db, "asistencia_eventos"), { ...entrada.asistencia, fecha: serverTimestamp() });
+
       // 5. Finanzas: aportación Kalian según variante, resto para el artista
-      if ((slot.precio || 0) > 0) {
-        const esSocio = slot.estado === 'validado_socio';
-        const esCupon = slot.tipo === 'titular' && !!reservaEncontrada.cuponUsado;
-        const variante = resolverVariantePrecio({ precio: slot.precio, origen: 'reserva', esSocio, esCupon });
-        const { kalian, artista } = calcularReparto(slot.precio, resolverAportacionKalian(variante, eventoSeleccionado));
-        await registrarIngreso({
-          monto: kalian,
-          monto_bruto: slot.precio,
-          monto_artista: artista,
-          variante_precio: variante,
-          concepto: `Entrada Evento: ${eventoSeleccionado.titulo} (${slot.tipo}${esSocio ? ' Soci@' : ''})`,
-          categoria: 'Evento',
-          metodo: metodoPago,
-          socio_id: slot.socio_id || 'anonimo',
-          staff_id: user?.uid,
-          eventoId: eventoSeleccionado.id
-        });
-      }
+      if (entrada.ingreso) await registrarIngreso(entrada.ingreso);
 
       setReservaEncontrada({ ...reservaEncontrada, slots: nuevosSlots, asistentes_ingresados: nuevosIngresados });
       setMsg(`✅ Entrada registrada (${slot.precio || 0}€). ${nuevosIngresados}/${total}`);
@@ -618,7 +523,7 @@ const ControlAcceso = ({ isPuertaMode = false }: { isPuertaMode?: boolean }) => 
     }
     setWalkInSocio(null);
     setWalkInDni('');
-    setWalkInPrecio(eventoSeleccionado.precio_estandar || 0);
+    setWalkInPrecio(precioWalkIn(eventoSeleccionado, false));
     setWalkInAbierto(true);
   };
 
@@ -641,7 +546,7 @@ const ControlAcceso = ({ isPuertaMode = false }: { isPuertaMode?: boolean }) => 
         return;
       }
       const sData: any = socioSnap.data();
-      const hoy = new Date().toISOString().split('T')[0];
+      const hoy = hoyPuerta();
       const academias = academiasDescuentoDeEvento(eventoSeleccionado).map(a => a === ACADEMIA_LOCAL ? 'Local' : a).join(', ') || 'ninguna';
       const activo = tieneDescuentoSocio(sData.membresias, eventoSeleccionado, hoy);
 
@@ -652,7 +557,7 @@ const ControlAcceso = ({ isPuertaMode = false }: { isPuertaMode?: boolean }) => 
       }
 
       setWalkInSocio({ id: socioSnap.id, ...sData });
-      setWalkInPrecio(eventoSeleccionado.precio_descuento || 0);
+      setWalkInPrecio(precioWalkIn(eventoSeleccionado, true));
     } catch (err) {
       console.error(err);
       alert("❌ Error al verificar socio");
@@ -677,31 +582,13 @@ const ControlAcceso = ({ isPuertaMode = false }: { isPuertaMode?: boolean }) => 
         aforo_actual: increment(1)
       });
 
-      await addDoc(collection(db, "asistencia_eventos"), {
-        eventoId: eventoSeleccionado.id,
-        tipo: 'walk-in',
-        fecha: serverTimestamp(),
-        staff: isAdmin ? 'admin' : 'portero',
-        precio: precio,
-        ...(esSocio ? { socioId: walkInSocio.id, nombre: walkInSocio.nombre } : {})
+      const entrada = entradaWalkIn({
+        evento: eventoSeleccionado, precio, socio: esSocio ? walkInSocio : null,
+        staff: isAdmin ? 'admin' : 'portero', metodo: metodoPago, staffId: user?.uid,
       });
+      await addDoc(collection(db, "asistencia_eventos"), { ...entrada.asistencia, fecha: serverTimestamp() });
 
-      if (precio > 0) {
-        const variante = resolverVariantePrecio({ precio, origen: 'walkin', esSocio });
-        const { kalian, artista } = calcularReparto(precio, resolverAportacionKalian(variante, eventoSeleccionado));
-        await registrarIngreso({
-          monto: kalian,
-          monto_bruto: precio,
-          monto_artista: artista,
-          variante_precio: variante,
-          concepto: `Entrada Puerta: ${eventoSeleccionado.titulo} (Walk-in${esSocio ? ' Soci@' : ''})`,
-          categoria: 'Evento',
-          metodo: metodoPago,
-          socio_id: esSocio ? walkInSocio.id : 'anonimo',
-          staff_id: user?.uid,
-          eventoId: eventoSeleccionado.id
-        });
-      }
+      if (entrada.ingreso) await registrarIngreso(entrada.ingreso);
 
       setMsg(`✅ Walk-in registrado${esSocio ? ` (Soci@ ${walkInSocio.nombre})` : ''}. Cobrado: ${precio}€`);
       setWalkInAbierto(false);
@@ -725,11 +612,7 @@ const ControlAcceso = ({ isPuertaMode = false }: { isPuertaMode?: boolean }) => 
     return 'text-emerald-500';
   };
 
-  const getLibresReales = () => {
-    if (!eventoSeleccionado) return 0;
-    const totalOcupado = (eventoSeleccionado.aforo_actual || 0) + (eventoSeleccionado.aforo_reservado || 0);
-    return Math.max(0, (eventoSeleccionado.aforo_maximo || 0) - totalOcupado);
-  };
+  const getLibresReales = () => plazasLibres(eventoSeleccionado);
 
   const handleLogoutPuerta = async () => {
     await signOut(firebaseAuth);
@@ -1257,7 +1140,7 @@ const ControlAcceso = ({ isPuertaMode = false }: { isPuertaMode?: boolean }) => 
                       )}
                       {Object.keys(socioEncontrado.membresias || {}).map(cat => {
                         const exp = socioEncontrado.membresias?.[cat];
-                        const hoy = new Date().toISOString().split('T')[0];
+                        const hoy = hoyPuerta();
                         const activo = exp && exp >= hoy;
                         return (
                           <div key={cat} className={`p-4 rounded-2xl border text-center ${activo ? 'bg-emerald-50 border-emerald-200' : 'bg-red-50 border-red-200'}`}>

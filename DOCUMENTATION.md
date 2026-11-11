@@ -154,6 +154,17 @@ Acceso vía `/staff/login` con email/contraseña. Solo `role == 'admin'` o maste
 | Config / Identidad | `/staff/config` y `/staff/identidad` (misma pantalla) | Identidad, donaciones, configuración pública. Las imágenes (logo, portada, galería y Hub) se cambian subiendo un archivo nuevo; la del Hub también se puede **quitar** para que la sección vuelva al fondo liso. Subir o quitar solo se publica al pulsar **GUARDAR CAMBIOS**. |
 | Traducir EU | `/staff/traducir-eu` | Asistente para rellenar campos `*_eu`. |
 
+### 3.0 Cierre mensual de la aportación de un curso
+
+Cada curso tiene un **tipo de aportación mensual** a Kalian, que se elige en su ficha (Staff > Cursos > editar):
+
+- **Variable (por defecto)**: Kalian ingresa según los alumnos que pagan. El profesor marca los pagos desde su panel.
+- **Fija**: Kalian ingresa un importe fijo al mes, haya los alumnos que haya (por ejemplo Big Band y Percusión Brasileña, 150 €/mes). El importe se puede cambiar en la ficha cuando varíe.
+
+El botón **"Cerrar Aportación Mes"** de cada curso es el control global del admin para confirmar que el pago del mes se ha recibido, lo haya registrado el profesor o no. Siempre está activo. Al pulsarlo pide el importe recibido, ya rellenado con el fijo del curso o con la suma de lo que haya marcado el profesor (vacío si no hay nada), y se puede corregir. Al confirmar se registra el ingreso en Contabilidad (`Cierre Aportación Curso`, indicando si el importe es fijo, de los pagos del profesor o manual), el curso queda cerrado ese mes y se bloquean los pagos que el profesor hubiera marcado. **"Mes cerrado · Revertir"** deshace el cierre y anula el ingreso.
+
+Los cursos creados antes de este cambio se tratan como variables: los de importe fijo hay que configurarlos una vez desde su ficha.
+
 ### 3.1 Reparto Kalian/artista y cierre de un evento
 
 De cada entrada cobrada en un evento, Kalian retiene una **aportación** (€)
@@ -225,7 +236,7 @@ Acceso vía `/profesor/login`.
 - **Pasar lista**: ve únicamente los cursos que tiene asignados.
 - **Validación de cuota de socio**: la fila del alumno muestra visualmente si la cuota del mes actual está pagada.
 - **Registro de pagos**: puede marcar pagos de inscripción y de cuota mensual desde el aula. Hay una **confirmación modal** antes de desmarcar un pago mensual (evita reversiones accidentales).
-- **Aporta al cierre**: la aportación mensual del alumno se difiere a la contabilidad oficial hasta el cierre del curso por parte del admin.
+- **Aporta al cierre**: la aportación mensual del alumno se difiere a la contabilidad oficial hasta que el admin cierra el mes del curso (ver 3.0). En cursos de aportación fija, el importe que entra en contabilidad es el fijo del curso, no la suma de lo marcado.
 
 ---
 
@@ -284,6 +295,20 @@ Firestore en `europe-west1`. Se recomienda configurar **exportaciones programada
 - Tras desactivar un curso o pagar un local, llamar a `syncMultipleSocios()` con los IDs afectados para recomputar el estado.
 - Los residuos de pagos sin socio aparecen en Contabilidad → botón Purgar.
 - La integridad referencial entre `socios.cursos[]` y `cursos.alumnos[]` se valida en `AdminCursos` y `AdminSocios`.
+
+### 7.6 Pruebas en la web de test (QA)
+
+Para probar sin tocar datos reales, se pueden crear eventos y reservas de prueba en la web de test. La forma sencilla es pedírselo a Claude ("prueba la puerta", "¿cuadra la caja?"): usa el agente `qa` / la skill `qa-pruebas` del repo. Por defecto hace la prueba **automática**: simula la noche en la puerta con la misma lógica que la web y comprueba que caja, reparto Kalian/artista, no presentados y aforo cuadran, y responde "todo cuadra" o qué falla. Si se quiere probar la pantalla a mano, devuelve los tickets, qué hacer con cada uno y las cifras que deben salir.
+
+La prueba automática también se ejecuta sola cada vez que entra un cambio en `test`; si todo cuadra borra su evento, y si algo falla la ejecución sale en rojo en GitHub → Actions y deja el evento para revisarlo. También se puede lanzar a mano: GitHub → Actions → "QA - preparar pruebas en test" → Run workflow, eligiendo el escenario (el botón aparece cuando el cambio está en `main`). El resultado aparece en la página de la ejecución.
+
+| Escenario | Para qué |
+|---|---|
+| `puerta-auto` | Prueba automática: crea el evento, simula las entradas (reservas, un no presentado, socio con carnet, puerta e invitación) y comprueba caja, cierre y Recibí. Si algo no cuadra, la ejecución sale en rojo y dice qué cifra falla. No prueba los botones de la pantalla. |
+| `puerta` | Evento de hoy con precio normal, socio y cupón y 4 reservas sin validar (incluida una de socio y una para dejar como no presentada). Sirve para probar Control de Acceso y, al día siguiente, el PDF de cierre y el Recibí del artista. |
+| `limpiar` | Borra todos los eventos de prueba (`qa-…`) con sus reservas, entradas y movimientos de caja. Los totales mensuales de la vista rápida de puerta no se revierten. |
+
+Solo escribe en el proyecto de test; nunca en producción. Los eventos de prueba se reconocen porque su título empieza por "QA" y sus tickets por "Q".
 
 ---
 

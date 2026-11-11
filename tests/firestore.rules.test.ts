@@ -319,6 +319,33 @@ describe('cursos', () => {
       titulo: 'Hack',
     }));
   });
+
+  it('admin puede configurar aportación fija', async () => {
+    await assertSucceeds(updateDoc(doc(db(adminCtx()), 'cursos', 'cur-1'), {
+      tipoAportacion: 'fija', aportacionFijaMensual: 150,
+    }));
+  });
+
+  it('rechaza tipo de aportación desconocido', async () => {
+    await assertFails(updateDoc(doc(db(adminCtx()), 'cursos', 'cur-1'), {
+      tipoAportacion: 'gratis',
+    }));
+  });
+
+  it('rechaza aportación fija negativa o no numérica', async () => {
+    await assertFails(updateDoc(doc(db(adminCtx()), 'cursos', 'cur-1'), {
+      aportacionFijaMensual: -5,
+    }));
+    await assertFails(updateDoc(doc(db(adminCtx()), 'cursos', 'cur-1'), {
+      aportacionFijaMensual: '150',
+    }));
+  });
+
+  it('teacher NO puede cambiar la aportación', async () => {
+    await assertFails(updateDoc(doc(db(teacherCtx()), 'cursos', 'cur-1'), {
+      aportacionFijaMensual: 0,
+    }));
+  });
 });
 
 // ══════════════════════════════════════════════════════════════════════════

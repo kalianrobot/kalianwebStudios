@@ -126,7 +126,7 @@ Convenciones:
 |---|---|---|
 | `users/{uid}` | Perfil de cualquier usuario autenticado + rol. `role` solo lo cambia admin. | Owner read/update (sin `role`), admin todo. |
 | `socios/{id}` | Alta como soci@. DNI, membresías, estado. | Owner read, admin todo. |
-| `cursos/{id}` (+ `sesiones/`) | Cursos y talleres. `alumnos`, `aforo_actual`, profesor asignado. | Lectura pública, admin/teacher escritura. |
+| `cursos/{id}` (+ `sesiones/`) | Cursos y talleres. `alumnos`, `aforo_actual`, profesor asignado. `tipoAportacion` (`'fija' \| 'variable'`, ausente = variable) y `aportacionFijaMensual` (€/mes, solo si fija) definen lo que Kalian ingresa al cerrar el mes; `ultimoCierreAportacion` (`AAAA_M`) marca el último mes cerrado. El cierre crea un `finanzas` `Cierre Aportación Curso` con `origenImporte` (`'fijo' \| 'pagos_profesor' \| 'manual'`); lógica en `src/lib/cierreAportacionCurso.ts`. | Lectura pública, admin/teacher escritura. |
 | `eventos/{id}` | Eventos puntuales. Aforo, reservas. | Lectura pública. Reserva pública (validada). |
 | `reservas/{id}` | Reserva de plaza (invitado o socio). Contiene `manageToken` (capability). | Crear validado; lectura por owner/admin/portero. |
 | `academias/{id}`, `profesores/{id}`, `exposiciones/{id}`, `locales/{id}` | Catálogos. | Lectura pública, admin escritura. |
@@ -339,7 +339,8 @@ Clase utilitaria global: `kalian-poster-text` para títulos grandes.
 │   ├── firebase.ts        # init Firebase + helpers
 │   ├── context/           # AuthContext, LanguageContext
 │   ├── i18n/              # es.ts, eu.ts, dateFormat.ts
-│   ├── lib/               # adminAuth, brevoService, constants, finanzas, reservaInvitado, slug, socioService, configService
+│   ├── lib/               # adminAuth, brevoService, constants, finanzas, reservaInvitado, slug, socioService, configService…
+│   │                      #   módulos puros (sin Firebase, reutilizables en scripts/qa): puerta, cierreEvento, reparto, slots, descuentoSocio
 │   ├── pages/             # rutas top-level (Landing, Newsletter, Reserva, etc.)
 │   └── components/
 │       ├── public/        # NewsletterForm, ReservaForm, Navbar, modales legales…
@@ -349,6 +350,8 @@ Clase utilitaria global: `kalian-poster-text` para títulos grandes.
 │       └── admin/         # Admin* (gestores)
 ├── functions/             # Cloud Functions (TypeScript, Node 22)
 │   └── src/index.ts       # todas las funciones
+├── scripts/               # copiar-prod-a-test.cjs, qa/ (escenarios de datos de prueba para test)
+├── .claude/               # agents/qa.md, skills/qa-pruebas/ (QA en la web de test)
 ├── firestore.rules        # reglas de seguridad
 ├── storage.rules
 ├── firebase.json          # hosting + functions + emulators + CSP
@@ -366,6 +369,7 @@ Clase utilitaria global: `kalian-poster-text` para títulos grandes.
 - Sin `console.log` en producción: usar `import.meta.env.DEV` para guardarlo.
 - Sin backwards-compat hacks ni feature flags improvisados.
 - No usar emojis en texto al usuario salvo en componentes ya establecidos (éxito/error visual).
+- Reglas de negocio fuera de las pantallas: la lógica que decide precios, repartos o qué se escribe en Firestore va en un módulo puro de `src/lib` (sin importar `../firebase` ni `firebase/*`; los tipos con `import type`), con unit tests en `tests/unit`. La pantalla solo lee/escribe con lo que devuelve. Así la prueban los unit tests y la reutilizan los escenarios de QA (`scripts/qa/`). Ejemplos: `puerta.ts` (Control de Acceso), `cierreEvento.ts` (PDF de cierre y Recibí), `reparto.ts`, `slots.ts`. Los módulos con Firebase (`finanzas.ts`, `informeCierreEvento.ts`, `reservaInvitado.ts`) re-exportan lo que antes contenían.
 
 ### Firestore
 - Validar siempre en `firestore.rules` con función `isValid<Entidad>(data)` y reglas `match` por colección.
@@ -509,6 +513,7 @@ firebase emulators:start
 - Aviso de documentación (`.github/workflows/aviso-docs.yml`): en PR contra `main` o `test`, si cambia `src/` o `functions/src/` (sin contar `src/i18n/` ni tests) y no cambia ningún `*.md` de la raíz ni `openspec/`, emite un warning y un único comentario en el PR. No bloquea el merge.
 - Preview por PR (`.github/workflows/preview.yml`): cada PR contra `main` o `test` despliega functions + reglas al proyecto de test y el front a un canal de preview de Hosting (URL comentada en el PR, caduca a los 7 días). Secretos: `FIREBASE_SERVICE_ACCOUNT_TEST`, `TEST_VITE_FIREBASE_*`. Los secretos de Brevo del proyecto de test tienen valores ficticios: en test no se envían emails.
 - Datos (`.github/workflows/copiar-prod-a-test.yml`, manual): copia Firestore de producción a test con `scripts/copiar-prod-a-test.cjs`. Producción solo se lee; test se vacía y se rellena. Datos personales (DNI, emails, nombres, teléfonos, direcciones, cuentas, fotos, textos libres) anonimizados de forma consistente, también dentro de IDs. Clave de puerta de test: `test1234`. Parámetro `admins` para dar rol admin en test.
+- QA (`.github/workflows/qa-test.yml`, automático en cada push a `test` con `puerta-auto` —borra su evento si todo cuadra— y manual desde `main` o `test`): prepara datos de prueba en test con `scripts/qa/sembrar.cjs` (ejecutado con `tsx`) según un escenario (`scripts/qa/escenarios/<id>.cjs`: `puerta-auto`, `puerta`, `limpiar`). `puerta-auto` simula la puerta con `src/lib/puerta.ts` y verifica el cierre con `src/lib/cierreEvento.ts`; si una comprobación falla, el job termina con error. No vacía nada: crea docs con ID `qa-…` y `qa: true` (eventos, reservas con el mismo esquema que `ReservaForm`) y `limpiar` los borra junto con `asistencia_eventos`/`finanzas` del mismo `eventoId`. Devuelve tickets y cifras esperadas en el resumen de la ejecución y en el artefacto `qa-resultado`. Lo usa el agente `.claude/agents/qa.md` mediante la skill `.claude/skills/qa-pruebas/`; para añadir escenarios ver esa skill.
 
 CSP y cabeceras de seguridad: definidas en `firebase.json` (HSTS, X-Frame DENY, CSP estricta con whitelist de Brevo, Google, Firebase, ipify, mymemory).
 

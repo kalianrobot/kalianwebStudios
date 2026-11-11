@@ -34,6 +34,8 @@ export interface IngresoData {
   monto_artista?: number;
   /** Solo para categoria == 'Evento': variante de precio cobrada. */
   variante_precio?: VariantePrecio;
+  /** Solo para categoria == 'Cierre Aportación Curso': de dónde sale el importe confirmado. */
+  origenImporte?: 'fijo' | 'pagos_profesor' | 'manual';
 }
 
 export const registrarIngreso = async (data: IngresoData) => {

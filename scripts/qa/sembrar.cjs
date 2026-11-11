@@ -13,8 +13,9 @@
  * Si el escenario devuelve `ok: false` (alguna comprobación falla), el proceso
  * termina con código 1 y la ejecución del workflow sale en rojo.
  *
- * Salida: resumen legible en consola, qa-resultado.json y, en GitHub Actions,
- * el mismo resumen en la página de la ejecución ($GITHUB_STEP_SUMMARY).
+ * Salida: resumen legible en consola, qa-resultado.json, una línea
+ * `QA-RESULTADO-B64 <json en base64>` para leerlo desde el registro y, en
+ * GitHub Actions, el mismo resumen en la página de la ejecución ($GITHUB_STEP_SUMMARY).
  */
 const fs = require('fs');
 const path = require('path');
@@ -106,7 +107,9 @@ async function main() {
   fs.writeFileSync('qa-resultado.json', JSON.stringify(resultado, null, 2));
   const md = aMarkdown(resultado);
   console.log(md);
-  console.log('\n--- QA-RESULTADO-JSON ---\n' + JSON.stringify(resultado) + '\n--- FIN ---');
+  // En base64: GitHub oculta en los registros los trozos de los secretos (p. ej.
+  // las llaves `{` del JSON de la cuenta de servicio) y el JSON en claro llega roto.
+  console.log('\nQA-RESULTADO-B64 ' + Buffer.from(JSON.stringify(resultado)).toString('base64'));
   if (process.env.GITHUB_STEP_SUMMARY) fs.appendFileSync(process.env.GITHUB_STEP_SUMMARY, md + '\n');
   if (resultado.ok === false) {
     console.error('\nQA: hay comprobaciones en FALLO.');

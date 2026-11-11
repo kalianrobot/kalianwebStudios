@@ -26,7 +26,7 @@ Si piden algo que ningún escenario cubre, ver "Añadir un escenario".
 
 ## Cómo lanzarlo
 
-`puerta-auto` ya se ejecuta solo en cada push a `test` (y borra su evento si todo cuadra). Para ver la última: `gh run list --workflow=qa-test.yml --branch test -L 1`. Lo de abajo es para lanzarlo a demanda.
+`puerta-auto` ya se ejecuta solo en cada push a `test` (y borra su evento si todo cuadra). Si preguntan "¿cómo fue la última prueba?", busca la última ejecución con `RUN=$(gh run list --workflow=qa-test.yml --branch test -L 1 --json databaseId -q '.[0].databaseId')` y sigue en el paso 4. Lo de abajo es para lanzarla a demanda.
 
 1. Elige escenario y fecha (`YYYY-MM-DD`; vacío = hoy en Madrid). Si piden "probar" sin más, usa `puerta-auto`. Usa `puerta` solo si quieren hacerlo ellos a mano en la pantalla; entonces el evento tiene que ser **hoy**, porque Control de Acceso solo muestra eventos del día o en curso.
 2. Lanza el workflow contra `test` (el lanzamiento manual exige que el fichero exista también en `main`; si aún no está, dilo y ofrece ver la última ejecución automática):
@@ -38,11 +38,11 @@ Si piden algo que ningún escenario cubre, ver "Añadir un escenario".
    sleep 5; RUN=$(gh run list --workflow=qa-test.yml -L 1 --json databaseId -q '.[0].databaseId')
    gh run watch "$RUN" --exit-status   # sale con error si alguna comprobación de puerta-auto falla
    ```
-4. Lee el resultado (JSON entre marcas) o descarga el artefacto:
+4. Lee el resultado. Va en una línea del registro codificada en base64 (GitHub oculta las llaves `{` del JSON en claro). El artefacto `qa-resultado` no se puede descargar desde las sesiones de Claude:
    ```bash
-   gh run view "$RUN" --log | sed -n '/--- QA-RESULTADO-JSON ---/,/--- FIN ---/p' | sed '1d;$d' | sed 's/^.*Z //'
-   # alternativa: gh run download "$RUN" -n qa-resultado
+   gh run view "$RUN" --log | grep -o 'QA-RESULTADO-B64 [A-Za-z0-9+/=]*' | tail -1 | cut -d' ' -f2 | base64 -d > /tmp/qa-resultado.json
    ```
+   Campos útiles: `ok`, `comprobaciones[]` (`que`, `esperado`, `obtenido`, `ok`), `registro[]`, `reservas[]`, `avisos[]`.
    El mismo resumen legible aparece en la página de la ejecución en GitHub (Summary).
 
 Si `gh` no tiene acceso o el workflow aún no está en `main`, dilo claramente y no improvises otra vía de escritura en la base de datos.

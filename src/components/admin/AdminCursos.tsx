@@ -624,7 +624,7 @@ const AdminCursos = () => {
           sala: c.sala || 'SALA',
           programacionAutomatica: c.programacionAutomatica || false,
           tipoAportacion: c.tipoAportacion === 'fija' ? 'fija' : 'variable',
-          aportacionFijaMensual: c.aportacionFijaMensual != null ? String(c.aportacionFijaMensual) : ''
+          aportacionFijaMensual: c.aportacionFijaMensual !== undefined && c.aportacionFijaMensual !== null ? String(c.aportacionFijaMensual) : ''
         });
         window.scrollTo({ top: 0, behavior: 'smooth' });
       }
@@ -1730,7 +1730,7 @@ const AdminCursos = () => {
                                 sala: c.sala === 'SALA' || c.sala === 'Toda la Sala' ? 'SALA GRANDE' : (c.sala || 'SALA GRANDE'),
                                 programacionAutomatica: c.programacionAutomatica || false,
                                 tipoAportacion: c.tipoAportacion === 'fija' ? 'fija' : 'variable',
-                                aportacionFijaMensual: c.aportacionFijaMensual != null ? String(c.aportacionFijaMensual) : ''
+                                aportacionFijaMensual: c.aportacionFijaMensual !== undefined && c.aportacionFijaMensual !== null ? String(c.aportacionFijaMensual) : ''
                               });
                               window.scrollTo({ top: 0, behavior: 'smooth' });
                             }}

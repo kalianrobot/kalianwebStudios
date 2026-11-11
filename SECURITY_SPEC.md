@@ -38,6 +38,8 @@ Estas afirmaciones deben ser ciertas en cualquier estado de la base de datos. Si
 
 22. **`academias_descuento` acotado**: si un evento lleva `academias_descuento`, `firestore.rules → isValidEvento` exige que sea una lista de como máximo 20 elementos. El cálculo del precio con descuento de socio para reservas públicas sigue siendo server-side (`calcularPrecioReserva`), con la misma regla que el cliente (`descuentoSocio.ts`). (`firestore.rules` → `isValidEvento`.)
 
+23. **Aportación mensual de curso acotada**: `cursos.tipoAportacion` y `cursos.aportacionFijaMensual` son opcionales (los cursos previos se tratan como variables), pero si vienen en la escritura `firestore.rules → isValidCurso` exige `tipoAportacion in ['fija', 'variable']` y `aportacionFijaMensual` `number >= 0`. Solo el admin puede cambiarlos: el profesor sigue limitado a `alumnos` y `aforo_actual`. El importe que entra en contabilidad al cerrar el mes lo confirma el admin (`finanzas`, solo admin/portero). (`firestore.rules` → `isValidCurso`.)
+
 ---
 
 ## 2. Dirty Dozen — payloads de ataque y respuesta esperada

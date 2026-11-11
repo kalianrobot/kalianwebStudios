@@ -126,7 +126,7 @@ Convenciones:
 |---|---|---|
 | `users/{uid}` | Perfil de cualquier usuario autenticado + rol. `role` solo lo cambia admin. | Owner read/update (sin `role`), admin todo. |
 | `socios/{id}` | Alta como soci@. DNI, membresías, estado. | Owner read, admin todo. |
-| `cursos/{id}` (+ `sesiones/`) | Cursos y talleres. `alumnos`, `aforo_actual`, profesor asignado. | Lectura pública, admin/teacher escritura. |
+| `cursos/{id}` (+ `sesiones/`) | Cursos y talleres. `alumnos`, `aforo_actual`, profesor asignado. `tipoAportacion` (`'fija' \| 'variable'`, ausente = variable) y `aportacionFijaMensual` (€/mes, solo si fija) definen lo que Kalian ingresa al cerrar el mes; `ultimoCierreAportacion` (`AAAA_M`) marca el último mes cerrado. El cierre crea un `finanzas` `Cierre Aportación Curso` con `origenImporte` (`'fijo' \| 'pagos_profesor' \| 'manual'`); lógica en `src/lib/cierreAportacionCurso.ts`. | Lectura pública, admin/teacher escritura. |
 | `eventos/{id}` | Eventos puntuales. Aforo, reservas. | Lectura pública. Reserva pública (validada). |
 | `reservas/{id}` | Reserva de plaza (invitado o socio). Contiene `manageToken` (capability). | Crear validado; lectura por owner/admin/portero. |
 | `academias/{id}`, `profesores/{id}`, `exposiciones/{id}`, `locales/{id}` | Catálogos. | Lectura pública, admin escritura. |

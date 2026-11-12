@@ -51,11 +51,22 @@ En `finanzas` cada documento tiene `categoria` ∈ `'Socio' | 'Curso' | 'Evento'
 - Las reglas de Firestore solo permiten incrementos acotados (`+20` máximo por update, nunca superando `aforo_maximo`) → ver `firestore.rules → isSafeAforoUpdate()`.
 - El portero (rol `portero`) puede actualizar `aforo_actual` y `aforo_reservado` desde la tablet de puerta.
 
+### 2.4ter Descuento de socio en eventos
+
+- En la ficha de cada evento (`/staff/eventos`), "Descuento soci@s de" muestra una casilla por academia (Music is Cool, SBK CLUB, Club Flamenco…) y "Local de ensayo". Al crear un evento vienen marcadas Music is Cool y Local de ensayo; se marcan o desmarcan según el evento. El descuento solo se aplica si además el evento está "CON DESCUENTO".
+- Un socio paga el precio soci@ si tiene un curso en vigor en alguna academia marcada, o local de ensayo si esa casilla está marcada. La cuota mensual no influye.
+- La misma regla se aplica al reservar en la web, al pasar el carnet en puerta y al verificar a un socio en puerta (con reserva o sin ella). Si el socio no tiene derecho, el aviso de puerta indica qué academias dan descuento en ese evento.
+- Eventos creados antes de este cambio: los de música dan descuento a Music is Cool y local; los de danza, a SBK CLUB y local.
+- Si se cambia el nombre de una academia, las fichas de sus socios conservan el nombre anterior y dejan de coincidir: hay que marcar también ese nombre en el evento o corregir las fichas.
+
 ### 2.4bis Reserva pública (invitado, sin cuenta)
 
 - En un **evento**, el DNI es **opcional**: solo sirve para comprobar si quien reserva es socio y aplicarle el descuento/apertura anticipada correspondiente. Sin DNI, la reserva se completa igual como invitado sin descuento.
 - En un **curso**, el DNI (junto con nombre y email) es obligatorio — el alta al curso implica alta de socio.
 - Si se introduce, el DNI debe tener ≥7 caracteres (lo exige `firestore.rules`); por debajo de eso se avisa en el propio formulario antes de enviar, sin llegar a tocar el servidor.
+- **Descuentos no acumulables**: el titular paga el mejor precio entre el de socio y el de cupón; los acompañantes pagan siempre el precio estándar. El precio aplicado queda guardado en la entrada del titular, y el cupón solo se anota en la reserva si llegó a aplicarse. Así, en puerta se cobra lo mismo que se prometió al reservar y la entrada cuenta como "Cupón" en el reparto con el artista.
+- Las reservas hechas antes de noviembre de 2026 guardaban al titular con cupón a precio estándar. El control de acceso lo corrige al abrirlas: si la reserva trae el cupón vigente del evento y el titular está pendiente de pago, cobra el precio del cupón y lo deja guardado.
+- **Cambiar los acompañantes** (desde el enlace del invitado o desde `/staff/reservas`) ajusta también las plazas que ve la puerta: se quitan plazas pendientes o se añaden nuevas a precio estándar. Las plazas ya ingresadas no se tocan. Antes solo cambiaba el total y la puerta seguía mostrando las plazas antiguas (en el concierto del 31/10/2026 entró y se cobró una plaza que el titular había quitado). Las reservas que quedaron así se corrigen solas al abrirlas en puerta.
 - Un invitado anónimo no puede leer la colección `reservas` (solo admin/portero/el propio titular logueado, ver SECURITY_SPEC.md invariante #6), así que la comprobación de "¿ya tengo una reserva para este evento?" y el cálculo del precio con descuento de socio se resuelven mediante Cloud Functions (`comprobarReservaDuplicada`, `calcularPrecioReserva`), no consultando Firestore directamente desde el navegador.
 
 ### 2.5 Newsletter y doble opt-in
@@ -143,6 +154,17 @@ Acceso vía `/staff/login` con email/contraseña. Solo `role == 'admin'` o maste
 | Config / Identidad | `/staff/config` y `/staff/identidad` (misma pantalla) | Identidad, donaciones, configuración pública. Las imágenes (logo, portada, galería y Hub) se cambian subiendo un archivo nuevo; la del Hub también se puede **quitar** para que la sección vuelva al fondo liso. Subir o quitar solo se publica al pulsar **GUARDAR CAMBIOS**. |
 | Traducir EU | `/staff/traducir-eu` | Asistente para rellenar campos `*_eu`. |
 
+### 3.0 Cierre mensual de la aportación de un curso
+
+Cada curso tiene un **tipo de aportación mensual** a Kalian, que se elige en su ficha (Staff > Cursos > editar):
+
+- **Variable (por defecto)**: Kalian ingresa según los alumnos que pagan. El profesor marca los pagos desde su panel.
+- **Fija**: Kalian ingresa un importe fijo al mes, haya los alumnos que haya (por ejemplo Big Band y Percusión Brasileña, 150 €/mes). El importe se puede cambiar en la ficha cuando varíe.
+
+El botón **"Cerrar Aportación Mes"** de cada curso es el control global del admin para confirmar que el pago del mes se ha recibido, lo haya registrado el profesor o no. Siempre está activo. Al pulsarlo pide el importe recibido, ya rellenado con el fijo del curso o con la suma de lo que haya marcado el profesor (vacío si no hay nada), y se puede corregir. Al confirmar se registra el ingreso en Contabilidad (`Cierre Aportación Curso`, indicando si el importe es fijo, de los pagos del profesor o manual), el curso queda cerrado ese mes y se bloquean los pagos que el profesor hubiera marcado. **"Mes cerrado · Revertir"** deshace el cierre y anula el ingreso.
+
+Los cursos creados antes de este cambio se tratan como variables: los de importe fijo hay que configurarlos una vez desde su ficha.
+
 ### 3.1 Reparto Kalian/artista y cierre de un evento
 
 De cada entrada cobrada en un evento, Kalian retiene una **aportación** (€)
@@ -161,9 +183,23 @@ dos botones:
   descuadre (caja ≠ suma de precios de asistencia), lo resalta para que se
   investigue antes de liquidar con el artista. Incluye DNIs de no-shows —
   no se comparte con nadie fuera del staff.
-- **Recibí para el artista**: PDF para firmar con el artista. Desglose
-  entrada a entrada (fecha, variante, bruto, Kalian, artista) y totales, sin
-  ningún dato personal de asistentes. Trae al final la línea de firma y DNI.
+- **Recibí para el artista**: PDF para firmar con el artista, sin ningún
+  dato personal de asistentes. Contiene:
+  - **Resumen por tipo de entrada** (estándar, soci@, cupón, puerta, puerta
+    soci@, gratis): cuántas entradas, a qué precio, bruto, parte Kalian y
+    parte del artista, con totales. Las invitaciones y entradas gratis
+    también cuentan.
+  - **Liquidación**: total del artista, pagos ya entregados y pendiente. La
+    frase "Recibí la cantidad de…" sale con el pendiente. Para que sea
+    correcto, **cada pago al artista se apunta con "+ Pago artista"** en
+    Contabilidad (ver abajo). Orden habitual: descargar el Recibí, pagar,
+    que firme y apuntar el pago.
+  - **Avisos de control**, solo si algo no cuadra: entradas cobradas a un
+    precio distinto del de la ficha del evento, diferencia entre las
+    entradas de pago registradas en puerta y los cobros en contabilidad, o
+    pagos al artista por encima de lo que le corresponde. Revísalos antes
+    de firmar.
+  - Firma y DNI del artista, y un **anexo** con todas las entradas una a una.
 
 **Contabilidad** (`/staff/contabilidad`) ya muestra, en la fila de cada
 evento y en cada entrada expandida, el desglose `Bruto · Kalian · Artista`.
@@ -200,7 +236,7 @@ Acceso vía `/profesor/login`.
 - **Pasar lista**: ve únicamente los cursos que tiene asignados.
 - **Validación de cuota de socio**: la fila del alumno muestra visualmente si la cuota del mes actual está pagada.
 - **Registro de pagos**: puede marcar pagos de inscripción y de cuota mensual desde el aula. Hay una **confirmación modal** antes de desmarcar un pago mensual (evita reversiones accidentales).
-- **Aporta al cierre**: la aportación mensual del alumno se difiere a la contabilidad oficial hasta el cierre del curso por parte del admin.
+- **Aporta al cierre**: la aportación mensual del alumno se difiere a la contabilidad oficial hasta que el admin cierra el mes del curso (ver 3.0). En cursos de aportación fija, el importe que entra en contabilidad es el fijo del curso, no la suma de lo marcado.
 
 ---
 
@@ -221,7 +257,8 @@ Acceso vía `/control-acceso`. **No requiere cuenta de usuario** — la tablet d
 
 Desde `ControlAcceso`:
 - **Selección del evento** del día.
-- **Escaneo QR**: lee `ticketID` o `uid` del carnet digital. Verifica reserva, marca asistencia, decrementa aforo.
+- **Escaneo QR**: lee `ticketID` o `uid` del carnet digital. Verifica reserva, marca asistencia, decrementa aforo. Un mismo carnet de socio solo puede entrar una vez por evento.
+- **Reserva en puerta**: la tarjeta muestra cuántas personas tiene la reserva, el precio de cada una y el importe total pendiente de cobrar. Cada botón ENTRAR indica lo que se cobra por esa persona. Si no han venido todos, se da entrada uno a uno: quien no entra queda como no presentado en el cierre y no se cobra. El botón grande indica cuántos entran y cuánto se cobra antes de pulsarlo. Si el titular es socio con descuento en ese evento y la reserva no lo reflejaba, aparece "Aplicar precio soci@". Cada invitado de la reserva se puede verificar como socio con su DNI o su carnet ("Verificar Socio"); un mismo socio no puede cubrir dos plazas ni entrar también con su carnet.
 - **Caja del evento**: registra ingresos en efectivo/tarjeta/transferencia por método de pago.
 - **Listado de Emergencia (PDF)**: botón `descargarListadoEmergencia` en `src/components/admin/ControlAcceso.tsx:655`. Genera un PDF con DNIs y estado de pago para control manual si cae internet. Crítico durante el evento.
 
@@ -258,6 +295,20 @@ Firestore en `europe-west1`. Se recomienda configurar **exportaciones programada
 - Tras desactivar un curso o pagar un local, llamar a `syncMultipleSocios()` con los IDs afectados para recomputar el estado.
 - Los residuos de pagos sin socio aparecen en Contabilidad → botón Purgar.
 - La integridad referencial entre `socios.cursos[]` y `cursos.alumnos[]` se valida en `AdminCursos` y `AdminSocios`.
+
+### 7.6 Pruebas en la web de test (QA)
+
+Para probar sin tocar datos reales, se pueden crear eventos y reservas de prueba en la web de test. La forma sencilla es pedírselo a Claude ("prueba la puerta", "¿cuadra la caja?"): usa el agente `qa` / la skill `qa-pruebas` del repo. Por defecto hace la prueba **automática**: simula la noche en la puerta con la misma lógica que la web y comprueba que caja, reparto Kalian/artista, no presentados y aforo cuadran, y responde "todo cuadra" o qué falla. Si se quiere probar la pantalla a mano, devuelve los tickets, qué hacer con cada uno y las cifras que deben salir.
+
+La prueba automática también se ejecuta sola cada vez que entra un cambio en `test`; si todo cuadra borra su evento, y si algo falla la ejecución sale en rojo en GitHub → Actions y deja el evento para revisarlo. También se puede lanzar a mano: GitHub → Actions → "QA - preparar pruebas en test" → Run workflow, eligiendo el escenario (el botón aparece cuando el cambio está en `main`). El resultado aparece en la página de la ejecución.
+
+| Escenario | Para qué |
+|---|---|
+| `puerta-auto` | Prueba automática: crea el evento, simula las entradas (reservas, un no presentado, socio con carnet, puerta e invitación) y comprueba caja, cierre y Recibí. Si algo no cuadra, la ejecución sale en rojo y dice qué cifra falla. No prueba los botones de la pantalla. |
+| `puerta` | Evento de hoy con precio normal, socio y cupón y 4 reservas sin validar (incluida una de socio y una para dejar como no presentada). Sirve para probar Control de Acceso y, al día siguiente, el PDF de cierre y el Recibí del artista. |
+| `limpiar` | Borra todos los eventos de prueba (`qa-…`) con sus reservas, entradas y movimientos de caja. Los totales mensuales de la vista rápida de puerta no se revierten. |
+
+Solo escribe en el proyecto de test; nunca en producción. Los eventos de prueba se reconocen porque su título empieza por "QA" y sus tickets por "Q".
 
 ---
 

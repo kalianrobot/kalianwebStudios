@@ -77,7 +77,10 @@ service cloud.firestore {
           && (!data.keys().hasAny(['descripcion_eu'])  || (data.descripcion_eu is string  && data.descripcion_eu.size() <= 2000))
           && (!data.keys().hasAny(['horario_eu'])      || (data.horario_eu is string      && data.horario_eu.size() <= 500))
           && (!data.keys().hasAny(['ventajas_eu'])     || (data.ventajas_eu is string     && data.ventajas_eu.size() <= 1000))
-          && (!data.keys().hasAny(['subcategoria_eu']) || (data.subcategoria_eu is string && data.subcategoria_eu.size() <= 100));
+          && (!data.keys().hasAny(['subcategoria_eu']) || (data.subcategoria_eu is string && data.subcategoria_eu.size() <= 100))
+          // update-cierre-aportacion-curso: tipo de aportación mensual opcional
+          && (!data.keys().hasAny(['tipoAportacion'])        || data.tipoAportacion in ['fija', 'variable'])
+          && (!data.keys().hasAny(['aportacionFijaMensual']) || (data.aportacionFijaMensual is number && data.aportacionFijaMensual >= 0));
     }
     match /cursos/{id} {
       allow read: if true;
@@ -115,6 +118,7 @@ service cloud.firestore {
           && (!data.keys().hasAny(['titulo_eu'])      || (data.titulo_eu is string      && data.titulo_eu.size() <= 200))
           && (!data.keys().hasAny(['descripcion_eu']) || (data.descripcion_eu is string && data.descripcion_eu.size() <= 2000))
           && (!data.keys().hasAny(['reglas_eu'])      || (data.reglas_eu is string      && data.reglas_eu.size() <= 2000))
+          && (!data.keys().hasAny(['academias_descuento']) || (data.academias_descuento is list && data.academias_descuento.size() <= 20))
           && isValidAportacionKalian(data, 'aportacion_kalian_estandar', 'precio_estandar')
           && isValidAportacionKalian(data, 'aportacion_kalian_descuento', 'precio_descuento')
           && isValidAportacionKalian(data, 'aportacion_kalian_cupon', 'precioCupon');

@@ -6,7 +6,12 @@ import { useAuth } from '../../context/AuthContext';
 import { useNavigate } from 'react-router-dom';
 import { Html5Qrcode } from 'html5-qrcode';
 import { Camera, X, Users, Ticket, UserPlus, LogOut, CreditCard, Banknote, Landmark, Calculator, FileDown } from 'lucide-react';
-import { registrarIngreso, resolverVariantePrecio, resolverAportacionKalian, calcularReparto, MetodoPago } from '../../lib/finanzas';
+import { tieneDescuentoSocio, academiasDescuentoDeEvento, ACADEMIA_LOCAL } from '../../lib/descuentoSocio';
+import { registrarIngreso, precioSlotEnPuerta, MetodoPago } from '../../lib/finanzas';
+import {
+  hoyPuerta, slotsDesdeReserva, entradaSocioCarnet, slotComoSocio, marcarSlotIngresado,
+  entradaSlotReserva, entradaWalkIn, precioWalkIn, plazasLibres, idAsistenciaCarnet,
+} from '../../lib/puerta';
 import { normalizeDni } from '../../lib/dni';
 import { jsPDF } from 'jspdf';
 import autoTable from 'jspdf-autotable';
@@ -36,6 +41,7 @@ const ControlAcceso = ({ isPuertaMode = false }: { isPuertaMode?: boolean }) => 
   const scannerRef = useRef<Html5Qrcode | null>(null);
   // Verificación de socio por slot
   const [verificarSocioSlot, setVerificarSocioSlot] = useState<number | null>(null);
+  const [titularSocioSugerido, setTitularSocioSugerido] = useState<{ nombre: string; precio: number } | null>(null);
   const [verifDni, setVerifDni] = useState('');
   const [verifMostrarScanner, setVerifMostrarScanner] = useState(false);
   // Walk-in con verificación de socio
@@ -182,25 +188,30 @@ const ControlAcceso = ({ isPuertaMode = false }: { isPuertaMode?: boolean }) => 
     return () => unsubscribe();
   }, [eventoSeleccionado, user]);
 
-  // Construye slots virtuales para reservas legacy sin el campo `slots`
-  const slotsDesdeReserva = (r: any) => {
-    if (Array.isArray(r.slots) && r.slots.length > 0) return r.slots;
-    const total = 1 + (r.acompañantes || 0);
-    const precioBase = r.precioPorPersona || r.totalPagado / Math.max(1, total) || 0;
-    const titular = {
-      tipo: 'titular',
-      nombre: r.nombreTitular,
-      dni: r.dniTitular,
-      email: r.emailTitular,
-      estado: r.esSocio ? 'validado_socio' : 'pendiente',
-      precio: precioBase,
-      ingresado: false
-    };
-    const acomps = Array.from({ length: total - 1 }, () => ({
-      tipo: 'acompañante', estado: 'pendiente', precio: precioBase, ingresado: false
-    }));
-    return [titular, ...acomps];
-  };
+  // Si el titular reservó con el DNI de un socio con descuento en este evento y
+  // la reserva no lo refleja (p. ej. reservó antes de tener el curso, o antes de
+  // que el descuento tuviera en cuenta las academias), se ofrece aplicarlo.
+  useEffect(() => {
+    setTitularSocioSugerido(null);
+    const r = reservaEncontrada;
+    const titular = r?.slots?.[0];
+    const dni = String(r?.dniTitular || '').trim().toUpperCase();
+    if (!r || !eventoSeleccionado || !titular || titular.ingresado || titular.estado !== 'pendiente' || !dni || dni === 'INVITADO') return;
+    const precioSocio = Number(eventoSeleccionado.precio_descuento);
+    if (!eventoSeleccionado.tiene_descuento || !(precioSocio < Number(titular.precio))) return;
+    let cancelado = false;
+    getDoc(doc(db, "socios", dni)).then(snap => {
+      if (cancelado || !snap.exists()) return;
+      const hoy = hoyPuerta();
+      if (tieneDescuentoSocio(snap.data().membresias, eventoSeleccionado, hoy)) {
+        setTitularSocioSugerido({ nombre: snap.data().nombre || r.nombreTitular, precio: precioSocio });
+      }
+    }).catch(() => {});
+    return () => { cancelado = true; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [reservaEncontrada?.id, reservaEncontrada?.slots?.[0]?.estado, eventoSeleccionado?.id]);
+
+  // plazasAcompanantes / slotsDesdeReserva: ver src/lib/puerta.ts
 
   const buscarReserva = async (override?: string) => {
     const raw = (override ?? busqueda).trim();
@@ -232,7 +243,7 @@ const ControlAcceso = ({ isPuertaMode = false }: { isPuertaMode?: boolean }) => 
           if (eventoSeleccionado?.id !== eventoDeReserva.id) {
             setEventoSeleccionado(eventoDeReserva);
           }
-          const slots = slotsDesdeReserva(encontrada);
+          const slots = slotsDesdeReserva(encontrada, eventoDeReserva);
           if (slots.every((s: any) => s.ingresado)) {
             setMsg("❌ CUPO COMPLETO: Ya han entrado todos los asistentes de esta reserva");
           } else {
@@ -254,7 +265,7 @@ const ControlAcceso = ({ isPuertaMode = false }: { isPuertaMode?: boolean }) => 
           r.uidTitular === raw
         );
         if (encontrada) {
-          const slots = slotsDesdeReserva(encontrada);
+          const slots = slotsDesdeReserva(encontrada, eventoSeleccionado);
           if (slots.every((s: any) => s.ingresado)) {
             setMsg("❌ CUPO COMPLETO: Ya han entrado todos los asistentes de esta reserva");
           } else {
@@ -280,9 +291,14 @@ const ControlAcceso = ({ isPuertaMode = false }: { isPuertaMode?: boolean }) => 
 
       if (socioSnap.exists()) {
         const sData = socioSnap.data();
-        const asistenciaRef = doc(db, "asistencia_eventos", `${eventoSeleccionado.id}_${socioSnap.id}`);
+        const asistenciaRef = doc(db, "asistencia_eventos", idAsistenciaCarnet(eventoSeleccionado.id, socioSnap.id));
         const asistenciaSnap = await getDoc(asistenciaRef);
-        if (asistenciaSnap.exists()) {
+        const entroConReserva = !asistenciaSnap.exists() && !(await getDocs(query(
+          collection(db, "asistencia_eventos"),
+          where("eventoId", "==", eventoSeleccionado.id),
+          where("socioId", "==", socioSnap.id)
+        ))).empty;
+        if (asistenciaSnap.exists() || entroConReserva) {
           setMsg("❌ ERROR: Carnet ya utilizado para este evento");
         } else {
           setSocioEncontrado({ id: socioSnap.id, ...sData });
@@ -308,27 +324,27 @@ const ControlAcceso = ({ isPuertaMode = false }: { isPuertaMode?: boolean }) => 
 
     setCargando(true);
     try {
-      const hoy = new Date().toISOString().split('T')[0];
-      const expData = socioEncontrado.membresias || {};
-      let tieneDescuento = false;
-
-      if (eventoSeleccionado.categoria === 'musica') {
-        tieneDescuento = (expData['musica'] || '') >= hoy || (expData['local'] || '') >= hoy;
-      } else if (eventoSeleccionado.categoria === 'danza') {
-        tieneDescuento = (expData['danza'] || '') >= hoy;
-      }
-
-      const precio = tieneDescuento ? (eventoSeleccionado.precio_descuento || 0) : (eventoSeleccionado.precio_estandar || 0);
-
-      // Registrar asistencia
-      await addDoc(collection(db, "asistencia_eventos"), {
-        eventoId: eventoSeleccionado.id,
-        socioId: socioEncontrado.id,
-        nombre: socioEncontrado.nombre,
-        fecha: serverTimestamp(),
-        precio: precio,
-        tipo: 'socio_carnet'
+      const entrada = entradaSocioCarnet({
+        evento: eventoSeleccionado, socio: socioEncontrado, hoy: hoyPuerta(),
+        metodo: metodoPago, staffId: user?.uid,
       });
+      const precio = entrada.precio;
+
+      // Registrar asistencia con ID fijo evento_socio: un mismo carnet solo puede
+      // entrar una vez por evento (antes se usaba un ID aleatorio y la
+      // comprobación de "carnet ya utilizado" nunca encontraba nada).
+      const asistenciaRef = doc(db, "asistencia_eventos", entrada.asistenciaId);
+      const nueva = await runTransaction(db, async (tx) => {
+        if ((await tx.get(asistenciaRef)).exists()) return false;
+        tx.set(asistenciaRef, { ...entrada.asistencia, fecha: serverTimestamp() });
+        return true;
+      });
+      if (!nueva) {
+        setMsg("❌ ERROR: Carnet ya utilizado para este evento");
+        setSocioEncontrado(null);
+        setCargando(false);
+        return;
+      }
 
       // Sumar a caja
       const mesAnio = new Date().toISOString().substring(0, 7);
@@ -338,22 +354,7 @@ const ControlAcceso = ({ isPuertaMode = false }: { isPuertaMode?: boolean }) => 
       }, { merge: true });
 
       // Registrar en Finanzas: aportación Kalian según variante, resto para el artista
-      if (precio > 0) {
-        const variante = resolverVariantePrecio({ precio, origen: 'socio_carnet', esSocio: tieneDescuento });
-        const { kalian, artista } = calcularReparto(precio, resolverAportacionKalian(variante, eventoSeleccionado));
-        await registrarIngreso({
-          monto: kalian,
-          monto_bruto: precio,
-          monto_artista: artista,
-          variante_precio: variante,
-          concepto: `Entrada Evento: ${eventoSeleccionado.titulo} (Soci@)`,
-          categoria: 'Evento',
-          metodo: metodoPago,
-          socio_id: socioEncontrado.id,
-          staff_id: user?.uid,
-          eventoId: eventoSeleccionado.id
-        });
-      }
+      if (entrada.ingreso) await registrarIngreso(entrada.ingreso);
 
       // Incrementar aforo_actual
       await updateDoc(doc(db, "eventos", eventoSeleccionado.id), {
@@ -391,29 +392,32 @@ const ControlAcceso = ({ isPuertaMode = false }: { isPuertaMode?: boolean }) => 
         return;
       }
       const sData: any = socioSnap.data();
-      const hoy = new Date().toISOString().split('T')[0];
-      const exp = sData.membresias || {};
-      const cat = eventoSeleccionado.categoria;
-      let activo = false;
-      if (cat === 'musica') activo = (exp['musica'] || '') >= hoy || (exp['local'] || '') >= hoy;
-      else if (cat === 'danza') activo = (exp['danza'] || '') >= hoy;
-      else activo = Object.values(exp).some((f: any) => (f || '') >= hoy);
+      const hoy = hoyPuerta();
+      const academias = academiasDescuentoDeEvento(eventoSeleccionado).map(a => a === ACADEMIA_LOCAL ? 'Local' : a).join(', ') || 'ninguna';
+      const activo = tieneDescuentoSocio(sData.membresias, eventoSeleccionado, hoy);
 
       if (!activo) {
-        alert(`⚠️ Soci@ ${sData.nombre} sin membresía activa para ${cat}. No se aplica descuento.`);
+        alert(`⚠️ Soci@ ${sData.nombre} sin membresía en vigor en las academias con descuento de este evento (${academias}). No se aplica descuento.`);
+        setCargando(false);
+        return;
+      }
+
+      // Un mismo socio no puede cubrir dos plazas ni entrar también con su carnet.
+      const yaEnOtraPlaza = reservaEncontrada.slots.some((s: any, i: number) => i !== slotIdx && s.socio_id === socioSnap.id);
+      const yaEntroEnEvento = !yaEnOtraPlaza && !(await getDocs(query(
+        collection(db, "asistencia_eventos"),
+        where("eventoId", "==", eventoSeleccionado.id),
+        where("socioId", "==", socioSnap.id)
+      ))).empty;
+      if (yaEnOtraPlaza || yaEntroEnEvento) {
+        alert(`⚠️ ${sData.nombre} ya ${yaEnOtraPlaza ? 'está en otra plaza de esta reserva' : 'ha entrado en este evento'}. No se puede aplicar el descuento de nuevo.`);
         setCargando(false);
         return;
       }
 
       const precioDescuento = eventoSeleccionado.precio_descuento || 0;
       const nuevosSlots = [...reservaEncontrada.slots];
-      nuevosSlots[slotIdx] = {
-        ...nuevosSlots[slotIdx],
-        estado: 'validado_socio',
-        precio: precioDescuento,
-        socio_id: socioSnap.id,
-        socio_nombre: sData.nombre
-      };
+      nuevosSlots[slotIdx] = slotComoSocio(nuevosSlots[slotIdx], eventoSeleccionado, { id: socioSnap.id, nombre: sData.nombre });
       setReservaEncontrada({ ...reservaEncontrada, slots: nuevosSlots });
       setVerificarSocioSlot(null);
       setVerifDni('');
@@ -442,19 +446,16 @@ const ControlAcceso = ({ isPuertaMode = false }: { isPuertaMode?: boolean }) => 
         const rSnap = await tx.get(rRef);
         if (!rSnap.exists()) throw new Error("La reserva ya no existe");
 
-        const slotsServidor = [...(rSnap.data().slots || [])];
-        if (!slotsServidor[slotIdx] || slotsServidor[slotIdx].ingresado) {
-          return null; // Ya ingresado: no duplicar
-        }
-
-        slotsServidor[slotIdx] = { ...slotsServidor[slotIdx], ingresado: true };
-        const nuevosIngresados = slotsServidor.filter((s: any) => s.ingresado).length;
-        const total = slotsServidor.length;
+        const marcado = marcarSlotIngresado({
+          reservaServidor: rSnap.data(), evento: eventoSeleccionado, slotIdx, slotLocal: slot,
+        });
+        if (!marcado) return null; // Ya ingresado: no duplicar
+        const { slots: slotsServidor, ingresados: nuevosIngresados, total, estado } = marcado;
 
         tx.update(rRef, {
           slots: slotsServidor,
           asistentes_ingresados: nuevosIngresados,
-          estado: nuevosIngresados >= total ? 'validado' : 'pendiente',
+          estado,
           ultimaEntrada: serverTimestamp()
         });
         tx.update(doc(db, "eventos", eventoSeleccionado.id), {
@@ -484,39 +485,15 @@ const ControlAcceso = ({ isPuertaMode = false }: { isPuertaMode?: boolean }) => 
         ultimaActualizacion: serverTimestamp()
       }, { merge: true });
 
-      // 4. Asistencia
-      await addDoc(collection(db, "asistencia_eventos"), {
-        eventoId: eventoSeleccionado.id,
-        reservaId: reservaEncontrada.id,
-        ticketID: reservaEncontrada.ticketID,
-        slotTipo: slot.tipo,
-        slotNombre: slot.nombre || null,
-        slotDni: slot.dni || null,
-        socioId: slot.socio_id || null,
-        fecha: serverTimestamp(),
-        precio: slot.precio || 0,
-        tipo: slot.estado === 'validado_socio' ? 'reserva_socio' : 'reserva'
+      const entrada = entradaSlotReserva({
+        evento: eventoSeleccionado, reserva: reservaEncontrada, slot, metodo: metodoPago, staffId: user?.uid,
       });
 
+      // 4. Asistencia
+      await addDoc(collection(db, "asistencia_eventos"), { ...entrada.asistencia, fecha: serverTimestamp() });
+
       // 5. Finanzas: aportación Kalian según variante, resto para el artista
-      if ((slot.precio || 0) > 0) {
-        const esSocio = slot.estado === 'validado_socio';
-        const esCupon = slot.tipo === 'titular' && !!reservaEncontrada.cuponUsado;
-        const variante = resolverVariantePrecio({ precio: slot.precio, origen: 'reserva', esSocio, esCupon });
-        const { kalian, artista } = calcularReparto(slot.precio, resolverAportacionKalian(variante, eventoSeleccionado));
-        await registrarIngreso({
-          monto: kalian,
-          monto_bruto: slot.precio,
-          monto_artista: artista,
-          variante_precio: variante,
-          concepto: `Entrada Evento: ${eventoSeleccionado.titulo} (${slot.tipo}${esSocio ? ' Soci@' : ''})`,
-          categoria: 'Evento',
-          metodo: metodoPago,
-          socio_id: slot.socio_id || 'anonimo',
-          staff_id: user?.uid,
-          eventoId: eventoSeleccionado.id
-        });
-      }
+      if (entrada.ingreso) await registrarIngreso(entrada.ingreso);
 
       setReservaEncontrada({ ...reservaEncontrada, slots: nuevosSlots, asistentes_ingresados: nuevosIngresados });
       setMsg(`✅ Entrada registrada (${slot.precio || 0}€). ${nuevosIngresados}/${total}`);
@@ -546,7 +523,7 @@ const ControlAcceso = ({ isPuertaMode = false }: { isPuertaMode?: boolean }) => 
     }
     setWalkInSocio(null);
     setWalkInDni('');
-    setWalkInPrecio(eventoSeleccionado.precio_estandar || 0);
+    setWalkInPrecio(precioWalkIn(eventoSeleccionado, false));
     setWalkInAbierto(true);
   };
 
@@ -569,22 +546,18 @@ const ControlAcceso = ({ isPuertaMode = false }: { isPuertaMode?: boolean }) => 
         return;
       }
       const sData: any = socioSnap.data();
-      const hoy = new Date().toISOString().split('T')[0];
-      const exp = sData.membresias || {};
-      const cat = eventoSeleccionado.categoria;
-      let activo = false;
-      if (cat === 'musica') activo = (exp['musica'] || '') >= hoy || (exp['local'] || '') >= hoy;
-      else if (cat === 'danza') activo = (exp['danza'] || '') >= hoy;
-      else activo = Object.values(exp).some((f: any) => (f || '') >= hoy);
+      const hoy = hoyPuerta();
+      const academias = academiasDescuentoDeEvento(eventoSeleccionado).map(a => a === ACADEMIA_LOCAL ? 'Local' : a).join(', ') || 'ninguna';
+      const activo = tieneDescuentoSocio(sData.membresias, eventoSeleccionado, hoy);
 
       if (!activo) {
-        alert(`⚠️ Soci@ ${sData.nombre} sin membresía activa para ${cat}. No se aplica descuento.`);
+        alert(`⚠️ Soci@ ${sData.nombre} sin membresía en vigor en las academias con descuento de este evento (${academias}). No se aplica descuento.`);
         setCargando(false);
         return;
       }
 
       setWalkInSocio({ id: socioSnap.id, ...sData });
-      setWalkInPrecio(eventoSeleccionado.precio_descuento || 0);
+      setWalkInPrecio(precioWalkIn(eventoSeleccionado, true));
     } catch (err) {
       console.error(err);
       alert("❌ Error al verificar socio");
@@ -609,31 +582,13 @@ const ControlAcceso = ({ isPuertaMode = false }: { isPuertaMode?: boolean }) => 
         aforo_actual: increment(1)
       });
 
-      await addDoc(collection(db, "asistencia_eventos"), {
-        eventoId: eventoSeleccionado.id,
-        tipo: 'walk-in',
-        fecha: serverTimestamp(),
-        staff: isAdmin ? 'admin' : 'portero',
-        precio: precio,
-        ...(esSocio ? { socioId: walkInSocio.id, nombre: walkInSocio.nombre } : {})
+      const entrada = entradaWalkIn({
+        evento: eventoSeleccionado, precio, socio: esSocio ? walkInSocio : null,
+        staff: isAdmin ? 'admin' : 'portero', metodo: metodoPago, staffId: user?.uid,
       });
+      await addDoc(collection(db, "asistencia_eventos"), { ...entrada.asistencia, fecha: serverTimestamp() });
 
-      if (precio > 0) {
-        const variante = resolverVariantePrecio({ precio, origen: 'walkin', esSocio });
-        const { kalian, artista } = calcularReparto(precio, resolverAportacionKalian(variante, eventoSeleccionado));
-        await registrarIngreso({
-          monto: kalian,
-          monto_bruto: precio,
-          monto_artista: artista,
-          variante_precio: variante,
-          concepto: `Entrada Puerta: ${eventoSeleccionado.titulo} (Walk-in${esSocio ? ' Soci@' : ''})`,
-          categoria: 'Evento',
-          metodo: metodoPago,
-          socio_id: esSocio ? walkInSocio.id : 'anonimo',
-          staff_id: user?.uid,
-          eventoId: eventoSeleccionado.id
-        });
-      }
+      if (entrada.ingreso) await registrarIngreso(entrada.ingreso);
 
       setMsg(`✅ Walk-in registrado${esSocio ? ` (Soci@ ${walkInSocio.nombre})` : ''}. Cobrado: ${precio}€`);
       setWalkInAbierto(false);
@@ -657,11 +612,7 @@ const ControlAcceso = ({ isPuertaMode = false }: { isPuertaMode?: boolean }) => 
     return 'text-emerald-500';
   };
 
-  const getLibresReales = () => {
-    if (!eventoSeleccionado) return 0;
-    const totalOcupado = (eventoSeleccionado.aforo_actual || 0) + (eventoSeleccionado.aforo_reservado || 0);
-    return Math.max(0, (eventoSeleccionado.aforo_maximo || 0) - totalOcupado);
-  };
+  const getLibresReales = () => plazasLibres(eventoSeleccionado);
 
   const handleLogoutPuerta = async () => {
     await signOut(firebaseAuth);
@@ -771,7 +722,7 @@ const ControlAcceso = ({ isPuertaMode = false }: { isPuertaMode?: boolean }) => 
         const slots = Array.isArray(r.slots) ? r.slots : [];
         const precioBase = Number(eventoSeleccionado.precio_estandar) || 0;
 
-        const precioTitular = Number(slots[0]?.precio ?? precioBase);
+        const precioTitular = slots[0] ? precioSlotEnPuerta(slots[0], r, eventoSeleccionado) : precioBase;
         const filaTitular = [
           r.nombreTitular || 'N/A',
           r.dniTitular || 'N/A',
@@ -1048,7 +999,7 @@ const ControlAcceso = ({ isPuertaMode = false }: { isPuertaMode?: boolean }) => 
                         <p className="text-[10px] font-black text-kalian-gold mt-2 uppercase tracking-widest">{reservaEncontrada.eventoTitulo} • {reservaEncontrada.fechaActividad}</p>
                       </div>
                       <div className="text-right">
-                        <p className="text-[10px] font-black text-black/40 uppercase tracking-widest mb-1">Total</p>
+                        <p className="text-[10px] font-black text-black/40 uppercase tracking-widest mb-1">Personas</p>
                         <p className="text-6xl kalian-poster-text text-kalian-gold">{reservaEncontrada.slots.length}</p>
                       </div>
                     </div>
@@ -1063,6 +1014,32 @@ const ControlAcceso = ({ isPuertaMode = false }: { isPuertaMode?: boolean }) => 
                              style={{ width: `${(reservaEncontrada.slots.filter((s: any) => s.ingresado).length / reservaEncontrada.slots.length) * 100}%` }}></div>
                       </div>
                     </div>
+
+                    {titularSocioSugerido && (
+                      <div className="mb-6 rounded-2xl border-2 border-indigo-300 bg-indigo-50 p-4 flex flex-wrap items-center justify-between gap-3">
+                        <p className="text-xs font-bold text-indigo-900">
+                          El titular es soci@ con descuento en este evento ({titularSocioSugerido.nombre}). Le corresponden {titularSocioSugerido.precio}€.
+                        </p>
+                        <button
+                          onClick={() => verificarSlotComoSocio(0, reservaEncontrada.dniTitular)}
+                          disabled={cargando}
+                          className="bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-3 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all"
+                        >
+                          Aplicar precio soci@
+                        </button>
+                      </div>
+                    )}
+
+                    {(() => {
+                      const pendientes = reservaEncontrada.slots.filter((s: any) => !s.ingresado);
+                      const importe = pendientes.reduce((acc: number, s: any) => acc + (Number(s.precio) || 0), 0);
+                      return pendientes.length > 0 ? (
+                        <div className="mb-6 flex items-end justify-between rounded-2xl bg-black text-kalian-gold px-6 py-4">
+                          <span className="text-[10px] font-black uppercase tracking-widest">A cobrar si entran los {pendientes.length} pendientes</span>
+                          <span className="text-4xl kalian-poster-text">{importe}€</span>
+                        </div>
+                      ) : null;
+                    })()}
 
                     <div className="space-y-3 mb-6">
                       {reservaEncontrada.slots.map((slot: any, idx: number) => {
@@ -1103,7 +1080,7 @@ const ControlAcceso = ({ isPuertaMode = false }: { isPuertaMode?: boolean }) => 
                                       disabled={cargando}
                                       className="bg-black hover:bg-emerald-600 text-kalian-gold hover:text-white px-5 py-3 rounded-xl kalian-poster-text text-lg transition-all"
                                     >
-                                      ENTRAR
+                                      ENTRAR · {(slot.precio || 0)}€
                                     </button>
                                   </>
                                 )}
@@ -1121,16 +1098,25 @@ const ControlAcceso = ({ isPuertaMode = false }: { isPuertaMode?: boolean }) => 
                       >
                         Cancelar
                       </button>
-                      {reservaEncontrada.slots.some((s: any) => !s.ingresado) && (
-                        <button
-                          onClick={entrarTodosPendientes}
-                          disabled={cargando}
-                          className="flex-[3] bg-black text-kalian-gold py-6 rounded-2xl kalian-poster-text text-2xl hover:bg-emerald-600 hover:text-white transition-all shadow-2xl"
-                        >
-                          ENTRAR TODOS LOS PENDIENTES
-                        </button>
-                      )}
+                      {reservaEncontrada.slots.some((s: any) => !s.ingresado) && (() => {
+                        const pendientes = reservaEncontrada.slots.filter((s: any) => !s.ingresado);
+                        const importe = pendientes.reduce((acc: number, s: any) => acc + (Number(s.precio) || 0), 0);
+                        return (
+                          <button
+                            onClick={entrarTodosPendientes}
+                            disabled={cargando}
+                            className="flex-[3] bg-black text-kalian-gold py-6 rounded-2xl kalian-poster-text text-2xl hover:bg-emerald-600 hover:text-white transition-all shadow-2xl"
+                          >
+                            ENTRAN {pendientes.length} · COBRAR {importe}€
+                          </button>
+                        );
+                      })()}
                     </div>
+                    {reservaEncontrada.slots.filter((s: any) => !s.ingresado).length > 1 && (
+                      <p className="mt-4 text-center text-[10px] font-bold uppercase tracking-widest text-black/50">
+                        ¿No han venido todos? Da entrada uno a uno con ENTRAR. Quien no entre queda como no presentado en el cierre y no se cobra.
+                      </p>
+                    )}
                   </div>
                 )}
 
@@ -1149,14 +1135,17 @@ const ControlAcceso = ({ isPuertaMode = false }: { isPuertaMode?: boolean }) => 
                     </div>
 
                     <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mb-8">
-                      {['musica', 'danza', 'local'].map(cat => {
+                      {Object.keys(socioEncontrado.membresias || {}).length === 0 && (
+                        <p className="sm:col-span-3 text-center text-[10px] font-bold text-red-600 uppercase">Sin membresías</p>
+                      )}
+                      {Object.keys(socioEncontrado.membresias || {}).map(cat => {
                         const exp = socioEncontrado.membresias?.[cat];
-                        const hoy = new Date().toISOString().split('T')[0];
+                        const hoy = hoyPuerta();
                         const activo = exp && exp >= hoy;
                         return (
                           <div key={cat} className={`p-4 rounded-2xl border text-center ${activo ? 'bg-emerald-50 border-emerald-200' : 'bg-red-50 border-red-200'}`}>
                             <p className="text-[8px] font-black uppercase tracking-widest text-black/40 mb-1">{cat}</p>
-                            <p className={`text-[10px] font-bold ${activo ? 'text-emerald-600' : 'text-red-600'}`}>{activo ? 'ACTIVO' : 'CADUCADO'}</p>
+                            <p className={`text-[10px] font-bold ${activo ? 'text-emerald-600' : 'text-red-600'}`}>{activo ? `ACTIVO hasta ${exp}` : 'CADUCADO'}</p>
                           </div>
                         );
                       })}

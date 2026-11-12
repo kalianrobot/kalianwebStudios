@@ -7,6 +7,7 @@ import { syncMultipleSocios, syncSocioStatus } from '../../lib/socioService';
 import { normalizeToSlug } from '../../lib/slug';
 import { normalizeDni, isValidDni } from '../../lib/dni';
 import { registrarIngreso, MetodoPago } from '../../lib/finanzas';
+import { TipoAportacion, tipoAportacionCurso, importePropuesto, confirmarImporte, etiquetaOrigen } from '../../lib/cierreAportacionCurso';
 
 import { createSocioAuth } from '../../lib/adminAuth';
 import { sendWelcomeEmail, sendMembershipUpdateEmail } from '../../lib/brevoService';
@@ -44,7 +45,9 @@ const AdminCursos = () => {
     horaInicio: '18:00',
     horaFin: '19:30',
     sala: 'SALA GRANDE',
-    programacionAutomatica: false
+    programacionAutomatica: false,
+    tipoAportacion: 'variable' as TipoAportacion,
+    aportacionFijaMensual: ''
   });
 
   const [conflictosRealTime, setConflictosRealTime] = useState<{fecha: string, motivo: string}[]>([]);
@@ -105,15 +108,30 @@ const AdminCursos = () => {
 
   const cerrarAportacionCurso = async (curso: DocumentData) => {
     const yaCerrado = curso.ultimoCierreAportacion === mesAnioKey;
+    const mesNombre = mesesES[mesActual-1];
+    let confirmado: { importe: number; origen: 'fijo' | 'pagos_profesor' | 'manual' } | null = null;
     if (yaCerrado) {
-      if (!window.confirm(`Este curso ya está cerrado para ${mesesES[mesActual-1]}. ¿Revertir el cierre? Se desbloquearán los pagos del mes y se anulará la entrada en contabilidad.`)) return;
+      if (!window.confirm(`Este curso ya está cerrado para ${mesNombre}. ¿Revertir el cierre? Se desbloquearán los pagos del mes y se anulará la entrada en contabilidad.`)) return;
     } else {
+      // Control global del admin: se puede cerrar aunque el profesor no haya marcado pagos.
       const info = pagosPorCurso[curso.id] || { count: 0, total: 0 };
-      if (info.count === 0) {
-        alert(`Ningún alumno ha pagado la aportación en "${curso.titulo}" este mes. Pide al profesor que marque los pagos antes de cerrar.`);
+      const propuesto = importePropuesto(curso, info.total);
+      const fija = tipoAportacionCurso(curso) === 'fija';
+      const detalle = fija
+        ? `Curso de aportación FIJA.${propuesto.importe === null ? ' No tiene importe fijo configurado: escribe el importe.' : ''}`
+        : info.count > 0
+          ? `Curso de aportación VARIABLE. El profesor ha marcado ${info.count} pago(s): ${info.total}€.`
+          : 'Curso de aportación VARIABLE. El profesor no ha marcado pagos este mes: escribe el importe recibido.';
+      const entrada = window.prompt(
+        `Cerrar aportación de "${curso.titulo}" — ${mesNombre} ${anioActual}\n\n${detalle}\n\nImporte recibido por Kalian (€). Puedes corregirlo antes de confirmar.\nSe registrará en contabilidad y se bloquearán los pagos del mes.`,
+        propuesto.importe !== null ? String(propuesto.importe) : ''
+      );
+      if (entrada === null) return;
+      confirmado = confirmarImporte(entrada, propuesto);
+      if (!confirmado) {
+        alert("Importe no válido. Escribe una cantidad mayor que 0.");
         return;
       }
-      if (!window.confirm(`¿Confirmar cierre de aportación de "${curso.titulo}" para ${mesesES[mesActual-1]}?\n\n${info.count} alumno(s) — total ${info.total}€\n\nEsto registrará el ingreso en contabilidad y bloqueará los pagos del mes.`)) return;
     }
 
     setCerrandoId(curso.id);
@@ -127,21 +145,18 @@ const AdminCursos = () => {
       );
       const snap = await getDocs(q);
 
-      if (!yaCerrado) {
-        const montoTotal = snap.docs.reduce((acc, d) => acc + (d.data().monto || 0), 0);
-        if (montoTotal === 0) {
-          alert("No hay importe que cerrar.");
-          return;
-        }
+      if (!yaCerrado && confirmado) {
+        const montoTotal = confirmado.importe;
 
         await registrarIngreso({
           monto: montoTotal,
-          concepto: `Cierre Aportación ${curso.titulo} - ${mesesES[mesActual-1]} ${anioActual} (${snap.size} socios)`,
+          concepto: `Cierre Aportación ${curso.titulo} - ${mesNombre} ${anioActual} (${etiquetaOrigen(confirmado.origen)}${snap.size > 0 ? `, ${snap.size} pago(s) del profesor` : ''})`,
           categoria: 'Cierre Aportación Curso',
           metodo: metodoPagoCierre,
           cursoId: curso.id,
           mes: mesActual,
-          anio: anioActual
+          anio: anioActual,
+          origenImporte: confirmado.origen
         });
 
         const batch = writeBatch(db);
@@ -607,7 +622,9 @@ const AdminCursos = () => {
           horaInicio: c.horaInicio || '18:00',
           horaFin: c.horaFin || '19:30',
           sala: c.sala || 'SALA',
-          programacionAutomatica: c.programacionAutomatica || false
+          programacionAutomatica: c.programacionAutomatica || false,
+          tipoAportacion: c.tipoAportacion === 'fija' ? 'fija' : 'variable',
+          aportacionFijaMensual: c.aportacionFijaMensual !== undefined && c.aportacionFijaMensual !== null ? String(c.aportacionFijaMensual) : ''
         });
         window.scrollTo({ top: 0, behavior: 'smooth' });
       }
@@ -816,6 +833,12 @@ const AdminCursos = () => {
       return;
     }
 
+    const aportacionFija = Number(String(form.aportacionFijaMensual).replace(',', '.'));
+    if (form.tipoAportacion === 'fija' && !(Number.isFinite(aportacionFija) && aportacionFija > 0)) {
+      alert("Indica el importe fijo mensual de la aportación (mayor que 0).");
+      return;
+    }
+
     try {
       const prof = profesores.find(p => p.id === form.profesorId);
       const academia = academias.find(a => a.id === form.categoria || a.nombre === form.categoria);
@@ -827,6 +850,8 @@ const AdminCursos = () => {
         categoria: academia ? academia.nombre : form.categoria, // Normalización al nombre oficial
         profesorNombre: prof ? prof.nombre : '',
         modalidades: form.modalidades.map(m => ({ ...m, precio: Number(m.precio) })),
+        tipoAportacion: form.tipoAportacion,
+        aportacionFijaMensual: form.tipoAportacion === 'fija' ? aportacionFija : 0,
         ventajas: getVentajasText(form.categoria),
         ventajas_eu: getVentajasTextEU(form.categoria),
         aforo_actual: editando ? (cursos.find(c => c.id === editando)?.aforo_actual || 0) : 0,
@@ -932,7 +957,9 @@ const AdminCursos = () => {
         horaInicio: '18:00',
         horaFin: '19:30',
         sala: 'SALA',
-        programacionAutomatica: false
+        programacionAutomatica: false,
+        tipoAportacion: 'variable',
+        aportacionFijaMensual: ''
       });
       setEditando(null);
       fetchCursos();
@@ -1425,6 +1452,34 @@ const AdminCursos = () => {
               </div>
             </div>
 
+            <div className="space-y-2">
+              <label className="text-[9px] font-black uppercase text-slate-600 ml-4">Aportación mensual a Kalian</label>
+              <div className="grid grid-cols-2 gap-2">
+                <select
+                  className="p-4 bg-slate-50 rounded-2xl text-[10px] font-black uppercase border border-slate-200 text-slate-900"
+                  value={form.tipoAportacion}
+                  onChange={e => setForm({...form, tipoAportacion: e.target.value as TipoAportacion})}
+                >
+                  <option value="variable">Variable (según alumnos)</option>
+                  <option value="fija">Fija mensual</option>
+                </select>
+                {form.tipoAportacion === 'fija' ? (
+                  <input
+                    type="number"
+                    min="0"
+                    step="0.01"
+                    placeholder="IMPORTE FIJO € / MES"
+                    className="p-4 bg-slate-50 rounded-2xl text-[10px] font-black border border-slate-200 text-slate-900"
+                    value={form.aportacionFijaMensual}
+                    onChange={e => setForm({...form, aportacionFijaMensual: e.target.value})}
+                    required
+                  />
+                ) : (
+                  <p className="text-[9px] text-slate-400 self-center px-2">Se calcula con los pagos que marque el profesor; al cerrar el mes puedes corregir el importe.</p>
+                )}
+              </div>
+            </div>
+
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-1">
                 <label className="text-[9px] font-black uppercase text-slate-400 ml-4">Fecha Inicio</label>
@@ -1499,7 +1554,9 @@ const AdminCursos = () => {
                       horaInicio: '18:00',
                       horaFin: '19:30',
                       sala: 'SALA GRANDE',
-                      programacionAutomatica: false
+                      programacionAutomatica: false,
+                      tipoAportacion: 'variable',
+                      aportacionFijaMensual: ''
                     });
                   }}
                   className="bg-slate-200 text-slate-600 px-8 rounded-[2rem] font-black uppercase"
@@ -1607,12 +1664,15 @@ const AdminCursos = () => {
                           const info = pagosPorCurso[c.id] || { count: 0, total: 0 };
                           const total = c.alumnos?.length || 0;
                           const cerrado = c.ultimoCierreAportacion === mesAnioKey;
+                          const fija = tipoAportacionCurso(c) === 'fija';
                           return (
                             <div className="flex flex-wrap items-center justify-between gap-3">
                               <div className="space-y-1">
                                 <p className="text-[9px] font-black uppercase tracking-[0.3em] text-slate-400">Aportación {mesesES[mesActual-1]}</p>
                                 <p className="text-xs font-black text-slate-700 uppercase tracking-widest">
-                                  {info.count}/{total} pagados {info.total > 0 && <span className="text-indigo-600 ml-2">{info.total}€</span>}
+                                  {fija
+                                    ? <>Fija {Number(c.aportacionFijaMensual) > 0 ? `${c.aportacionFijaMensual}€/mes` : '(sin importe)'}</>
+                                    : <>{info.count}/{total} pagados {info.total > 0 && <span className="text-indigo-600 ml-2">{info.total}€</span>}</>}
                                 </p>
                               </div>
                               <div className="flex items-center gap-2">
@@ -1630,10 +1690,10 @@ const AdminCursos = () => {
                                 )}
                                 <button
                                   onClick={() => cerrarAportacionCurso(c)}
-                                  disabled={cerrandoId === c.id || (!cerrado && info.count === 0)}
-                                  className={`p-3 px-5 rounded-xl font-black uppercase text-[9px] tracking-widest transition-all disabled:opacity-50 disabled:cursor-not-allowed ${cerrado ? 'bg-emerald-500 text-white hover:bg-emerald-600' : 'bg-amber-500 text-white hover:bg-amber-600 animate-pulse'}`}
+                                  disabled={cerrandoId === c.id}
+                                  className={`p-3 px-5 rounded-xl font-black uppercase text-[9px] tracking-widest transition-all disabled:opacity-50 disabled:cursor-not-allowed ${cerrado ? 'bg-emerald-500 text-white hover:bg-emerald-600' : 'bg-amber-500 text-white hover:bg-amber-600'}`}
                                 >
-                                  {cerrandoId === c.id ? '⏳ Procesando...' : cerrado ? '✅ Cerrar revertir' : '❌ Cerrar Aportación Mes'}
+                                  {cerrandoId === c.id ? 'Procesando...' : cerrado ? 'Mes cerrado · Revertir' : 'Cerrar Aportación Mes'}
                                 </button>
                               </div>
                             </div>
@@ -1668,7 +1728,9 @@ const AdminCursos = () => {
                                 horaInicio: c.horaInicio || '18:00',
                                 horaFin: c.horaFin || '19:30',
                                 sala: c.sala === 'SALA' || c.sala === 'Toda la Sala' ? 'SALA GRANDE' : (c.sala || 'SALA GRANDE'),
-                                programacionAutomatica: c.programacionAutomatica || false
+                                programacionAutomatica: c.programacionAutomatica || false,
+                                tipoAportacion: c.tipoAportacion === 'fija' ? 'fija' : 'variable',
+                                aportacionFijaMensual: c.aportacionFijaMensual !== undefined && c.aportacionFijaMensual !== null ? String(c.aportacionFijaMensual) : ''
                               });
                               window.scrollTo({ top: 0, behavior: 'smooth' });
                             }}

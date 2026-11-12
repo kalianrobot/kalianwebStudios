@@ -78,3 +78,7 @@ export const comprobarReservaDuplicada = (params: {
   dni?: string;
   email?: string;
 }) => callComprobarDuplicada(params).then(r => r.data);
+
+// Plazas de la reserva: viven en ./slots (módulo sin Firebase) y se re-exportan
+// aquí para no cambiar los imports existentes.
+export { ajustarSlotsAcompanantes, totalPendienteSlots } from './slots';

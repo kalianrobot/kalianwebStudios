@@ -1,3 +1,4 @@
+import { tieneDescuentoSocio } from '../../lib/descuentoSocio';
 import React, { useState, useEffect } from 'react';
 import { db, auth } from '../../firebase';
 import { collection, doc, DocumentData, runTransaction, increment } from 'firebase/firestore';
@@ -61,16 +62,12 @@ const ReservaForm = ({ item, alCerrar }: ReservaFormProps) => {
     const timer = setTimeout(async () => {
       let socio = false;
 
-      // Lógica de Descuentos Cruzados (Arquitecto):
-      if (categoriaActividad === 'musica') {
-        // Music Is Cool se aplica si tiene musica O local
-        socio = esSocioActivo('musica') || esSocioActivo('local');
-      } else if (categoriaActividad === 'danza') {
-        // Club de Baile solo si tiene danza
-        socio = esSocioActivo('danza');
-      } else {
-        // Otros casos (ej. local o ninguno)
+      // Cursos: membresía de la academia del curso. Eventos: academias marcadas
+      // en el evento (ver src/lib/descuentoSocio.ts).
+      if (esCurso) {
         socio = esSocioActivo(categoriaActividad);
+      } else {
+        socio = tieneDescuentoSocio(socioData?.membresias, item, new Date().toISOString().split('T')[0]);
       }
 
       const dniUpper = form.dni.trim().toUpperCase();
@@ -159,7 +156,7 @@ const ReservaForm = ({ item, alCerrar }: ReservaFormProps) => {
     }, 400);
 
     return () => { cancelado = true; clearTimeout(timer); };
-  }, [form.dni, form.acompañantes, claveInput, socioData, esCurso, categoriaActividad, precioBase, item.id, item.tiene_descuento, item.precio_descuento, item.cupon, item.precioCupon, item.fechaCupon, item.apertura_general]);
+  }, [form.dni, form.acompañantes, claveInput, socioData, esCurso, categoriaActividad, precioBase, item.id, item.tiene_descuento, item.precio_descuento, item.cupon, item.precioCupon, item.fechaCupon, item.apertura_general, item.academias_descuento, item.categoria]);
 
   const handleFirestoreError = (error: unknown, operationType: string, path: string | null) => {
     const errInfo = {
@@ -289,11 +286,16 @@ const ReservaForm = ({ item, alCerrar }: ReservaFormProps) => {
 
       // 2. VERIFICACIÓN DE SOCIO (Ya calculada en precioCalculado)
       const esSocioReal = precioCalculado.esSocio;
+      const aplicadoCupon = precioCalculado.esClave;
 
       // 3. CÁLCULO DE SLOTS
+      // El titular lleva el precio del descuento que realmente se le aplicó
+      // (socio o cupón, no acumulables). Antes el cupón no se guardaba aquí y en
+      // puerta se cobraba el precio estándar.
       const slots = [];
       const precioSocio = item.tiene_descuento ? Number(item.precio_descuento) : 0;
-      const precioTitular = esSocioReal ? precioSocio : precioBase;
+      const precioCupon = Number(item.precioCupon) || 0;
+      const precioTitular = esSocioReal ? precioSocio : aplicadoCupon ? precioCupon : precioBase;
 
       slots.push({
         dni: dniUpper || 'INVITADO',
@@ -358,7 +360,9 @@ const ReservaForm = ({ item, alCerrar }: ReservaFormProps) => {
         esCurso: esCurso,
         acompañantes: Number(form.acompañantes),
         asistentes_ingresados: 0,
-        cuponUsado: claveValida ? claveInput : null,
+        // Solo si el cupón llegó a aplicarse: si el precio de socio era mejor, o el
+        // evento no tiene precio de cupón, la entrada no es de variante 'cupon'.
+        cuponUsado: aplicadoCupon ? claveInput : null,
         esSocio: esSocioReal,
         precioVerificado
       };

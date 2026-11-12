@@ -113,6 +113,18 @@ describe('eventos', () => {
     }));
   });
 
+  it('admin puede guardar academias_descuento como lista', async () => {
+    await assertSucceeds(setDoc(doc(db(adminCtx()), 'eventos', 'evt-academias-ok'), {
+      titulo: 'Concierto', aforo_maximo: 50, academias_descuento: ['Music is Cool', 'local'],
+    }));
+  });
+
+  it('admin NO puede guardar academias_descuento como texto', async () => {
+    await assertFails(setDoc(doc(db(adminCtx()), 'eventos', 'evt-academias-ko'), {
+      titulo: 'Concierto', aforo_maximo: 50, academias_descuento: 'Music is Cool',
+    }));
+  });
+
   it('cualquiera puede actualizar solo aforo_reservado (para reservas)', async () => {
     await assertSucceeds(updateDoc(doc(db(anonCtx()), 'eventos', 'evt-1'), {
       aforo_reservado: 2,
@@ -305,6 +317,33 @@ describe('cursos', () => {
   it('socio NO puede crear curso', async () => {
     await assertFails(setDoc(doc(db(socioCtx()), 'cursos', 'hack'), {
       titulo: 'Hack',
+    }));
+  });
+
+  it('admin puede configurar aportación fija', async () => {
+    await assertSucceeds(updateDoc(doc(db(adminCtx()), 'cursos', 'cur-1'), {
+      tipoAportacion: 'fija', aportacionFijaMensual: 150,
+    }));
+  });
+
+  it('rechaza tipo de aportación desconocido', async () => {
+    await assertFails(updateDoc(doc(db(adminCtx()), 'cursos', 'cur-1'), {
+      tipoAportacion: 'gratis',
+    }));
+  });
+
+  it('rechaza aportación fija negativa o no numérica', async () => {
+    await assertFails(updateDoc(doc(db(adminCtx()), 'cursos', 'cur-1'), {
+      aportacionFijaMensual: -5,
+    }));
+    await assertFails(updateDoc(doc(db(adminCtx()), 'cursos', 'cur-1'), {
+      aportacionFijaMensual: '150',
+    }));
+  });
+
+  it('teacher NO puede cambiar la aportación', async () => {
+    await assertFails(updateDoc(doc(db(teacherCtx()), 'cursos', 'cur-1'), {
+      aportacionFijaMensual: 0,
     }));
   });
 });

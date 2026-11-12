@@ -1,6 +1,6 @@
 import { initializeApp, getApps } from "firebase/app";
 import { getAuth, createUserWithEmailAndPassword } from "firebase/auth";
-import firebaseConfig from "../../firebase-applet-config.json";
+import { firebaseConfig } from "./firebaseConfig";
 
 const isDev = import.meta.env.DEV;
 

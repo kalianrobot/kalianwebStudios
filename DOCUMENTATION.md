@@ -30,16 +30,24 @@ Una sola web sirve **cinco interfaces** según el rol del usuario autenticado: p
 
 ### 2.2 Socio Activo vs Inactivo
 
-Implementado en `src/lib/socioService.ts → syncSocioStatus()`. Un socio es **activo** si cumple al menos una de estas condiciones:
+Criterio único en `src/lib/socioService.ts → calcularEstadoSocio()`. Lo usan igual `syncSocioStatus()` (que guarda `socios.estado`) y el panel de Socios (pestañas, indicadores, bloqueo de 4 meses y botón Eliminar). Un socio es **activo** si cumple al menos una de estas condiciones:
 
 1. Tiene un curso inscrito con `fechaFin >= hoy` y sin `deletedAt`.
 2. Pertenece a un local cuyo `ultimoPagoMesAnio` es el mes actual **o el anterior** (1 mes de gracia).
 
 Si no cumple ninguna, su `estado` pasa a `'inactivo'`. **No se borran las membresías** (`membresias.local = '2099-12-31'` o similares siguen vivas) porque la vigencia firmada no debe limpiarse por un mes sin pago — eso lo lleva `pagos_mensuales` por separado.
 
+Las fechas de `membresias` **no deciden** si un socio está activo: son la vigencia que se enseña en el carnet. Un socio con `membresias.local = '2099-12-31'` pero sin curso vigente ni local pagado es inactivo.
+
+**Cuándo se recalcula `estado`**: no hay tarea programada. Se recalcula al iniciar sesión el socio, cuando staff o profesor tocan sus pagos, cursos o local, y cada vez que un admin abre `/staff/socios`: el panel corrige en Firestore los `estado` desfasados (por ejemplo, un curso que terminó ayer).
+
 **Consecuencias de la inactividad**:
 - Si un socio inactivo intenta entrar a `/home` o `/perfil`, el guard en `src/App.tsx` redirige a `/` con un mensaje. Implementado para roles `socio` e `invitado_registrado` (no se aplica al master).
-- El badge visual en `AdminSocios` lo distingue.
+- Aparece en la pestaña **Inactivos** de `AdminSocios`, con indicador rojo.
+- **Nadie se borra solo.** La limpieza es manual desde la pestaña Inactivos:
+  - **BLOQUEAR INACTIVOS 4M**: anonimiza (nombre `ANONIMIZADO`, sin email ni teléfono) y marca como borrados a los socios inactivos cuya última actividad fue hace más de 4 meses. No borra finanzas, pagos ni asistencias (obligación contable).
+  - **ELIMINAR** (por socio): solo se habilita si el socio está inactivo y han pasado 120 días desde su última actividad. Lo mueve a la papelera (`deletedAt`).
+  - **Última actividad** (`ultimaFechaActividad()`): el `fechaFin` más tardío de sus cursos no borrados o el último día del mes de gracia de su local; si nunca tuvo, su `fechaAlta`.
 
 ### 2.3 Categorías de ingresos
 
@@ -141,7 +149,7 @@ Acceso vía `/staff/login` con email/contraseña. Solo `role == 'admin'` o maste
 | Dashboard | `/staff` | Resumen rápido de ingresos del mes y ocupación. |
 | Eventos | `/staff/eventos` | Crear/editar eventos. Definir aforo y reglas. |
 | Cursos | `/staff/cursos` | Catálogo académico, profesor asignado, horarios. |
-| Socios | `/staff/socios` | Alta, edición, gestión de membresías. Pestañas activos/inactivos. |
+| Socios | `/staff/socios` | Alta, edición, gestión de membresías. Pestañas activos/inactivos con el criterio de §2.2; al abrirlo corrige estados desfasados. Limpieza manual de inactivos (bloqueo 4 meses, eliminar a 120 días). |
 | Locales | `/staff/locales` | Salas de ensayo. Inquilinos, pagos del local. |
 | Profesores | `/staff/profesores` | Alta de profesores y asignación. |
 | Academias | `/staff/academias` | Catálogo de academias externas asociadas. |

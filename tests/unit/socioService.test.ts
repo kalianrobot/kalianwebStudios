@@ -16,7 +16,7 @@ vi.mock('firebase/firestore', () => ({
   getDocs: vi.fn(),
 }));
 
-import { syncSocioStatus } from '../../src/lib/socioService';
+import { syncSocioStatus, calcularEstadoSocio, ultimaFechaActividad, clavesMesVigente } from '../../src/lib/socioService';
 
 const hoy = new Date();
 const MES_ACTUAL   = `${hoy.getFullYear()}_${hoy.getMonth() + 1}`;
@@ -84,5 +84,56 @@ describe('syncSocioStatus (unit)', () => {
   it('devuelve null si hay un error inesperado', async () => {
     mockGetDoc.mockRejectedValue(new Error('red'));
     expect(await syncSocioStatus('S7')).toBeNull();
+  });
+});
+
+
+describe('calcularEstadoSocio (criterio único)', () => {
+  const AHORA = new Date('2026-11-21T12:00:00Z');
+  const cursos = {
+    vigente: { fechaFin: '2026-12-01' },
+    caducado: { fechaFin: '2026-01-01' },
+    borrado: { fechaFin: '2027-01-01', deletedAt: 'x' },
+  };
+  const locales = {
+    pagadoEsteMes: { ultimoPagoMesAnio: '2026_11' },
+    pagadoMesAnterior: { ultimoPagoMesAnio: '2026_10' },
+    pagadoHaceDos: { ultimoPagoMesAnio: '2026_9' },
+  };
+
+  it('curso vigente → activo', () => {
+    expect(calcularEstadoSocio({ cursos: ['vigente'] }, cursos, locales, AHORA)).toBe('activo');
+  });
+
+  it('curso caducado o borrado → inactivo', () => {
+    expect(calcularEstadoSocio({ cursos: ['caducado', 'borrado'] }, cursos, locales, AHORA)).toBe('inactivo');
+  });
+
+  it('local pagado este mes o el anterior → activo; hace dos meses → inactivo', () => {
+    expect(calcularEstadoSocio({ localId: 'pagadoEsteMes' }, cursos, locales, AHORA)).toBe('activo');
+    expect(calcularEstadoSocio({ localId: 'pagadoMesAnterior' }, cursos, locales, AHORA)).toBe('activo');
+    expect(calcularEstadoSocio({ localId: 'pagadoHaceDos' }, cursos, locales, AHORA)).toBe('inactivo');
+  });
+
+  it('las membresías no cuentan: sin curso ni local → inactivo aunque tenga membresía 2099', () => {
+    const socio = { cursos: [], membresias: { local: '2099-12-31' } } as any;
+    expect(calcularEstadoSocio(socio, cursos, locales, AHORA)).toBe('inactivo');
+  });
+
+  it('el mes de gracia cruza el cambio de año', () => {
+    expect(clavesMesVigente(new Date('2026-01-15T12:00:00Z'))).toEqual(['2026_1', '2025_12']);
+  });
+});
+
+describe('ultimaFechaActividad', () => {
+  const cursos = { c1: { fechaFin: '2026-01-01' }, c2: { fechaFin: '2027-05-01', deletedAt: 'x' } };
+  const locales = { l1: { ultimoPagoMesAnio: '2026_9' } };
+
+  it('toma lo más tardío entre cursos no borrados y fin del mes de gracia del local', () => {
+    expect(ultimaFechaActividad({ cursos: ['c1', 'c2'], localId: 'l1' }, cursos, locales)).toBe('2026-10-31');
+  });
+
+  it('sin actividad cae a la fecha de alta', () => {
+    expect(ultimaFechaActividad({ fechaAlta: '2025-03-02T10:00:00Z' }, cursos, locales)).toBe('2025-03-02');
   });
 });

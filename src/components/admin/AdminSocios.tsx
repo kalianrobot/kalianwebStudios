@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { db } from '../../firebase';
 import { collection, getDocs, getDocsFromServer, limit, doc, setDoc, getDoc, query, orderBy, DocumentData, where, onSnapshot, writeBatch, serverTimestamp, deleteField } from 'firebase/firestore';
 import { Link } from 'react-router-dom';
@@ -8,7 +8,7 @@ import { sendWelcomeEmail, sendMembershipUpdateEmail } from '../../lib/brevoServ
 import { updateDoc, increment } from 'firebase/firestore';
 import { registrarIngreso, MetodoPago } from '../../lib/finanzas';
 import { fetchConfig } from '../../lib/configService';
-import { syncSocioStatus } from '../../lib/socioService';
+import { syncSocioStatus, calcularEstadoSocio, ultimaFechaActividad, diasSinActividad, CursoParaEstado, LocalParaEstado } from '../../lib/socioService';
 import { normalizeDni } from '../../lib/dni';
 
 import { motion, AnimatePresence } from 'motion/react';
@@ -17,7 +17,11 @@ const AdminSocios = () => {
   const { user } = useAuth();
   const [socios, setSocios] = useState<DocumentData[]>([]);
   const [pagosMensuales, setPagosMensuales] = useState<Record<string, any>>({});
-  const [cursosExistentes, setCursosExistentes] = useState<Set<string>>(new Set());
+  const [cursosMap, setCursosMap] = useState<Record<string, CursoParaEstado>>({});
+  const [localesMap, setLocalesMap] = useState<Record<string, LocalParaEstado>>({});
+  const [cursosCargados, setCursosCargados] = useState(false);
+  const [localesCargados, setLocalesCargados] = useState(false);
+  const cursosExistentes = useMemo(() => new Set(Object.keys(cursosMap)), [cursosMap]);
   const [loading, setLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);
   const [form, setForm] = useState({ dni: '', nombre: '', email: '' });
@@ -30,7 +34,10 @@ const AdminSocios = () => {
   const [tabActiva, setTabActiva] = useState<'activos' | 'inactivos'>('activos');
   const [filtroPago, setFiltroPago] = useState<'todos' | 'pagado' | 'pendiente'>('todos');
   const [showDuplicados, setShowDuplicados] = useState(false);
-  const hoy = new Date().toISOString().split('T')[0];
+
+  // Criterio único de activo/inactivo (mismo que syncSocioStatus y el bloqueo de /home).
+  const estadoDe = (s: any) => calcularEstadoSocio(s, cursosMap, localesMap);
+  const diasInactivo = (s: any) => diasSinActividad(ultimaFechaActividad(s, cursosMap, localesMap));
 
   // Detecta socios duplicados: mismo nombre (normalizado) o mismo email (normalizado).
   // Devuelve grupos de >=2 docs.
@@ -172,17 +179,64 @@ const AdminSocios = () => {
       console.error("AdminSocios: Error en pagos onSnapshot:", err.message);
     });
 
-    // Fetch courses once (they don't change often)
-    getDocs(collection(db, "cursos")).then(cursosSnap => {
-      const ids = new Set(cursosSnap.docs.map(d => d.id));
-      setCursosExistentes(ids);
-    }).catch(err => console.error("AdminSocios: Error cursos getDocs:", err.message));
+    // Cursos y locales en tiempo real: el estado activo/inactivo depende de ellos.
+    const unsubCursos = onSnapshot(collection(db, "cursos"), (snap) => {
+      const map: Record<string, CursoParaEstado> = {};
+      snap.docs.forEach(d => { map[d.id] = d.data() as CursoParaEstado; });
+      setCursosMap(map);
+      setCursosCargados(true);
+    }, (err) => {
+      console.error("AdminSocios: Error cursos onSnapshot:", err.message);
+      setMsg("Error cargando cursos: no se puede calcular el estado de los socios");
+    });
+
+    const unsubLocales = onSnapshot(collection(db, "locales"), (snap) => {
+      const map: Record<string, LocalParaEstado> = {};
+      snap.docs.forEach(d => { map[d.id] = d.data() as LocalParaEstado; });
+      setLocalesMap(map);
+      setLocalesCargados(true);
+    }, (err) => {
+      console.error("AdminSocios: Error locales onSnapshot:", err.message);
+      setMsg("Error cargando locales: no se puede calcular el estado de los socios");
+    });
 
     return () => {
       unsubSocios();
       unsubPagos();
+      unsubCursos();
+      unsubLocales();
     };
   }, [mesActual, anioActual, user]);
+
+  // Corrige en Firestore los `estado` desfasados (no hay tarea programada que los
+  // recalcule cuando caduca un curso). Así el bloqueo de /home y /perfil coincide
+  // con lo que se ve en este panel.
+  const corrigiendo = useRef<Set<string>>(new Set());
+  useEffect(() => {
+    if (!user || !cursosCargados || !localesCargados || socios.length === 0) return;
+    const desfasados = socios.filter((s: any) =>
+      !s.bloqueado && !corrigiendo.current.has(s.id) && s.estado !== estadoDe(s)
+    );
+    if (desfasados.length === 0) return;
+    (async () => {
+      for (let i = 0; i < desfasados.length; i += 400) {
+        const trozo = desfasados.slice(i, i + 400);
+        const batch = writeBatch(db);
+        trozo.forEach((s: any) => {
+          corrigiendo.current.add(s.id);
+          batch.update(doc(db, "socios", s.id), { estado: estadoDe(s) });
+        });
+        try {
+          await batch.commit();
+        } catch (err: any) {
+          console.error("AdminSocios: Error corrigiendo estados:", err.message);
+        } finally {
+          trozo.forEach((s: any) => corrigiendo.current.delete(s.id));
+        }
+      }
+    })();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [socios, cursosMap, localesMap, cursosCargados, localesCargados, user]);
 
   const handleCleanup = async () => {
     if (!window.confirm(
@@ -202,13 +256,12 @@ const AdminSocios = () => {
       let bloqueados = 0;
       for (const s of socios) {
         if (s.bloqueado) continue;
-        const exp = s.membresias || {};
-        const fechas = Object.values(exp) as string[];
+        if (estadoDe(s) !== 'inactivo') continue;
 
-        // Si no tiene ninguna fecha de expiración o todas son muy antiguas
-        const ultimaExp = fechas.length > 0 ? fechas.sort().reverse()[0] : s.fechaAlta?.split('T')[0] || '1900-01-01';
+        // Último día con curso vigente o local pagado (o fecha de alta si nunca tuvo)
+        const ultimaActividad = ultimaFechaActividad(s, cursosMap, localesMap);
 
-        if (ultimaExp < limiteIso) {
+        if (ultimaActividad < limiteIso) {
           await updateDoc(doc(db, "socios", s.id), {
             bloqueado: true,
             fechaBloqueo: serverTimestamp(),
@@ -487,13 +540,10 @@ const AdminSocios = () => {
           </form>
         )}
 
-        {loading && !showForm ? (
+        {(loading || !cursosCargados || !localesCargados) && !showForm ? (
           <div className="text-center py-32 kalian-poster-text text-4xl text-kalian-gold/20 animate-pulse">CARGANDO SOCI@S...</div>
         ) : (() => {
-          const esActivo = (s: any) => {
-            const exp = s.membresias || {};
-            return Object.keys(exp).some(cat => exp[cat] >= hoy);
-          };
+          const esActivo = (s: any) => estadoDe(s) === 'activo';
           const sociosActivos = socios.filter(esActivo);
           const sociosInactivos = socios.filter(s => !esActivo(s));
           const sociosActivosFiltrados = sociosActivos.filter(s => {
@@ -573,9 +623,11 @@ const AdminSocios = () => {
                   </div>
                 )}
                 {sociosAMostrar.map(s => {
+              const estadoCalculado = estadoDe(s);
+              // Las membresías solo se muestran (vigencia del carnet); no deciden el estado.
               const exp = s.membresias || {};
-              const activas = Object.keys(exp).filter(cat => exp[cat] >= hoy);
-              const estadoCalculado = activas.length > 0 ? 'activo' : 'inactivo';
+              const hoyIso = new Date().toISOString().split('T')[0];
+              const activas = Object.keys(exp).filter(cat => exp[cat] >= hoyIso);
               const emailNoVerificado = s.verificado === false;
               
               return (
@@ -641,7 +693,7 @@ const AdminSocios = () => {
                           <span className="text-[8px] font-black text-kalian-gold/80 mt-2 uppercase tracking-widest">Hasta {exp[cat]}</span>
                         </div>
                       ))}
-                      {activas.length === 0 && <span className="px-6 py-2 bg-black/40 text-kalian-gold/20 font-black text-[10px] uppercase rounded-xl border border-kalian-gold/10 tracking-widest italic">Inactivo</span>}
+                      {estadoCalculado === 'inactivo' && <span className="px-6 py-2 bg-black/40 text-kalian-gold/20 font-black text-[10px] uppercase rounded-xl border border-kalian-gold/10 tracking-widest italic">Inactivo</span>}
                       <button 
                         onClick={() => {
                           setEditando(s);
@@ -658,13 +710,7 @@ const AdminSocios = () => {
                       </button>
                       <button 
                         onClick={() => handleDelete(s.id)}
-                        disabled={(() => {
-                          const fechas = Object.values(exp) as string[];
-                          const ultimaExp = fechas.length > 0 ? fechas.sort().reverse()[0] : s.fechaAlta?.split('T')[0] || '1900-01-01';
-                          const diff = new Date().getTime() - new Date(ultimaExp).getTime();
-                          const dias = diff / (1000 * 60 * 60 * 24);
-                          return dias < 120;
-                        })()}
+                        disabled={estadoCalculado === 'activo' || diasInactivo(s) < 120}
                         className="p-3 bg-red-500/10 text-red-500 rounded-xl border border-red-500/20 hover:bg-red-500 hover:text-white transition-all text-[10px] font-black uppercase tracking-widest disabled:opacity-20 disabled:cursor-not-allowed"
                         title="Solo eliminable tras 120 días de inactividad"
                       >
@@ -779,9 +825,7 @@ const AdminSocios = () => {
                         <p className="text-[9px] font-black text-amber-500/60 uppercase tracking-[0.3em] mb-3">Grupo {idx + 1} — {grupo.length} coincidencias</p>
                         <div className="space-y-3">
                           {grupo.map((s: any) => {
-                            const exp = s.membresias || {};
-                            const activas = Object.keys(exp).filter(cat => exp[cat] >= hoy);
-                            const estadoCalc = activas.length > 0 ? 'activo' : 'inactivo';
+                            const estadoCalc = estadoDe(s);
                             return (
                               <div key={s.id} className="bg-black/30 rounded-xl p-4 flex flex-col md:flex-row justify-between gap-3 border border-white/5">
                                 <div className="flex-1 min-w-0">

@@ -741,24 +741,35 @@ const ReservaForm = ({ item, alCerrar }: ReservaFormProps) => {
                 )}
 
                 {!esCurso && (
-                  <div className="flex justify-between items-center bg-kalian-gold/5 p-6 rounded-3xl border border-kalian-gold/10">
-                    <div>
-                      <span className="text-[9px] font-black uppercase text-kalian-gold/80 block mb-1 tracking-widest">{t('reserva.companions')}</span>
-                      <span className="text-[10px] text-kalian-gold/60 font-bold italic uppercase">{t('reserva.maxPersons', { n: item.max_acompanantes || 4 })}</span>
+                  <div className="bg-kalian-gold/5 p-6 rounded-3xl border border-kalian-gold/10 space-y-4">
+                    <div className="flex justify-between items-center gap-4">
+                      <div>
+                        <span className="text-sm font-black uppercase text-kalian-gold block mb-1 tracking-widest">{t('reserva.companionsQuestion')}</span>
+                        <span className="text-[11px] text-kalian-gold/80 font-bold block">{t('reserva.companionsHint')}</span>
+                        <span className="text-[10px] text-kalian-gold/60 font-bold italic uppercase">{t('reserva.maxPersons', { n: item.max_acompanantes || 4 })}</span>
+                      </div>
+                      <div className="flex items-center gap-4 shrink-0">
+                        <button 
+                          type="button"
+                          aria-label="-1"
+                          onClick={() => setForm(f => ({...f, acompañantes: Math.max(0, f.acompañantes - 1)}))}
+                          className="w-10 h-10 bg-kalian-gold/10 rounded-xl text-kalian-gold font-black text-xl hover:bg-kalian-gold hover:text-black transition-all"
+                        >-</button>
+                        <span className="text-2xl font-black text-kalian-gold w-8 text-center">{form.acompañantes}</span>
+                        <button 
+                          type="button"
+                          aria-label="+1"
+                          onClick={() => setForm(f => ({...f, acompañantes: Math.min(item.max_acompanantes || 4, f.acompañantes + 1)}))}
+                          className="w-10 h-10 bg-kalian-gold/10 rounded-xl text-kalian-gold font-black text-xl hover:bg-kalian-gold hover:text-black transition-all"
+                        >+</button>
+                      </div>
                     </div>
-                    <div className="flex items-center gap-4">
-                      <button 
-                        type="button"
-                        onClick={() => setForm(f => ({...f, acompañantes: Math.max(0, f.acompañantes - 1)}))}
-                        className="w-10 h-10 bg-kalian-gold/10 rounded-xl text-kalian-gold font-black text-xl hover:bg-kalian-gold hover:text-black transition-all"
-                      >-</button>
-                      <span className="text-2xl font-black text-kalian-gold w-8 text-center">{form.acompañantes}</span>
-                      <button 
-                        type="button"
-                        onClick={() => setForm(f => ({...f, acompañantes: Math.min(item.max_acompanantes || 4, f.acompañantes + 1)}))}
-                        className="w-10 h-10 bg-kalian-gold/10 rounded-xl text-kalian-gold font-black text-xl hover:bg-kalian-gold hover:text-black transition-all"
-                      >+</button>
-                    </div>
+                    {/* Resumen en personas: la gente contaba el contador como "total" y reservaba una plaza de más */}
+                    <p className="text-center text-sm font-black text-kalian-cream bg-black/30 rounded-2xl py-3 px-4" aria-live="polite">
+                      {form.acompañantes === 0
+                        ? t('reserva.partySolo')
+                        : t('reserva.partySummary', { total: 1 + form.acompañantes, n: form.acompañantes })}
+                    </p>
                   </div>
                 )}
               </div>
@@ -797,7 +808,7 @@ const ReservaForm = ({ item, alCerrar }: ReservaFormProps) => {
                 disabled={cargando}
                 className="w-full bg-kalian-gold text-black p-6 rounded-2xl kalian-poster-text text-2xl tracking-widest hover:bg-white transition-all flex items-center justify-center gap-4 active:scale-95 shadow-2xl shadow-kalian-gold/20 disabled:opacity-50"
               >
-                {cargando ? t('reserva.processing') : (esCurso ? t('reserva.checkEnrollment') : t('reserva.confirmBooking'))}
+                {cargando ? t('reserva.processing') : (esCurso ? t('reserva.checkEnrollment') : (form.acompañantes === 0 ? t('reserva.confirmBookingOne') : t('reserva.confirmBookingFor', { total: 1 + form.acompañantes })))}
               </button>
               
               </form>

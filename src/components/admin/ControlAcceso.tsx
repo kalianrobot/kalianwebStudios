@@ -13,6 +13,7 @@ import {
   entradaSlotReserva, entradaWalkIn, precioWalkIn, plazasLibres, idAsistenciaCarnet,
 } from '../../lib/puerta';
 import { normalizeDni } from '../../lib/dni';
+import { indexarPersonas, filasListadoEmergencia } from '../../lib/listadoEmergencia';
 import { jsPDF } from 'jspdf';
 import autoTable from 'jspdf-autotable';
 
@@ -178,15 +179,29 @@ const ControlAcceso = ({ isPuertaMode = false }: { isPuertaMode?: boolean }) => 
         return false;
       });
       setEventos(evs);
-      if (evs.length === 1 && !eventoSeleccionado) {
-        setEventoSeleccionado(evs[0]);
-      }
+      setEventoSeleccionado((prev: any) => (!prev && evs.length === 1 ? evs[0] : prev));
     }, (err) => {
       console.error("ControlAcceso: Error en onSnapshot:", err.message);
     });
 
     return () => unsubscribe();
-  }, [eventoSeleccionado, user]);
+  }, [user]);
+
+  // Contadores en vivo del evento seleccionado (aforo, comprometidas): antes se
+  // guardaba una copia al seleccionarlo y había que recargar la página para ver
+  // reservas nuevas o entradas registradas desde otro móvil.
+  useEffect(() => {
+    const id = eventoSeleccionado?.id;
+    if (!id || !user) return;
+    const unsubscribe = onSnapshot(doc(db, "eventos", id), (snap) => {
+      if (!snap.exists()) return;
+      const datos = { id: snap.id, ...(snap.data() as any) };
+      setEventoSeleccionado((prev: any) => (prev?.id === id ? datos : prev));
+    }, (err) => {
+      console.error("ControlAcceso: Error escuchando el evento:", err.message);
+    });
+    return () => unsubscribe();
+  }, [eventoSeleccionado?.id, user]);
 
   // Si el titular reservó con el DNI de un socio con descuento en este evento y
   // la reserva no lo refleja (p. ej. reservó antes de tener el curso, o antes de
@@ -688,14 +703,27 @@ const ControlAcceso = ({ isPuertaMode = false }: { isPuertaMode?: boolean }) => 
     if (!eventoSeleccionado) return;
     setCargando(true);
     try {
-      // 1. Obtener todas las reservas del evento
-      const q = query(collection(db, "reservas"), where("eventoId", "==", eventoSeleccionado.id));
-      const snap = await getDocs(q);
-      const reservas = snap.docs.map(d => d.data());
+      // 1. Reservas, entradas en puerta, socios y profesores (para la categoría real)
+      const [snapRes, snapAsis, snapSocios, snapProfes] = await Promise.all([
+        getDocs(query(collection(db, "reservas"), where("eventoId", "==", eventoSeleccionado.id))),
+        getDocs(query(collection(db, "asistencia_eventos"), where("eventoId", "==", eventoSeleccionado.id))),
+        getDocs(collection(db, "socios")).catch(() => null),
+        getDocs(collection(db, "profesores")).catch(() => null),
+      ]);
+      const indice = indexarPersonas(
+        snapSocios ? snapSocios.docs.map(d => ({ id: d.id, ...d.data() })) : [],
+        snapProfes ? snapProfes.docs.map(d => ({ id: d.id, ...d.data() })) : []
+      );
+      const listado = filasListadoEmergencia({
+        reservas: snapRes.docs.map(d => ({ id: d.id, ...d.data() })),
+        asistencias: snapAsis.docs.map(d => ({ id: d.id, ...d.data() })),
+        evento: eventoSeleccionado,
+        indice,
+        precioSlot: precioSlotEnPuerta,
+      });
 
       // 2. Crear PDF
       const doc = new jsPDF();
-      const pageWidth = doc.internal.pageSize.getWidth();
 
       // Cabecera
       doc.setFontSize(22);
@@ -711,50 +739,14 @@ const ControlAcceso = ({ isPuertaMode = false }: { isPuertaMode?: boolean }) => 
       doc.text(`Ubicación: ${eventoSeleccionado.sala || 'Kalian Hub'}`, 14, 43);
       doc.text(`Aforo Máx: ${eventoSeleccionado.aforo_maximo}`, 14, 48);
 
-      // Tabla de Asistentes
-      const totalAcomp = reservas.reduce((s: number, r: any) => s + Number(r.acompañantes || 0), 0);
-      const totalPersonas = reservas.reduce((s: number, r: any) => s + Number(r.numPersonas || (1 + Number(r.acompañantes || 0))), 0);
-      doc.text(`Reservas: ${reservas.length} • Titulares: ${reservas.length} • Acompañantes: ${totalAcomp} • Total personas: ${totalPersonas}`, 14, 53);
-
-      const tableData = reservas.flatMap((r: any) => {
-        const numAcomp = Number(r.acompañantes ?? Math.max(0, Number(r.numPersonas || 1) - 1));
-        const totalPax = Number(r.numPersonas ?? (1 + numAcomp));
-        const slots = Array.isArray(r.slots) ? r.slots : [];
-        const precioBase = Number(eventoSeleccionado.precio_estandar) || 0;
-
-        const precioTitular = slots[0] ? precioSlotEnPuerta(slots[0], r, eventoSeleccionado) : precioBase;
-        const filaTitular = [
-          r.nombreTitular || 'N/A',
-          r.dniTitular || 'N/A',
-          r.esSocio ? 'SOCIO' : 'NO SOCIO',
-          String(numAcomp),
-          String(totalPax),
-          `${precioTitular}€`,
-          r.ticketID || '',
-          ''
-        ];
-
-        const filasAcomp = Array.from({ length: numAcomp }, (_, i) => {
-          const slot = slots[i + 1];
-          const precio = Number(slot?.precio ?? precioBase);
-          return [
-            `  ↳ Acompañante ${i + 1}`,
-            '',
-            'NO SOCIO',
-            '',
-            '',
-            `${precio}€`,
-            r.ticketID || '',
-            ''
-          ];
-        });
-
-        return [filaTitular, ...filasAcomp];
-      });
+      const c = listado.porCategoria;
+      doc.text(`Reservas: ${listado.reservas} • Acompañantes: ${listado.acompanantes} • Sin reserva: ${listado.sinReserva} • Total personas: ${listado.totalPersonas}`, 14, 53);
+      doc.text(`Profesores: ${c['PROFESOR/A']} • Socios: ${c['SOCIO/A']} • No socios: ${c['NO SOCIO']}`, 14, 58);
+      const tableData = listado.filas;
 
       autoTable(doc, {
-        startY: 60,
-        head: [['Nombre Completo', 'DNI', 'Categoría', 'Acomp.', 'Total Pax', 'Importe (efectivo en puerta)', 'Ticket ID', 'Check Manual']],
+        startY: 64,
+        head: [['Nombre Completo', 'DNI', 'Categoría', 'Acomp.', 'Total Pax', 'Importe (efectivo en puerta)', 'Ticket ID', 'Dentro / Check']],
         body: tableData,
         theme: 'grid',
         headStyles: { fillColor: [0, 0, 0], textColor: [212, 175, 55] },
